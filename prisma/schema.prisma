@@ -1,0 +1,448 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────────────
+
+enum Role {
+  CLIENT
+  THERAPIST
+  ADMIN
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  completed
+  cancelled
+  no_show
+}
+
+enum AppointmentType {
+  video
+  in_person
+  phone
+}
+
+enum CommunityPrivacy {
+  open
+  invite
+}
+
+enum CommunityStatus {
+  active
+  archived
+}
+
+// ── Core user models ───────────────────────────────────────────────────────────
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  password  String
+  role      Role      @default(CLIENT)
+  avatar    String?
+  plan      String    @default("Free")
+  phone     String?
+  dob       DateTime?
+  timezone  String    @default("UTC")
+  language  String    @default("en")
+  xp        Int       @default(0)
+  level     Int       @default(1)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Client-side relations
+  moodEntries        MoodEntry[]
+  journalEntries     JournalEntry[]
+  courseProgress     CourseProgress[]
+  assessmentResults  AssessmentResult[]
+  missionCompletions MissionCompletion[]
+  achievements       Achievement[]
+  notifications      Notification[]
+  sentMessages       Message[]
+  postReplies        PostReply[]          @relation("PostReplyAuthor")
+  communityPosts     CommunityPost[]
+  postLikes          PostLike[]
+  groupMemberships   GroupMembership[]
+
+  // Therapist group relations (as a client)
+  therapistGroupMemberships TherapistGroupMembership[] @relation("TherapistGroupMemberUser")
+  therapistGroupInvites     TherapistGroupInvite[]     @relation("TherapistGroupInviteUser")
+  therapistGroupPosts       TherapistGroupPost[]       @relation("TherapistGroupPostAuthor")
+  therapistGroupPostLikes   TherapistGroupPostLike[]   @relation("TherapistGroupPostLikeUser")
+  therapistGroupPostReplies TherapistGroupPostReply[]  @relation("TherapistGroupPostReplyAuthor")
+
+  // Appointment & messaging relations
+  clientAppointments  Appointment[]  @relation("ClientAppointments")
+  clientConversations Conversation[] @relation("ClientConversations")
+
+  // Therapist portal
+  therapistProfile  Therapist? @relation("TherapistUser")
+  assignedTherapist Therapist? @relation("TherapistClients", fields: [therapistId], references: [id])
+  therapistId       String?
+}
+
+model Therapist {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation("TherapistUser", fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  specializations String[]
+  bio             String?
+  rating          Float    @default(0)
+  totalSessions   Int      @default(0)
+  activeClients   Int      @default(0)
+  pendingAppointments Int  @default(0)
+  pendingMessages Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  clients       User[]         @relation("TherapistClients")
+  appointments  Appointment[]  @relation("TherapistAppointments")
+  conversations Conversation[] @relation("TherapistConversations")
+  missions      Mission[]
+  groups        TherapistGroup[]
+}
+
+// ── Mood & journal ─────────────────────────────────────────────────────────────
+
+model MoodEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score     Int
+  label     String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model JournalEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  mood      Int
+  emotions  String[]
+  wordCount Int      @default(0)
+  type      String   @default("text")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+// ── Courses ────────────────────────────────────────────────────────────────────
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  instructor  String
+  category    String
+  description String?
+  duration    String?
+  lessonCount Int      @default(0)
+  rating      Float    @default(0)
+  thumbnail   String?
+  color       String?
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CourseProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId  String
+  lessonId  String
+  completed Boolean  @default(false)
+  updatedAt DateTime @updatedAt @default(now())
+
+  @@unique([userId, courseId, lessonId])
+  @@index([userId, courseId])
+}
+
+// ── Assessments ────────────────────────────────────────────────────────────────
+
+model AssessmentResult {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessmentId String
+  score        Int
+  label        String
+  answers      Json
+  createdAt    DateTime @default(now())
+
+  @@index([userId, assessmentId])
+}
+
+// ── Missions ───────────────────────────────────────────────────────────────────
+
+model Mission {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  category    String
+  duration    Int
+  xp          Int        @default(10)
+  recurring   Boolean    @default(true)
+  therapistId String?
+  therapist   Therapist? @relation(fields: [therapistId], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+
+  completions MissionCompletion[]
+
+  @@index([therapistId])
+}
+
+model MissionCompletion {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  missionId   String
+  mission     Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  completedAt DateTime @default(now())
+
+  @@index([userId, missionId, completedAt])
+}
+
+// ── Achievements ───────────────────────────────────────────────────────────────
+
+model Achievement {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId  String
+  earnedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+}
+
+// ── Client community (support groups) ─────────────────────────────────────────
+
+model SupportGroup {
+  id          String    @id @default(cuid())
+  name        String
+  description String
+  category    String
+  icon        String
+  color       String
+  nextSession DateTime?
+  createdAt   DateTime  @default(now())
+
+  posts       CommunityPost[]
+  memberships GroupMembership[]
+}
+
+model GroupMembership {
+  id       String       @id @default(cuid())
+  userId   String
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId  String
+  group    SupportGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  joinedAt DateTime     @default(now())
+
+  @@unique([userId, groupId])
+}
+
+model CommunityPost {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId   String?
+  group     SupportGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  content   String
+  anonymous Boolean       @default(false)
+  pinned    Boolean       @default(false)
+  flagged   Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  likes   PostLike[]
+  replies PostReply[]
+
+  @@index([groupId, createdAt])
+}
+
+model PostLike {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, postId])
+}
+
+model PostReply {
+  id        String        @id @default(cuid())
+  postId    String
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?         @relation("PostReplyAuthor", fields: [userId], references: [id], onDelete: SetNull)
+  content   String
+  anonymous Boolean       @default(false)
+  createdAt DateTime      @default(now())
+
+  @@index([postId, createdAt])
+}
+
+// ── Therapist communities ──────────────────────────────────────────────────────
+
+model TherapistGroup {
+  id          String           @id @default(cuid())
+  therapistId String
+  therapist   Therapist        @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  category    String
+  icon        String           @default("💬")
+  privacy     CommunityPrivacy @default(open)
+  status      CommunityStatus  @default(active)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  memberships TherapistGroupMembership[]
+  invites     TherapistGroupInvite[]
+  posts       TherapistGroupPost[]
+
+  @@index([therapistId, status])
+}
+
+model TherapistGroupMembership {
+  id       String         @id @default(cuid())
+  groupId  String
+  group    TherapistGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  clientId String
+  client   User           @relation("TherapistGroupMemberUser", fields: [clientId], references: [id], onDelete: Cascade)
+  joinedAt DateTime       @default(now())
+
+  @@unique([groupId, clientId])
+}
+
+model TherapistGroupInvite {
+  id       String         @id @default(cuid())
+  groupId  String
+  group    TherapistGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  clientId String
+  client   User           @relation("TherapistGroupInviteUser", fields: [clientId], references: [id], onDelete: Cascade)
+  sentAt   DateTime       @default(now())
+  accepted Boolean        @default(false)
+
+  @@unique([groupId, clientId])
+}
+
+model TherapistGroupPost {
+  id        String         @id @default(cuid())
+  groupId   String
+  group     TherapistGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User           @relation("TherapistGroupPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  content   String
+  pinned    Boolean        @default(false)
+  flagged   Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  likes   TherapistGroupPostLike[]
+  replies TherapistGroupPostReply[]
+
+  @@index([groupId, pinned, createdAt])
+}
+
+model TherapistGroupPostLike {
+  id        String             @id @default(cuid())
+  postId    String
+  post      TherapistGroupPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User               @relation("TherapistGroupPostLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime           @default(now())
+
+  @@unique([postId, userId])
+}
+
+model TherapistGroupPostReply {
+  id        String             @id @default(cuid())
+  postId    String
+  post      TherapistGroupPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User               @relation("TherapistGroupPostReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime           @default(now())
+
+  @@index([postId, createdAt])
+}
+
+// ── Appointments & messaging ──────────────────────────────────────────────────
+
+model Appointment {
+  id          String            @id @default(cuid())
+  clientId    String
+  client      User              @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
+  therapistId String
+  therapist   Therapist         @relation("TherapistAppointments", fields: [therapistId], references: [id], onDelete: Cascade)
+  date        DateTime
+  duration    Int               @default(50)
+  type        AppointmentType   @default(video)
+  status      AppointmentStatus @default(pending)
+  notes       String?
+  isNew       Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([clientId, date])
+  @@index([therapistId, date])
+}
+
+model Conversation {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      User      @relation("ClientConversations", fields: [clientId], references: [id], onDelete: Cascade)
+  therapistId String
+  therapist   Therapist @relation("TherapistConversations", fields: [therapistId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  messages Message[]
+
+  @@unique([clientId, therapistId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  fromUserId     String
+  from           User         @relation(fields: [fromUserId], references: [id], onDelete: Cascade)
+  text           String
+  read           Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  icon      String?
+  href      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
