@@ -1,12 +1,38 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, useEffect, use } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { therapistClients, journalEntries, dailyMissions } from "@/lib/mockData";
+import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { AGE_GROUPS } from "@/lib/ageGroups";
 
 type Tab = "overview" | "journal" | "missions" | "notes" | "plan";
+
+type ApiJournalEntry = { id: string; title: string; content: string; mood: number; emotions: string[]; createdAt: string };
+type ApiMission = {
+  id: string; completedAt: string; responseData: Record<string, unknown> | null;
+  mission: { id: string; title: string; category: string; xp: number; activityType: string };
+};
+type ApiAppt = { id: string; date: string; duration: number; type: string; status: string };
+type ApiAssessmentResult = { id: string; assessmentId: string; score: number; label: string; createdAt: string };
+type ApiIntake = {
+  concerns: string[]; languagePreference: string | null; genderPreference: string | null;
+  ageRange: string | null; priorTherapyExperience: string | null; goals: string | null; modalityPreference: string | null;
+} | null;
+
+type ClientData = {
+  id: string; name: string; email: string; plan: string; level: number; xp: number;
+  memberSince: string; moodHistory: { score: number; date: string }[]; moodAvg: number;
+  journalEntries: ApiJournalEntry[]; missionCompletions: ApiMission[]; appointments: ApiAppt[];
+  assessmentResults: ApiAssessmentResult[]; intake: ApiIntake;
+};
+
+const AGE_GROUP_LABELS: Record<string, string> = Object.fromEntries(AGE_GROUPS.map((g) => [g.id, g.label]));
+const PRIOR_EXPERIENCE_LABELS: Record<string, string> = { yes: "Yes", no: "No", unsure: "Not sure" };
+
+const ASSESSMENT_TOOL_NAMES: Record<string, string> = {
+  a1: "GAD-7", a2: "PHQ-9", a3: "CBI", a4: "PSS-10", a5: "ISI", a6: "WEMWBS",
+};
 
 type SessionType = "individual" | "group" | "assessment" | "crisis" | "phone" | "email";
 type RiskLevel = "low" | "medium" | "high";
@@ -24,16 +50,69 @@ type TreatmentPlan = {
   lastAssessed: string;
 };
 
+type ApiTreatmentPlan = {
+  diagnosis: string; approach: string; frequency: string; shortTermGoals: string; longTermGoals: string;
+  phase: string; riskLevel: RiskLevel; safetyPlan: boolean; emergencyContacts: boolean; lastAssessed: string | null;
+};
+
 type ClinicalNote = {
   id: string;
   date: string;
   sessionType: SessionType;
   content: string;
+  noteFormat: "freeform" | "soap";
+  subjective: string;
+  objective: string;
+  clinicalAssessment: string;
   affect: string;
   riskLevel: RiskLevel;
   nextSteps: string;
   tags: string[];
 };
+
+type Enrollment = { id: string; courseName: string; status: "in_progress" | "completed" | "paused" };
+const COURSE_STATUS_LABEL: Record<Enrollment["status"], string> = {
+  in_progress: "In progress", completed: "Completed", paused: "Paused",
+};
+
+type ApiClinicalNote = {
+  id: string; date: string; sessionType: SessionType; content: string;
+  noteFormat?: "freeform" | "soap"; subjective?: string | null; objective?: string | null; clinicalAssessment?: string | null;
+  affect: string | null; riskLevel: RiskLevel; nextSteps: string | null; tags: string[];
+};
+
+function fromApiNote(n: ApiClinicalNote): ClinicalNote {
+  return {
+    id: n.id, date: n.date, sessionType: n.sessionType, content: n.content,
+    noteFormat: n.noteFormat ?? "freeform",
+    subjective: n.subjective ?? "", objective: n.objective ?? "", clinicalAssessment: n.clinicalAssessment ?? "",
+    affect: n.affect ?? "", riskLevel: n.riskLevel, nextSteps: n.nextSteps ?? "", tags: n.tags ?? [],
+  };
+}
+
+const DEFAULT_PLAN: TreatmentPlan = {
+  diagnosis: "",
+  approach: "Cognitive Behavioural Therapy (CBT) with mindfulness components",
+  frequency: "Weekly, 50-minute individual sessions",
+  shortTermGoals: "Reduce GAD-7 by 3+ points. Establish consistent sleep routine. Complete 70%+ of daily tasks.",
+  longTermGoals: "Develop autonomous anxiety management toolkit. Reduce avoidance behaviours. Improve social confidence.",
+  phase: "Phase 2: Skill Building & Application",
+  riskLevel: "low",
+  safetyPlan: true,
+  emergencyContacts: true,
+  lastAssessed: "Not yet",
+};
+
+function fromApiPlan(p: ApiTreatmentPlan): TreatmentPlan {
+  return {
+    diagnosis: p.diagnosis, approach: p.approach, frequency: p.frequency,
+    shortTermGoals: p.shortTermGoals, longTermGoals: p.longTermGoals, phase: p.phase,
+    riskLevel: p.riskLevel, safetyPlan: p.safetyPlan, emergencyContacts: p.emergencyContacts,
+    lastAssessed: p.lastAssessed
+      ? new Date(p.lastAssessed).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "Not yet",
+  };
+}
 
 const SESSION_TYPES: { value: SessionType; label: string }[] = [
   { value: "individual", label: "Individual" },
@@ -46,157 +125,224 @@ const SESSION_TYPES: { value: SessionType; label: string }[] = [
 
 const COMMON_TAGS = ["CBT", "EMDR", "Exposure", "Safety plan", "Homework", "Mindfulness", "Medication", "Family"];
 
-const SEED_NOTES: ClinicalNote[] = [
-  {
-    id: "cn1",
-    date: "2026-06-16",
-    sessionType: "individual",
-    content:
-      "CBT homework reviewed — client completed thought records on 4 of 7 days. Sleep improving; averaging 6.5 hrs vs 5 last week. Introduced 4-7-8 breathing technique. Client responded positively. GAD-7 score down to 9 from 12 at intake.",
-    affect: "Calm, engaged",
-    riskLevel: "low",
-    nextSteps: "Continue sleep log. Assign 5-4-3-2-1 grounding exercise for anxiety spikes.",
-    tags: ["CBT", "Homework", "Mindfulness"],
-  },
-  {
-    id: "cn2",
-    date: "2026-06-09",
-    sessionType: "individual",
-    content:
-      "Discussed avoidance patterns around social situations. Client identified coffee shops and group gatherings as primary triggers. Set graduated exposure task: 10 minutes in a low-demand café next week. Explored safety behaviours and their maintenance function.",
-    affect: "Anxious at start, more open by session end",
-    riskLevel: "low",
-    nextSteps: "Exposure task: 10 min café visit. Debrief next session.",
-    tags: ["CBT", "Exposure"],
-  },
-  {
-    id: "cn3",
-    date: "2026-06-02",
-    sessionType: "assessment",
-    content:
-      "Initial assessment. Client presented with generalised anxiety and low mood. GAD-7: 12 (moderate). PHQ-9: 8 (mild). No current suicidal ideation. Safety plan completed and signed. History: previous CBT episode in 2023, partial response. Family history of anxiety disorder (mother).",
-    affect: "Nervous, cooperative",
-    riskLevel: "medium",
-    nextSteps: "Begin CBT formulation. Psychoeducation re: anxiety cycle for next session.",
-    tags: ["CBT", "Safety plan"],
-  },
-];
-
 function todayIso() {
   return new Date(2026, 5, 24).toISOString().slice(0, 10);
 }
 
 function formatNoteDate(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", {
+  return new Date(iso).toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric", year: "numeric",
   });
 }
 
+const RESPONSE_FIELD_LABELS: Record<string, string> = {
+  items: "Gratitude items", mood: "Mood", text: "Reflection", prompt: "Prompt",
+  energy: "Energy (1-5)", body: "Body tension", note: "Note", worry: "Worry",
+  control: "In their control?", action: "Action / plan", pain: "What's hurting",
+  kindWords: "Words of kindness", strengths: "Strengths noticed", values: "Top values",
+  reflection: "Reflection", roundsCompleted: "Breathing rounds completed",
+  secondsSpent: "Time spent (s)", itemsNoticed: "Grounding items noticed",
+  regionsCompleted: "Body regions scanned", who: "Reached out to", message: "Message",
+  stepsCompleted: "Stretch steps completed", completed: "Marked done", skipped: "Skipped",
+};
+
+function formatResponseValue(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (Array.isArray(v)) return v.length ? v.join(", ") : "—";
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  return String(v);
+}
+
+function ResponseDataPreview({ data }: { data: Record<string, unknown> }) {
+  const entries = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (entries.length === 0) return null;
+  return (
+    <div className="mt-2 bg-stone-50 border border-stone-100 rounded-lg px-3 py-2.5 space-y-1.5">
+      {entries.map(([key, value]) => (
+        <div key={key} className="text-xs">
+          <span className="text-stone-400 font-medium">{RESPONSE_FIELD_LABELS[key] ?? key}: </span>
+          <span className="text-stone-700 whitespace-pre-wrap">{formatResponseValue(value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as Tab | null) ?? "overview";
-  const client = therapistClients.find((c) => c.id === id) ?? therapistClients[0];
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [clientData, setClientData] = useState<ClientData | null>(null);
+  const [loadingClient, setLoadingClient] = useState(true);
+  const [startingConversation, setStartingConversation] = useState(false);
+
+  async function messageClient() {
+    if (startingConversation) return;
+    setStartingConversation(true);
+    try {
+      const r = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: id }),
+      });
+      const d = await r.json();
+      if (r.ok && d.conversationId) {
+        router.push(`/therapist/messages?open=${d.conversationId}`);
+      } else {
+        router.push("/therapist/messages");
+      }
+    } finally {
+      setStartingConversation(false);
+    }
+  }
+
+  useEffect(() => {
+    fetch(`/api/therapist/clients/${id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.client) setClientData(d.client); })
+      .finally(() => setLoadingClient(false));
+  }, [id]);
+
+  const client = clientData;
 
   // Treatment plan state
-  const [plan, setPlan] = useState<TreatmentPlan>({
-    diagnosis: client.condition.join(", "),
-    approach: "Cognitive Behavioural Therapy (CBT) with mindfulness components",
-    frequency: "Weekly, 50-minute individual sessions",
-    shortTermGoals: "Reduce GAD-7 by 3+ points. Establish consistent sleep routine. Complete 70%+ of daily tasks.",
-    longTermGoals: "Develop autonomous anxiety management toolkit. Reduce avoidance behaviours. Improve social confidence.",
-    phase: "Phase 2: Skill Building & Application",
-    riskLevel: client.riskLevel as RiskLevel,
-    safetyPlan: true,
-    emergencyContacts: true,
-    lastAssessed: "Jun 16",
-  });
+  const [plan, setPlan] = useState<TreatmentPlan>(DEFAULT_PLAN);
   const [planDraft, setPlanDraft] = useState<TreatmentPlan | null>(null);
   const editingPlan = planDraft !== null;
   const [planSaved, setPlanSaved] = useState(false);
+  const [planSaving, setPlanSaving] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/therapist/clients/${id}/plan`)
+      .then((r) => r.json())
+      .then((d: { plan: ApiTreatmentPlan | null }) => {
+        if (d.plan) setPlan(fromApiPlan(d.plan));
+      });
+  }, [id]);
+
+  type SafetyPlanContact = { name: string; phone?: string; note?: string };
+  type ClientSafetyPlan = {
+    warningSigns: string[]; copingStrategies: string[]; distractionContacts: SafetyPlanContact[];
+    supportContacts: SafetyPlanContact[]; professionalContacts: SafetyPlanContact[]; safeEnvironmentSteps: string[];
+  };
+  const [safetyPlan, setSafetyPlan] = useState<ClientSafetyPlan | null>(null);
+  const [safetyPlanShared, setSafetyPlanShared] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/therapist/clients/${id}/safety-plan`)
+      .then((r) => r.json())
+      .then((d: { plan: ClientSafetyPlan | null; shared: boolean }) => {
+        setSafetyPlan(d.plan);
+        setSafetyPlanShared(d.shared);
+      });
+  }, [id]);
 
   function startEditPlan() { setPlanDraft({ ...plan }); }
   function cancelEditPlan() { setPlanDraft(null); }
-  function savePlan() {
-    if (!planDraft) return;
-    const now = new Date();
-    const stamp = now.toLocaleString("en-US", {
-      month: "short", day: "numeric", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-    setPlan({ ...planDraft, lastAssessed: stamp });
-    setPlanDraft(null);
-    setPlanSaved(true);
-    setTimeout(() => setPlanSaved(false), 2500);
+  async function savePlan() {
+    if (!planDraft || planSaving) return;
+    setPlanSaving(true);
+    try {
+      const r = await fetch(`/api/therapist/clients/${id}/plan`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          diagnosis: planDraft.diagnosis, approach: planDraft.approach, frequency: planDraft.frequency,
+          shortTermGoals: planDraft.shortTermGoals, longTermGoals: planDraft.longTermGoals, phase: planDraft.phase,
+          riskLevel: planDraft.riskLevel, safetyPlan: planDraft.safetyPlan, emergencyContacts: planDraft.emergencyContacts,
+        }),
+      });
+      const d = await r.json();
+      if (r.ok && d.plan) setPlan(fromApiPlan(d.plan));
+      setPlanDraft(null);
+      setPlanSaved(true);
+      setTimeout(() => setPlanSaved(false), 2500);
+    } finally {
+      setPlanSaving(false);
+    }
   }
 
-  // Missions state (shared between overview and missions tab)
-  const [clientMissions, setClientMissions] = useState(dailyMissions);
-  function removeMission(id: string) {
-    setClientMissions((prev) => prev.filter((m) => m.id !== id));
-  }
-  function toggleMissionComplete(id: string) {
-    setClientMissions((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, completed: !m.completed } : m))
-    );
-  }
-  const completedCount = clientMissions.filter((m) => m.completed).length;
-  const completionRate = clientMissions.length > 0
-    ? Math.round((completedCount / clientMissions.length) * 100)
-    : 0;
-
-  // Overview: mood chart
-  const [moodHistory, setMoodHistory] = useState(client.moodHistory);
+  // Missions state — completed missions from API
   const [hoveredMoodDay, setHoveredMoodDay] = useState<number | null>(null);
   const [editingMoodDay, setEditingMoodDay] = useState<number | null>(null);
-  const moodAvg = moodHistory.length
-    ? parseFloat((moodHistory.reduce((s, v) => s + v, 0) / moodHistory.length).toFixed(1))
+
+  const moodScores = (clientData?.moodHistory ?? []).map((m) => m.score);
+  const moodAvg = moodScores.length
+    ? parseFloat((moodScores.reduce((s, v) => s + v, 0) / moodScores.length).toFixed(1))
     : 0;
 
-  // Overview: courses
-  type CourseStatus = "In progress" | "Completed" | "Paused";
-  const COURSE_CYCLE: CourseStatus[] = ["In progress", "Completed", "Paused"];
-  const [courses, setCourses] = useState<{ name: string; status: CourseStatus }[]>(
-    client.coursesEnrolled.map((c) => ({ name: c, status: "In progress" }))
-  );
+  const completedMissions = clientData?.missionCompletions ?? [];
+  const completedCount = completedMissions.length;
+
+  // Overview: enrolled courses
+  const COURSE_CYCLE: Enrollment["status"][] = ["in_progress", "completed", "paused"];
+  const [courses, setCourses] = useState<Enrollment[]>([]);
   const [showCourseMenu, setShowCourseMenu] = useState(false);
   const AVAILABLE_COURSES = [
     "Managing Anxiety", "CBT Fundamentals", "Sleep & Recovery", "Stress Resilience",
     "Mindfulness Basics", "Emotional Regulation", "Building Self-Compassion",
   ];
-  function addCourse(name: string) {
-    if (!courses.find((c) => c.name === name)) {
-      setCourses((prev) => [...prev, { name, status: "In progress" }]);
-    }
+
+  useEffect(() => {
+    fetch(`/api/therapist/clients/${id}/courses`)
+      .then((r) => r.json())
+      .then((d) => setCourses(d.enrollments ?? []));
+  }, [id]);
+
+  async function addCourse(name: string) {
     setShowCourseMenu(false);
+    if (courses.find((c) => c.courseName === name)) return;
+    const r = await fetch(`/api/therapist/clients/${id}/courses`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseName: name }),
+    });
+    const d = await r.json();
+    if (r.ok && d.enrollment) setCourses((prev) => [...prev, d.enrollment]);
   }
-  function removeCourse(name: string) {
-    setCourses((prev) => prev.filter((c) => c.name !== name));
+  async function removeCourse(enrollmentId: string) {
+    setCourses((prev) => prev.filter((c) => c.id !== enrollmentId));
+    await fetch(`/api/therapist/clients/${id}/courses`, {
+      method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enrollmentId }),
+    });
   }
-  function cycleCourseStatus(name: string) {
-    setCourses((prev) =>
-      prev.map((c) => {
-        if (c.name !== name) return c;
-        const idx = COURSE_CYCLE.indexOf(c.status);
-        return { ...c, status: COURSE_CYCLE[(idx + 1) % COURSE_CYCLE.length] };
-      })
-    );
+  async function cycleCourseStatus(enrollmentId: string) {
+    const current = courses.find((c) => c.id === enrollmentId);
+    if (!current) return;
+    const next = COURSE_CYCLE[(COURSE_CYCLE.indexOf(current.status) + 1) % COURSE_CYCLE.length];
+    setCourses((prev) => prev.map((c) => c.id === enrollmentId ? { ...c, status: next } : c));
+    await fetch(`/api/therapist/clients/${id}/courses`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enrollmentId, status: next }),
+    });
   }
 
   // Journal state
   const [expandedJournalId, setExpandedJournalId] = useState<string | null>(null);
+  const journalEntries = clientData?.journalEntries ?? [];
   const expandedJournalEntry = journalEntries.find((e) => e.id === expandedJournalId) ?? null;
 
   // Clinical notes state
-  const [notes, setNotes] = useState<ClinicalNote[]>(SEED_NOTES);
+  const [notes, setNotes] = useState<ClinicalNote[]>([]);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null);
+  const [savingNote, setSavingNote] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/therapist/clients/${id}/notes`)
+      .then((r) => r.json())
+      .then((d: { notes?: ApiClinicalNote[] }) => setNotes((d.notes ?? []).map(fromApiNote)));
+  }, [id]);
 
   // Form state
   const [formDate, setFormDate] = useState(todayIso());
   const [formType, setFormType] = useState<SessionType>("individual");
+  const [formNoteFormat, setFormNoteFormat] = useState<"freeform" | "soap">("freeform");
   const [formContent, setFormContent] = useState("");
+  const [formSubjective, setFormSubjective] = useState("");
+  const [formObjective, setFormObjective] = useState("");
+  const [formClinicalAssessment, setFormClinicalAssessment] = useState("");
   const [formAffect, setFormAffect] = useState("");
   const [formRisk, setFormRisk] = useState<RiskLevel>("low");
   const [formNextSteps, setFormNextSteps] = useState("");
@@ -207,7 +353,11 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   function resetForm() {
     setFormDate(todayIso());
     setFormType("individual");
+    setFormNoteFormat("freeform");
     setFormContent("");
+    setFormSubjective("");
+    setFormObjective("");
+    setFormClinicalAssessment("");
     setFormAffect("");
     setFormRisk("low");
     setFormNextSteps("");
@@ -215,23 +365,56 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     setFormTagInput("");
   }
 
-  function handleSaveNote() {
-    if (!formContent.trim()) return;
-    const newNote: ClinicalNote = {
-      id: `cn${Date.now()}`,
-      date: formDate,
-      sessionType: formType,
-      content: formContent.trim(),
-      affect: formAffect.trim(),
-      riskLevel: formRisk,
-      nextSteps: formNextSteps.trim(),
-      tags: formTags,
-    };
-    setNotes((prev) => [newNote, ...prev]);
-    resetForm();
-    setShowNoteForm(false);
-    setSaveConfirm(true);
-    setTimeout(() => setSaveConfirm(false), 2500);
+  async function handleSaveNote() {
+    const isSoap = formNoteFormat === "soap";
+    const composedContent = isSoap
+      ? [
+          formSubjective.trim() && `Subjective: ${formSubjective.trim()}`,
+          formObjective.trim() && `Objective: ${formObjective.trim()}`,
+          formClinicalAssessment.trim() && `Assessment: ${formClinicalAssessment.trim()}`,
+          formNextSteps.trim() && `Plan: ${formNextSteps.trim()}`,
+        ].filter(Boolean).join("\n\n")
+      : formContent.trim();
+    if (!composedContent || savingNote) return;
+    setSavingNote(true);
+    try {
+      const r = await fetch(`/api/therapist/clients/${id}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: new Date(`${formDate}T12:00:00`).toISOString(),
+          sessionType: formType,
+          content: composedContent,
+          noteFormat: formNoteFormat,
+          subjective: isSoap ? formSubjective.trim() || undefined : undefined,
+          objective: isSoap ? formObjective.trim() || undefined : undefined,
+          clinicalAssessment: isSoap ? formClinicalAssessment.trim() || undefined : undefined,
+          affect: formAffect.trim() || undefined,
+          riskLevel: formRisk,
+          nextSteps: formNextSteps.trim() || undefined,
+          tags: formTags,
+        }),
+      });
+      const d = await r.json();
+      if (r.ok && d.note) setNotes((prev) => [fromApiNote(d.note), ...prev]);
+      resetForm();
+      setShowNoteForm(false);
+      setSaveConfirm(true);
+      setTimeout(() => setSaveConfirm(false), 2500);
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  async function deleteNote(noteId: string) {
+    setDeletingNoteId(noteId);
+    try {
+      await fetch(`/api/therapist/clients/${id}/notes/${noteId}`, { method: "DELETE" });
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+      setExpandedNoteId(null);
+    } finally {
+      setDeletingNoteId(null);
+    }
   }
 
   function toggleTag(tag: string) {
@@ -248,6 +431,39 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
   const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
+  if (loadingClient) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-5">
+        <Link href="/therapist/clients" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">← Clients</Link>
+        <div className="bg-white border border-stone-100 rounded-xl p-5 animate-pulse">
+          <div className="h-12 bg-stone-100 rounded-lg w-1/2 mb-4" />
+          <div className="h-4 bg-stone-100 rounded w-3/4" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!client) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-5">
+        <Link href="/therapist/clients" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">← Clients</Link>
+        <div className="bg-white border border-stone-100 rounded-xl p-8 text-center text-stone-400 text-sm">
+          Client not found or not assigned to you.
+        </div>
+      </div>
+    );
+  }
+
+  const lastSession = client.appointments
+    .filter((a) => a.status === "completed")
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  const nextSession = client.appointments
+    .filter((a) => a.status === "confirmed" && new Date(a.date) > new Date())
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+
+  const fmtApptDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
   return (
     <div className="max-w-4xl mx-auto space-y-5">
       <Link href="/therapist/clients" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">← Clients</Link>
@@ -262,33 +478,37 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg font-semibold text-stone-900">{client.name}</h1>
-                <span className={`text-[10px] border px-1.5 py-0.5 rounded font-medium ${
-                  client.riskLevel === "high" ? "border-red-200 text-red-600" :
-                  client.riskLevel === "medium" ? "border-amber-200 text-amber-600" :
-                  "border-stone-200 text-stone-400"
-                }`}>{client.riskLevel} risk</span>
+                <span className="text-[10px] border border-stone-200 text-stone-400 px-1.5 py-0.5 rounded font-medium">
+                  Level {client.level}
+                </span>
               </div>
-              <div className="text-xs text-stone-500 mt-0.5">{client.age} · {client.condition.join(", ")} · {client.plan}</div>
-              <div className="text-xs text-stone-400 mt-0.5">Since {client.startDate}</div>
+              <div className="text-xs text-stone-500 mt-0.5">{client.plan} · {client.email}</div>
+              <div className="text-xs text-stone-400 mt-0.5">
+                Member since {new Date(client.memberSince).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
             <button className="bg-stone-900 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-stone-800 transition-colors">
               Start video
             </button>
-            <Link href="/therapist/messages" className="border border-stone-200 text-stone-600 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-stone-50 transition-colors">
-              Message
-            </Link>
+            <button
+              onClick={messageClient}
+              disabled={startingConversation}
+              className="border border-stone-200 text-stone-600 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-stone-50 transition-colors disabled:opacity-50"
+            >
+              {startingConversation ? "Opening…" : "Message"}
+            </button>
           </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 pt-4 border-t border-stone-100">
           {[
-            { label: "Avg mood", value: client.moodAvg.toFixed(1) },
-            { label: "Missions", value: `${client.missionCompletion}%` },
-            { label: "Streak", value: `${client.streak}d` },
-            { label: "Last session", value: client.lastSession ?? "—" },
-            { label: "Next session", value: client.nextSession ?? "—" },
+            { label: "Avg mood", value: moodAvg > 0 ? moodAvg.toFixed(1) : "—" },
+            { label: "Completed tasks", value: String(completedCount) },
+            { label: "XP earned", value: `${client.xp} xp` },
+            { label: "Last session", value: lastSession ? fmtApptDate(lastSession.date) : "—" },
+            { label: "Next session", value: nextSession ? fmtApptDate(nextSession.date) : "—" },
           ].map((s) => (
             <div key={s.label} className="text-center">
               <div className="text-sm font-semibold text-stone-900">{s.value}</div>
@@ -317,114 +537,154 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       {tab === "overview" && (
         <div className="space-y-4">
 
+          {/* Intake */}
+          {client.intake && (
+            <div className="bg-white border border-stone-100 rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-stone-900 mb-4">Intake</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Age range</div>
+                  <div className="text-sm text-stone-700">{client.intake.ageRange ? AGE_GROUP_LABELS[client.intake.ageRange] ?? client.intake.ageRange : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Prior therapy</div>
+                  <div className="text-sm text-stone-700">{client.intake.priorTherapyExperience ? PRIOR_EXPERIENCE_LABELS[client.intake.priorTherapyExperience] ?? client.intake.priorTherapyExperience : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Language pref.</div>
+                  <div className="text-sm text-stone-700">{client.intake.languagePreference ?? "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Modality pref.</div>
+                  <div className="text-sm text-stone-700">{client.intake.modalityPreference && client.intake.modalityPreference !== "no_preference" ? client.intake.modalityPreference : "—"}</div>
+                </div>
+              </div>
+              {client.intake.concerns.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1.5">What brought them here</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {client.intake.concerns.map((c) => (
+                      <span key={c} className="text-xs font-medium bg-stone-100 text-stone-700 px-2.5 py-1 rounded-full">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {client.intake.goals && (
+                <div>
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1.5">Goals</div>
+                  <p className="text-sm text-stone-600 leading-relaxed">{client.intake.goals}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Mood chart */}
           <div className="bg-white border border-stone-100 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-stone-900">7-Day Mood Trend</h3>
               <span className="text-xs text-stone-400">Click a bar to edit</span>
             </div>
-            <div className="flex items-end gap-2 h-20">
-              {moodHistory.map((score, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1.5 relative group">
-                  {/* Tooltip */}
-                  {hoveredMoodDay === i && editingMoodDay !== i && (
-                    <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-stone-900 text-white text-[10px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                      {DAYS[i]} · {score}/5
+            {moodScores.length === 0 ? (
+              <div className="py-6 text-center text-xs text-stone-400">No mood data recorded yet.</div>
+            ) : (
+              <>
+                <div className="flex items-end gap-2 h-20">
+                  {moodScores.map((score, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5 relative group">
+                      {hoveredMoodDay === i && editingMoodDay !== i && (
+                        <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-stone-900 text-white text-[10px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                          Day {i + 1} · {score}/5
+                        </div>
+                      )}
+                      <button
+                        className="w-full rounded-t-sm transition-colors"
+                        style={{
+                          height: `${(score / 5) * 60}px`,
+                          backgroundColor: hoveredMoodDay === i ? "#44403c" : "#1c1917",
+                          minHeight: "4px",
+                        }}
+                        onMouseEnter={() => setHoveredMoodDay(i)}
+                        onMouseLeave={() => setHoveredMoodDay(null)}
+                        onClick={() => setEditingMoodDay(editingMoodDay === i ? null : i)}
+                      />
+                      <span className="text-[9px] text-stone-400">{DAYS[i % 7]}</span>
                     </div>
-                  )}
-                  {/* Inline score editor */}
-                  {editingMoodDay === i ? (
-                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1">
-                      <div className="bg-white border border-stone-200 rounded-lg shadow-sm p-1.5 flex gap-1">
-                        {[1, 2, 3, 4, 5].map((v) => (
-                          <button
-                            key={v}
-                            onClick={() => {
-                              setMoodHistory((prev) => prev.map((s, j) => j === i ? v : s));
-                              setEditingMoodDay(null);
-                            }}
-                            className={`w-6 h-6 text-[10px] font-semibold rounded transition-colors ${
-                              v === score
-                                ? "bg-stone-900 text-white"
-                                : "text-stone-500 hover:bg-stone-100"
-                            }`}
-                          >
-                            {v}
-                          </button>
+                  ))}
+                </div>
+                <div className="flex justify-between text-xs text-stone-400 mt-3 pt-3 border-t border-stone-50">
+                  <span>Min: {Math.min(...moodScores)} / 5</span>
+                  <span>Avg: {moodAvg} / 5</span>
+                  <span>Max: {Math.max(...moodScores)} / 5</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Assessment score trends */}
+          {(client.assessmentResults?.length ?? 0) > 0 && (
+            <div className="bg-white border border-stone-100 rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-stone-900 mb-4">Assessment Score Trends</h3>
+              <div className="space-y-5">
+                {Object.entries(
+                  client.assessmentResults.reduce<Record<string, ApiAssessmentResult[]>>((acc, r) => {
+                    (acc[r.assessmentId] ??= []).push(r);
+                    return acc;
+                  }, {})
+                ).map(([toolId, results]) => {
+                  const max = Math.max(...results.map((r) => r.score), 1);
+                  return (
+                    <div key={toolId}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-stone-700">{ASSESSMENT_TOOL_NAMES[toolId] ?? toolId}</span>
+                        <span className="text-xs text-stone-400">{results[results.length - 1].label} (latest)</span>
+                      </div>
+                      <div className="flex items-end gap-1.5 h-14">
+                        {results.map((r) => (
+                          <div key={r.id} className="flex-1 flex flex-col items-center gap-1 group relative">
+                            <div
+                              className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-stone-900 text-white text-[9px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"
+                            >
+                              {r.score} · {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </div>
+                            <div
+                              className="w-full rounded-t-sm bg-stone-900 transition-colors group-hover:bg-stone-700"
+                              style={{ height: `${Math.max(4, (r.score / max) * 56)}px` }}
+                            />
+                          </div>
                         ))}
                       </div>
                     </div>
-                  ) : null}
-                  <button
-                    className="w-full rounded-t-sm transition-colors"
-                    style={{
-                      height: `${(score / 5) * 60}px`,
-                      backgroundColor: hoveredMoodDay === i ? "#44403c" : "#1c1917",
-                      minHeight: "4px",
-                    }}
-                    onMouseEnter={() => setHoveredMoodDay(i)}
-                    onMouseLeave={() => setHoveredMoodDay(null)}
-                    onClick={() => setEditingMoodDay(editingMoodDay === i ? null : i)}
-                  />
-                  <span className="text-[9px] text-stone-400">{DAYS[i]}</span>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
-            <div className="flex justify-between text-xs text-stone-400 mt-3 pt-3 border-t border-stone-50">
-              <span>Min: {Math.min(...moodHistory)} / 5</span>
-              <span>Avg: {moodAvg} / 5</span>
-              <span>Max: {Math.max(...moodHistory)} / 5</span>
-            </div>
-          </div>
+          )}
 
           {/* Mission completion */}
           <div className="bg-white border border-stone-100 rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-stone-900">Mission completion</h3>
-              <span className="text-sm font-semibold text-stone-900">
-                {completionRate}%
-                <span className="text-xs font-normal text-stone-400 ml-1">
-                  ({completedCount}/{clientMissions.length})
-                </span>
-              </span>
+              <h3 className="text-sm font-semibold text-stone-900">Completed tasks</h3>
+              <span className="text-sm font-semibold text-stone-900">{completedCount} total</span>
             </div>
-            <div className="w-full bg-stone-100 rounded-full h-1.5 mb-4 overflow-hidden">
-              <div
-                className="bg-stone-900 h-1.5 rounded-full transition-all duration-300"
-                style={{ width: `${completionRate}%` }}
-              />
-            </div>
-            {clientMissions.length === 0 ? (
-              <p className="text-xs text-stone-400">No tasks assigned.</p>
+            {completedMissions.length === 0 ? (
+              <p className="text-xs text-stone-400">No tasks completed yet.</p>
             ) : (
               <div className="space-y-2">
-                {clientMissions.slice(0, 5).map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => toggleMissionComplete(m.id)}
-                    className="w-full flex items-center gap-3 text-left group"
-                  >
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                      m.completed
-                        ? "bg-stone-900 border-stone-900"
-                        : "border-stone-300 group-hover:border-stone-500"
-                    }`}>
-                      {m.completed && <span className="text-[8px] text-white font-bold">✓</span>}
+                {completedMissions.slice(0, 5).map((m) => (
+                  <div key={m.id} className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded-full bg-stone-900 border-2 border-stone-900 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[8px] text-white font-bold">✓</span>
                     </div>
-                    <span className={`text-xs flex-1 text-left transition-colors ${
-                      m.completed ? "line-through text-stone-400" : "text-stone-700 group-hover:text-stone-900"
-                    }`}>
-                      {m.title}
-                    </span>
-                    <span className="text-[10px] text-stone-400 flex-shrink-0">{m.duration}</span>
-                  </button>
+                    <span className="text-xs flex-1 text-stone-700 line-through truncate">{m.mission.title}</span>
+                    <span className="text-[10px] text-stone-400 flex-shrink-0 capitalize">{m.mission.category}</span>
+                  </div>
                 ))}
-                {clientMissions.length > 5 && (
+                {completedMissions.length > 5 && (
                   <button
                     onClick={() => setTab("missions")}
                     className="text-xs text-stone-500 hover:text-stone-900 transition-colors pt-1"
                   >
-                    +{clientMissions.length - 5} more → view all
+                    +{completedMissions.length - 5} more → view all
                   </button>
                 )}
               </div>
@@ -448,7 +708,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                       <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Available courses</p>
                     </div>
                     <div className="max-h-48 overflow-y-auto divide-y divide-stone-50">
-                      {AVAILABLE_COURSES.filter((c) => !courses.find((ec) => ec.name === c)).map((c) => (
+                      {AVAILABLE_COURSES.filter((c) => !courses.find((ec) => ec.courseName === c)).map((c) => (
                         <button
                           key={c}
                           onClick={() => addCourse(c)}
@@ -457,7 +717,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                           {c}
                         </button>
                       ))}
-                      {AVAILABLE_COURSES.filter((c) => !courses.find((ec) => ec.name === c)).length === 0 && (
+                      {AVAILABLE_COURSES.filter((c) => !courses.find((ec) => ec.courseName === c)).length === 0 && (
                         <p className="px-3 py-3 text-xs text-stone-400">All courses assigned</p>
                       )}
                     </div>
@@ -470,23 +730,23 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             ) : (
               <div className="divide-y divide-stone-50">
                 {courses.map((course) => (
-                  <div key={course.name} className="flex items-center gap-3 py-2.5 first:pt-0 group">
-                    <span className="text-xs text-stone-700 flex-1 truncate">{course.name}</span>
+                  <div key={course.id} className="flex items-center gap-3 py-2.5 first:pt-0 group">
+                    <span className="text-xs text-stone-700 flex-1 truncate">{course.courseName}</span>
                     <button
-                      onClick={() => cycleCourseStatus(course.name)}
+                      onClick={() => cycleCourseStatus(course.id)}
                       className={`text-[10px] font-medium border px-2 py-0.5 rounded transition-colors ${
-                        course.status === "Completed"
+                        course.status === "completed"
                           ? "border-stone-300 text-stone-500 hover:border-stone-400"
-                          : course.status === "Paused"
+                          : course.status === "paused"
                           ? "border-amber-200 text-amber-600 hover:border-amber-300"
                           : "border-stone-200 text-stone-500 hover:border-stone-400"
                       }`}
                       title="Click to change status"
                     >
-                      {course.status}
+                      {COURSE_STATUS_LABEL[course.status]}
                     </button>
                     <button
-                      onClick={() => removeCourse(course.name)}
+                      onClick={() => removeCourse(course.id)}
                       className="text-stone-300 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-xs ml-1"
                       title="Remove course"
                     >
@@ -521,17 +781,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
                     <span className="text-sm font-medium text-stone-800">{entry.title}</span>
-                    {entry.type !== "text" && (
-                      <span className="text-[10px] border border-stone-200 text-stone-400 px-1.5 py-0.5 rounded capitalize">
-                        {entry.type}
-                      </span>
-                    )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-stone-400">{entry.date} · {entry.time}</span>
-                    {entry.wordCount && (
-                      <span className="text-xs text-stone-300">{entry.wordCount} words</span>
-                    )}
+                    <span className="text-xs text-stone-400">
+                      {new Date(entry.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      {" · "}
+                      {new Date(entry.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    </span>
                   </div>
                 </div>
                 {/* Mood score */}
@@ -554,25 +810,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               </div>
 
               {/* Content preview */}
-              {entry.type === "voice" ? (
-                <div className="flex items-center gap-2 px-3 py-2 bg-stone-50 rounded-lg mb-3">
-                  <div className="flex gap-0.5 items-center h-4">
-                    {Array.from({ length: 12 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-0.5 bg-stone-400 rounded-full"
-                        style={{ height: `${4 + Math.sin(i * 1.3) * 8}px` }}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-xs text-stone-500">Voice recording</span>
-                </div>
-              ) : (
-                entry.content && (
-                  <p className="text-xs text-stone-500 leading-relaxed line-clamp-2 mb-3">
-                    {entry.content.replace(/\n+/g, " ")}
-                  </p>
-                )
+              {entry.content && (
+                <p className="text-xs text-stone-500 leading-relaxed line-clamp-2 mb-3">
+                  {entry.content.replace(/\n+/g, " ")}
+                </p>
               )}
 
               {/* Footer actions */}
@@ -608,19 +849,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <h2 className="text-base font-semibold text-stone-900">{expandedJournalEntry.title}</h2>
-                  {expandedJournalEntry.type !== "text" && (
-                    <span className="text-[10px] border border-stone-200 text-stone-400 px-1.5 py-0.5 rounded capitalize">
-                      {expandedJournalEntry.type}
-                    </span>
-                  )}
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-xs text-stone-400">
-                    {expandedJournalEntry.date} · {expandedJournalEntry.time}
+                    {new Date(expandedJournalEntry.createdAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                    {" · "}
+                    {new Date(expandedJournalEntry.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                   </span>
-                  {expandedJournalEntry.wordCount && (
-                    <span className="text-xs text-stone-300">{expandedJournalEntry.wordCount} words</span>
-                  )}
                 </div>
               </div>
               <button
@@ -654,31 +889,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
             {/* Full content — scrollable */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
-              {expandedJournalEntry.type === "voice" ? (
-                <div className="flex flex-col items-center justify-center py-10 gap-4 text-stone-400">
-                  <div className="flex gap-1 items-center h-8">
-                    {Array.from({ length: 20 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-1 bg-stone-300 rounded-full"
-                        style={{ height: `${6 + Math.abs(Math.sin(i * 0.9)) * 22}px` }}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-sm">Voice recording — playback not available in preview</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {expandedJournalEntry.content
-                    .split(/\n{2,}/)
-                    .filter(Boolean)
-                    .map((para, i) => (
-                      <p key={i} className="text-sm text-stone-700 leading-relaxed">
-                        {para.replace(/\n/g, " ")}
-                      </p>
-                    ))}
-                </div>
-              )}
+              <div className="space-y-4">
+                {expandedJournalEntry.content
+                  .split(/\n{2,}/)
+                  .filter(Boolean)
+                  .map((para, i) => (
+                    <p key={i} className="text-sm text-stone-700 leading-relaxed">
+                      {para.replace(/\n/g, " ")}
+                    </p>
+                  ))}
+              </div>
             </div>
 
             {/* Modal footer */}
@@ -704,39 +924,45 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       {tab === "missions" && (
         <div className="space-y-3">
           <div className="flex justify-between items-center">
-            <p className="text-sm text-stone-500">Assigned tasks</p>
+            <p className="text-sm text-stone-500">Completed tasks ({completedMissions.length})</p>
             <Link href="/therapist/missions" className="text-xs bg-stone-900 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-stone-800 transition-colors">
               + Assign task
             </Link>
           </div>
           <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
-            {clientMissions.length === 0 ? (
+            {completedMissions.length === 0 ? (
               <div className="py-12 text-center text-sm text-stone-400">
-                No tasks assigned. Use &quot;+ Assign task&quot; to add one.
+                No tasks completed yet.
               </div>
             ) : (
               <div className="divide-y divide-stone-50">
-                {clientMissions.map((m) => (
-                  <div key={m.id} className="flex items-start gap-3 px-5 py-4">
-                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${m.completed ? "bg-stone-900 border-stone-900" : "border-stone-300"}`}>
-                      {m.completed && <span className="text-[8px] text-white font-bold">✓</span>}
+                {completedMissions.map((m) => {
+                  const hasResponse = !!m.responseData && Object.values(m.responseData).some((v) => v !== null && v !== undefined && v !== "");
+                  const isExpanded = expandedMissionId === m.id;
+                  return (
+                    <div key={m.id} className="px-5 py-4">
+                      <button
+                        onClick={() => hasResponse && setExpandedMissionId(isExpanded ? null : m.id)}
+                        className={`w-full flex items-start gap-3 text-left ${hasResponse ? "cursor-pointer" : "cursor-default"}`}
+                      >
+                        <div className="mt-0.5 w-4 h-4 rounded-full border-2 bg-stone-900 border-stone-900 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[8px] text-white font-bold">✓</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-stone-800 line-through text-stone-400">{m.mission.title}</div>
+                          <div className="flex gap-3 mt-1 text-xs text-stone-400">
+                            <span className="capitalize">{m.mission.category}</span>
+                            <span>+{m.mission.xp} xp</span>
+                            <span>{new Date(m.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                            {hasResponse && <span className="text-stone-500 font-medium">Response recorded</span>}
+                          </div>
+                        </div>
+                        {hasResponse && (isExpanded ? <ChevronUp size={14} className="text-stone-400 mt-0.5" /> : <ChevronDown size={14} className="text-stone-400 mt-0.5" />)}
+                      </button>
+                      {isExpanded && m.responseData && <ResponseDataPreview data={m.responseData} />}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-stone-800">{m.title}</div>
-                      <div className="text-xs text-stone-400 mt-0.5 truncate">{m.description}</div>
-                      <div className="flex gap-3 mt-1 text-xs text-stone-400">
-                        <span>{m.duration}</span>
-                        {m.dueTime && <span>Due {m.dueTime}</span>}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removeMission(m.id)}
-                      className="text-xs text-stone-400 hover:text-red-500 transition-colors flex-shrink-0"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -771,9 +997,24 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           {/* ── New note form ── */}
           {showNoteForm && (
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-stone-100 bg-stone-50">
-                <h3 className="text-sm font-semibold text-stone-900">New clinical note</h3>
-                <p className="text-xs text-stone-400 mt-0.5">This note is private and will not be visible to the client.</p>
+              <div className="px-5 py-4 border-b border-stone-100 bg-stone-50 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-stone-900">New clinical note</h3>
+                  <p className="text-xs text-stone-400 mt-0.5">This note is private and will not be visible to the client.</p>
+                </div>
+                <div className="flex bg-stone-100 rounded-lg p-0.5 gap-0.5 flex-shrink-0">
+                  {(["freeform", "soap"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setFormNoteFormat(f)}
+                      className={`text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${
+                        formNoteFormat === f ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
+                      }`}
+                    >
+                      {f === "freeform" ? "Free text" : "SOAP"}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="p-5 space-y-5">
@@ -809,18 +1050,53 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 </div>
 
                 {/* Note content */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-stone-700">
-                    Session notes <span className="text-red-400">*</span>
-                  </label>
-                  <textarea
-                    rows={6}
-                    value={formContent}
-                    onChange={(e) => setFormContent(e.target.value)}
-                    placeholder="Describe the session content, client presentation, interventions used, client response…"
-                    className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2.5 text-stone-900 placeholder:text-stone-300 leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-400 transition-colors resize-none"
-                  />
-                </div>
+                {formNoteFormat === "freeform" ? (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-stone-700">
+                      Session notes <span className="text-red-400">*</span>
+                    </label>
+                    <textarea
+                      rows={6}
+                      value={formContent}
+                      onChange={(e) => setFormContent(e.target.value)}
+                      placeholder="Describe the session content, client presentation, interventions used, client response…"
+                      className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2.5 text-stone-900 placeholder:text-stone-300 leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-400 transition-colors resize-none"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-stone-700">Subjective</label>
+                      <textarea
+                        rows={3}
+                        value={formSubjective}
+                        onChange={(e) => setFormSubjective(e.target.value)}
+                        placeholder="Client's reported experience, in their own words…"
+                        className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2.5 text-stone-900 placeholder:text-stone-300 leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-400 transition-colors resize-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-stone-700">Objective</label>
+                      <textarea
+                        rows={3}
+                        value={formObjective}
+                        onChange={(e) => setFormObjective(e.target.value)}
+                        placeholder="Observable facts: affect, behavior, mental status…"
+                        className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2.5 text-stone-900 placeholder:text-stone-300 leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-400 transition-colors resize-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-stone-700">Assessment</label>
+                      <textarea
+                        rows={3}
+                        value={formClinicalAssessment}
+                        onChange={(e) => setFormClinicalAssessment(e.target.value)}
+                        placeholder="Clinical interpretation, progress toward goals…"
+                        className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2.5 text-stone-900 placeholder:text-stone-300 leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-400 transition-colors resize-none"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Affect + Risk */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -860,10 +1136,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   </div>
                 </div>
 
-                {/* Next steps */}
+                {/* Next steps / Plan */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-stone-700">
-                    Next steps / actions <span className="text-stone-400 font-normal">(optional)</span>
+                    {formNoteFormat === "soap" ? "Plan" : "Next steps / actions"} <span className="text-stone-400 font-normal">(optional)</span>
                   </label>
                   <textarea
                     rows={2}
@@ -938,10 +1214,14 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 </button>
                 <button
                   onClick={handleSaveNote}
-                  disabled={!formContent.trim()}
+                  disabled={
+                    (formNoteFormat === "soap"
+                      ? !(formSubjective.trim() || formObjective.trim() || formClinicalAssessment.trim() || formNextSteps.trim())
+                      : !formContent.trim()) || savingNote
+                  }
                   className="text-sm bg-stone-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-stone-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Save note
+                  {savingNote ? "Saving…" : "Save note"}
                 </button>
               </div>
             </div>
@@ -966,13 +1246,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                       {/* Date block */}
                       <div className="flex-shrink-0 text-center bg-stone-50 rounded-lg px-3 py-2 min-w-[60px]">
                         <div className="text-[10px] text-stone-400 uppercase font-medium">
-                          {new Date(note.date + "T12:00:00").toLocaleDateString("en-US", { month: "short" })}
+                          {new Date(note.date).toLocaleDateString("en-US", { month: "short" })}
                         </div>
                         <div className="text-sm font-semibold text-stone-900">
-                          {new Date(note.date + "T12:00:00").getDate()}
+                          {new Date(note.date).getDate()}
                         </div>
                         <div className="text-[10px] text-stone-400">
-                          {new Date(note.date + "T12:00:00").getFullYear()}
+                          {new Date(note.date).getFullYear()}
                         </div>
                       </div>
 
@@ -1012,10 +1292,33 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                     {/* Expanded content */}
                     {isExpanded && (
                       <div className="px-5 pb-5 space-y-4 border-t border-stone-50">
-                        <div className="pt-4">
-                          <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Full session notes</div>
-                          <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{note.content}</p>
-                        </div>
+                        {note.noteFormat === "soap" ? (
+                          <div className="pt-4 space-y-3">
+                            {note.subjective && (
+                              <div>
+                                <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Subjective</div>
+                                <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{note.subjective}</p>
+                              </div>
+                            )}
+                            {note.objective && (
+                              <div>
+                                <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Objective</div>
+                                <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{note.objective}</p>
+                              </div>
+                            )}
+                            {note.clinicalAssessment && (
+                              <div>
+                                <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Assessment</div>
+                                <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{note.clinicalAssessment}</p>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="pt-4">
+                            <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Full session notes</div>
+                            <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                          </div>
+                        )}
                         {note.affect && (
                           <div>
                             <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Affect / presentation</div>
@@ -1024,20 +1327,18 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                         )}
                         {note.nextSteps && (
                           <div>
-                            <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Next steps</div>
+                            <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1">{note.noteFormat === "soap" ? "Plan" : "Next steps"}</div>
                             <p className="text-sm text-stone-700 leading-relaxed">{note.nextSteps}</p>
                           </div>
                         )}
                         <div className="pt-2 border-t border-stone-50 flex items-center justify-between">
                           <p className="text-[11px] text-stone-400">{formatNoteDate(note.date)}</p>
                           <button
-                            onClick={() => {
-                              setNotes((prev) => prev.filter((n) => n.id !== note.id));
-                              setExpandedNoteId(null);
-                            }}
-                            className="text-xs text-stone-400 hover:text-red-500 transition-colors"
+                            onClick={() => deleteNote(note.id)}
+                            disabled={deletingNoteId === note.id}
+                            className="text-xs text-stone-400 hover:text-red-500 transition-colors disabled:opacity-40"
                           >
-                            Delete note
+                            {deletingNoteId === note.id ? "Deleting…" : "Delete note"}
                           </button>
                         </div>
                       </div>
@@ -1053,6 +1354,49 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       {/* ── Treatment plan ── */}
       {tab === "plan" && (
         <div className="space-y-4">
+          {/* Client's safety plan (read-only) */}
+          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-stone-100">
+              <h3 className="text-sm font-semibold text-stone-900">Client&apos;s safety plan</h3>
+            </div>
+            {!safetyPlanShared || !safetyPlan ? (
+              <div className="px-5 py-6 text-center text-sm text-stone-400">
+                {safetyPlanShared ? "Client hasn't created a safety plan yet." : "Client hasn't shared a safety plan with you."}
+              </div>
+            ) : (
+              <div className="divide-y divide-stone-50">
+                {[
+                  ["Warning signs", safetyPlan.warningSigns],
+                  ["Coping strategies", safetyPlan.copingStrategies],
+                  ["Making environment safer", safetyPlan.safeEnvironmentSteps],
+                ].map(([label, items]) => (items as string[]).length > 0 && (
+                  <div key={label as string} className="px-5 py-3">
+                    <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1.5">{label}</div>
+                    <ul className="space-y-1">
+                      {(items as string[]).map((item, i) => <li key={i} className="text-sm text-stone-700">• {item}</li>)}
+                    </ul>
+                  </div>
+                ))}
+                {(
+                  [
+                    ["People/places for distraction", safetyPlan.distractionContacts],
+                    ["People to ask for help", safetyPlan.supportContacts],
+                    ["Professional contacts", safetyPlan.professionalContacts],
+                  ] as [string, SafetyPlanContact[]][]
+                ).map(([label, contacts]) => contacts.length > 0 && (
+                  <div key={label} className="px-5 py-3">
+                    <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1.5">{label}</div>
+                    <div className="space-y-0.5">
+                      {contacts.map((c, i) => (
+                        <div key={i} className="text-sm text-stone-700">{c.name}{c.phone ? ` · ${c.phone}` : ""}{c.note ? ` — ${c.note}` : ""}</div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Plan card */}
           <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
@@ -1071,9 +1415,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                     </button>
                     <button
                       onClick={savePlan}
-                      className="text-xs bg-stone-900 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-stone-800 transition-colors"
+                      disabled={planSaving}
+                      className="text-xs bg-stone-900 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-stone-800 transition-colors disabled:opacity-40"
                     >
-                      Save changes
+                      {planSaving ? "Saving…" : "Save changes"}
                     </button>
                   </>
                 ) : (
@@ -1231,9 +1576,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               </button>
               <button
                 onClick={savePlan}
-                className="text-sm bg-stone-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-stone-800 transition-colors"
+                disabled={planSaving}
+                className="text-sm bg-stone-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-stone-800 transition-colors disabled:opacity-40"
               >
-                Save changes
+                {planSaving ? "Saving…" : "Save changes"}
               </button>
             </div>
           )}

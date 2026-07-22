@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import NotificationPanel from "@/components/NotificationPanel";
 import {
   LayoutDashboard, BookOpen, CheckSquare, PenLine,
   MessageCircle, Calendar, Search, Bot,
-  BarChart2, Users, ClipboardList, Settings, LogOut, Flame,
+  BarChart2, Users, ClipboardList, Settings, LogOut, Stethoscope, Newspaper,
 } from "lucide-react";
+import Logo from "@/components/Logo";
 
 const navSections = [
   {
@@ -16,16 +18,18 @@ const navSections = [
     items: [
       { href: "/dashboard", Icon: LayoutDashboard, label: "Dashboard", exact: true },
       { href: "/dashboard/courses", Icon: BookOpen, label: "My Courses" },
-      { href: "/dashboard/missions", Icon: CheckSquare, label: "Daily Tasks", badge: 4 },
+      { href: "/dashboard/articles", Icon: Newspaper, label: "Articles" },
+      { href: "/dashboard/missions", Icon: CheckSquare, label: "Daily Tasks" },
       { href: "/dashboard/journal", Icon: PenLine, label: "Journal" },
     ],
   },
   {
     label: "Care",
     items: [
-      { href: "/dashboard/messages", Icon: MessageCircle, label: "Messages", badge: 2 },
-      { href: "/dashboard/schedule", Icon: Calendar, label: "Schedule" },
-      { href: "/dashboard/find", Icon: Search, label: "Find a Therapist" },
+      { href: "/dashboard/messages",     Icon: MessageCircle, label: "Messages" },
+      { href: "/dashboard/schedule",     Icon: Calendar,      label: "Schedule" },
+      { href: "/dashboard/my-therapist", Icon: Stethoscope,   label: "My Therapist" },
+      { href: "/dashboard/find",         Icon: Search,        label: "Find a Therapist" },
     ],
   },
   {
@@ -41,7 +45,34 @@ const navSections = [
 
 export default function DashboardHeader() {
   const [open, setOpen] = useState(false);
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [userName, setUserName] = useState("");
+  const [badges, setBadges] = useState<Record<string, number>>({});
   const pathname = usePathname();
+
+  useEffect(() => {
+    fetch("/api/user")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        if (d.user?.avatar) setAvatar(d.user.avatar);
+        if (d.user?.name)   setUserName(d.user.name.split(" ")[0]);
+      })
+      .catch(() => {});
+    fetch("/api/missions")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const remaining = (d.missions ?? []).filter((m: { completed: boolean }) => !m.completed).length;
+        setBadges((prev) => ({ ...prev, "/dashboard/missions": remaining }));
+      })
+      .catch(() => {});
+    fetch("/api/messages")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const unread = (d.conversations ?? []).reduce((sum: number, c: { unread: number }) => sum + c.unread, 0);
+        setBadges((prev) => ({ ...prev, "/dashboard/messages": unread }));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -53,12 +84,11 @@ export default function DashboardHeader() {
 
   return (
     <>
-      <header className="flex-shrink-0 bg-white border-b border-stone-200 h-14 flex items-center justify-between px-4 md:px-6 gap-3">
+      <header suppressHydrationWarning className="flex-shrink-0 bg-white border-b border-stone-200 h-14 flex items-center justify-between px-4 md:px-6 gap-3">
         {/* Mobile: logo + burger */}
-        <div className="flex items-center gap-2 md:hidden">
-          <span className="w-7 h-7 bg-sage-700 rounded-lg flex items-center justify-center text-white text-xs">🌿</span>
-          <span className="font-semibold text-sage-800 text-sm">MindEase</span>
-        </div>
+        <Link href="/dashboard" className="flex items-center md:hidden">
+          <Logo height={22} />
+        </Link>
 
         {/* Desktop: search */}
         <div className="relative flex-1 max-w-xs hidden sm:block">
@@ -72,9 +102,11 @@ export default function DashboardHeader() {
 
         <div className="flex items-center gap-2 ml-auto">
           <NotificationPanel role="client" />
-          <div className="w-8 h-8 bg-sage-200 rounded-full flex items-center justify-center text-sm cursor-pointer hover:ring-2 hover:ring-sage-400 transition-all">
-            👤
-          </div>
+          <Link href="/dashboard/settings" className="w-8 h-8 bg-sage-100 rounded-full overflow-hidden flex items-center justify-center text-sage-700 text-sm font-semibold hover:ring-2 hover:ring-sage-400 transition-all flex-shrink-0">
+            {avatar
+              ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+              : (userName ? userName[0].toUpperCase() : "👤")}
+          </Link>
           {/* Burger button — mobile only */}
           <button
             onClick={() => setOpen(true)}
@@ -99,13 +131,13 @@ export default function DashboardHeader() {
         {/* Drawer header */}
         <div className="flex items-center justify-between px-4 h-14 border-b border-stone-100 flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-sage-100 flex items-center justify-center text-sage-700 text-sm font-semibold">A</div>
+            <div className="w-8 h-8 rounded-full bg-sage-100 overflow-hidden flex items-center justify-center text-sage-700 text-sm font-semibold">
+              {avatar
+                ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+                : (userName ? userName[0].toUpperCase() : "?")}
+            </div>
             <div>
-              <div className="text-sm font-medium text-stone-800 leading-tight">Alex Johnson</div>
-              <div className="flex items-center gap-1 mt-0.5">
-                <Flame size={10} className="text-amber-500" />
-                <span className="text-[11px] text-amber-600 font-medium">7-day streak</span>
-              </div>
+              <div className="text-sm font-medium text-stone-800 leading-tight">{userName || "…"}</div>
             </div>
           </div>
           <button
@@ -122,8 +154,9 @@ export default function DashboardHeader() {
             <div key={section.label}>
               <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-2 mb-1">{section.label}</p>
               <div className="space-y-0.5">
-                {section.items.map(({ href, Icon, label, badge, exact }) => {
+                {section.items.map(({ href, Icon, label, exact }) => {
                   const active = exact ? pathname === href : pathname.startsWith(href);
+                  const badge = badges[href];
                   return (
                     <Link
                       key={href}
@@ -149,10 +182,13 @@ export default function DashboardHeader() {
             <Settings size={17} strokeWidth={1.5} />
             Settings
           </Link>
-          <Link href="/" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-stone-500 hover:bg-red-50 hover:text-red-500 transition-colors">
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-stone-500 hover:bg-red-50 hover:text-red-500 transition-colors"
+          >
             <LogOut size={17} strokeWidth={1.5} />
             Sign out
-          </Link>
+          </button>
         </div>
       </div>
     </>

@@ -1,19 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { therapistProfile } from "@/lib/mockData";
+import { useState, useEffect } from "react";
+import { timeSlotToDate } from "@/lib/scheduling";
 
+type TherapistInfo = { name: string; avatar: string; title: string; specializations: string[]; rating: number };
 type SessionType = "video" | "phone" | "in-person";
 type Duration = 15 | 30 | 45 | 60;
 
 interface BookingModalProps {
   onClose: () => void;
+  therapistId?: string;
+  therapistName?: string;
+  therapistTitle?: string;
 }
-
-const timeSlots = [
-  "9:00 AM", "10:00 AM", "11:00 AM",
-  "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM",
-];
 
 const sessionTypeIcons: Record<SessionType, string> = {
   video: "📹",
@@ -27,20 +26,20 @@ const sessionTypeLabels: Record<SessionType, string> = {
   "in-person": "In-Person",
 };
 
-function timeSlotToISO(dateStr: string, timeSlot: string): string {
-  const [time, period] = timeSlot.split(" ");
-  let [hours, minutes] = time.split(":").map(Number);
-  if (period === "PM" && hours !== 12) hours += 12;
-  if (period === "AM" && hours === 12) hours = 0;
-  return new Date(`${dateStr}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`).toISOString();
-}
+const DEFAULT_THERAPIST: TherapistInfo = { name: "Your Therapist", avatar: "👩‍⚕️", title: "Licensed Therapist", specializations: [], rating: 0 };
 
-export default function BookingModal({ onClose }: BookingModalProps) {
+export default function BookingModal({ onClose, therapistId: therapistIdProp, therapistName, therapistTitle }: BookingModalProps) {
   const today = new Date();
   const minDate = new Date(today);
   minDate.setDate(today.getDate() + 1);
   const minDateStr = minDate.toISOString().split("T")[0];
 
+  const [therapist, setTherapist] = useState<TherapistInfo>(() => ({
+    ...DEFAULT_THERAPIST,
+    name: therapistName ?? DEFAULT_THERAPIST.name,
+    title: therapistTitle ?? DEFAULT_THERAPIST.title,
+  }));
+  const [realTherapistId, setRealTherapistId] = useState<string | null>(therapistIdProp ?? null);
   const [sessionType, setSessionType] = useState<SessionType>("video");
   const [duration, setDuration] = useState<Duration>(60);
   const [date, setDate] = useState("");
@@ -49,6 +48,44 @@ export default function BookingModal({ onClose }: BookingModalProps) {
   const [loading, setLoading] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+
+  useEffect(() => {
+    if (therapistIdProp) return;
+    fetch("/api/user").then((r) => r.json()).then((d) => {
+      const t = d.user?.assignedTherapist;
+      if (t) {
+        setRealTherapistId(t.id);
+        setTherapist({
+          name: t.user?.name ?? "Your Therapist",
+          avatar: t.user?.avatar ?? "👩‍⚕️",
+          title: t.title ?? "Licensed Therapist",
+          specializations: t.specializations ?? [],
+          rating: t.rating ?? 0,
+        });
+      }
+    });
+  }, [therapistIdProp]);
+
+  useEffect(() => {
+    if (!realTherapistId || !date) {
+      setAvailableSlots([]);
+      return;
+    }
+    let cancelled = false;
+    setSlotsLoading(true);
+    fetch(`/api/therapists/${realTherapistId}/availability?date=${date}&duration=${duration}`)
+      .then((r) => (r.ok ? r.json() : { slots: [] }))
+      .then((d) => {
+        if (cancelled) return;
+        const slots: string[] = d.slots ?? [];
+        setAvailableSlots(slots);
+        setTime((prev) => (prev && !slots.includes(prev) ? "" : prev));
+      })
+      .finally(() => { if (!cancelled) setSlotsLoading(false); });
+    return () => { cancelled = true; };
+  }, [realTherapistId, date, duration]);
 
   const canSubmit = date && time && !loading;
 
@@ -56,26 +93,32 @@ export default function BookingModal({ onClose }: BookingModalProps) {
     if (!canSubmit) return;
     setLoading(true);
     setError("");
+    if (!realTherapistId) {
+      setError("No therapist selected. Please assign a therapist first.");
+      setLoading(false);
+      return;
+    }
     try {
-      const isoDate = timeSlotToISO(date, time);
+      const isoDate = timeSlotToDate(date, time).toISOString();
+      const apiType = sessionType === "in-person" ? "in_person" : sessionType;
       const res = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          therapistId: "assigned",
+          therapistId: realTherapistId,
           date: isoDate,
-          type: sessionType,
+          type: apiType,
           duration,
           notes: notes.trim() || undefined,
         }),
       });
-      if (!res.ok && res.status !== 401) {
-        throw new Error("Could not send request");
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "Could not book session");
       }
       setConfirmed(true);
-    } catch {
-      // Show confirmation anyway for demo/mock mode
-      setConfirmed(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send request");
     } finally {
       setLoading(false);
     }
@@ -107,23 +150,24 @@ export default function BookingModal({ onClose }: BookingModalProps) {
           {/* Therapist card */}
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl">
-              {therapistProfile.avatar}
+              {therapist.avatar}
             </div>
             <div>
-              <div className="font-semibold">{therapistProfile.name}</div>
-              <div className="text-blue-200 text-xs">{therapistProfile.title}</div>
+              <div className="font-semibold">{therapist.name}</div>
+              <div className="text-blue-200 text-xs">{therapist.title}</div>
               <div className="flex gap-1 mt-1 flex-wrap">
-                {therapistProfile.specialisations.map((s) => (
+                {therapist.specializations.map((s) => (
                   <span key={s} className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">
                     {s}
                   </span>
                 ))}
               </div>
             </div>
-            <div className="ml-auto text-right flex-shrink-0">
-              <div className="text-base font-bold">★ {therapistProfile.rating}</div>
-              <div className="text-blue-200 text-xs">{therapistProfile.totalSessions} sessions</div>
-            </div>
+            {therapist.rating > 0 && (
+              <div className="ml-auto text-right flex-shrink-0">
+                <div className="text-base font-bold">★ {therapist.rating.toFixed(1)}</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -135,7 +179,7 @@ export default function BookingModal({ onClose }: BookingModalProps) {
             </div>
             <h3 className="text-lg font-bold text-stone-900 mb-1">Request Sent</h3>
             <p className="text-stone-500 text-sm mb-6">
-              {therapistProfile.name} will confirm your session shortly.
+              {therapist.name} will confirm your session shortly.
             </p>
             <div className="bg-stone-50 rounded-2xl p-4 text-left space-y-2 mb-6">
               <div className="flex justify-between text-sm">
@@ -238,21 +282,29 @@ export default function BookingModal({ onClose }: BookingModalProps) {
               <label className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2 block">
                 Time
               </label>
-              <div className="grid grid-cols-4 gap-2">
-                {timeSlots.map((slot) => (
-                  <button
-                    key={slot}
-                    onClick={() => setTime(slot)}
-                    className={`py-2 rounded-xl border-2 text-xs font-medium transition-all ${
-                      time === slot
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-stone-200 text-stone-600 hover:border-stone-300"
-                    }`}
-                  >
-                    {slot}
-                  </button>
-                ))}
-              </div>
+              {!date ? (
+                <p className="text-xs text-stone-400 py-2">Pick a date to see available times.</p>
+              ) : slotsLoading ? (
+                <p className="text-xs text-stone-400 py-2">Loading available times…</p>
+              ) : availableSlots.length === 0 ? (
+                <p className="text-xs text-stone-400 py-2">No available times for this date — try another day.</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {availableSlots.map((slot) => (
+                    <button
+                      key={slot}
+                      onClick={() => setTime(slot)}
+                      className={`py-2 rounded-xl border-2 text-xs font-medium transition-all ${
+                        time === slot
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-stone-200 text-stone-600 hover:border-stone-300"
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Notes */}

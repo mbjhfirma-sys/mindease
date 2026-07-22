@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { dailyMissions, type Mission } from "./mockData";
 
 // Key rotates daily so tasks reset each morning
-const storageKey = () => `mindease-tasks-${new Date().toISOString().split("T")[0]}`;
+const storageKey = () => `youmindo-tasks-${new Date().toISOString().split("T")[0]}`;
 
 function loadTasks(): Mission[] {
   if (typeof window === "undefined") return dailyMissions.map((m) => ({ ...m, completed: false }));

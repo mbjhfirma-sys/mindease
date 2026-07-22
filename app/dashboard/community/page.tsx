@@ -1,8 +1,21 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { supportGroups, communityPosts, type Post } from "@/lib/mockData";
-import { Rss, Users, Target, ShieldAlert, Send, X, Heart, MessageCircle } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Rss, Users, Target, ShieldAlert, Send, X, Heart, MessageCircle, Sparkles } from "lucide-react";
+import TaskActivityModal from "@/components/dashboard/TaskActivityModal";
+import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
+
+type Post = {
+  id: string; author: string; avatar: string; group: string | null; content: string;
+  time: string; likes: number; replies: number; liked: boolean; pinned?: boolean;
+  source?: "support" | "therapist";
+};
+
+type Group = {
+  id: string; name: string; description: string; category: string;
+  icon: string; color: string; nextSession: string | null; members: number; joined: boolean;
+  source?: "support" | "therapist"; createdByName?: string | null;
+};
 
 // ─── Enrichment constants ─────────────────────────────────────────────────────
 
@@ -23,12 +36,14 @@ const GROUP_META: Record<
   sg5: { weeklyPosts: 7,  onlineNow: 4,  activity: "quiet",    accentBorder: "border-l-4 border-emerald-400", tagColor: "bg-emerald-50 text-emerald-700" },
 };
 
-const CHALLENGES_DATA = [
-  { id: "c1", title: "30-Day Mindfulness",   desc: "Complete at least one mindfulness activity every day for 30 days.", participants: 1842, progress: 7,  total: 30, joined: true,  difficulty: "Beginner", category: "Mindfulness", daysLeft: 23 },
-  { id: "c2", title: "Gratitude Week",       desc: "Write 3 things you're grateful for every day for 7 days.",          participants: 934,  progress: 0,  total: 7,  joined: false, difficulty: "Beginner", category: "Journaling",  daysLeft: null },
-  { id: "c3", title: "Sleep Hygiene Sprint", desc: "Follow your wind-down routine for 14 consecutive nights.",           participants: 621,  progress: 0,  total: 14, joined: false, difficulty: "Moderate", category: "Sleep",      daysLeft: null },
-  { id: "c4", title: "Community Connector",  desc: "Post in 3 different support group discussions this week.",           participants: 487,  progress: 1,  total: 3,  joined: true,  difficulty: "Beginner", category: "Community",  daysLeft: 5 },
-];
+const DEFAULT_META = { weeklyPosts: 8, onlineNow: 4, activity: "moderate" as const, accentBorder: "border-l-4 border-stone-200", tagColor: "bg-stone-50 text-stone-600" };
+function getGroupMeta(id: string) { return GROUP_META[id] ?? DEFAULT_META; }
+
+type Challenge = {
+  id: string; title: string; description: string; category: string; difficulty: string;
+  totalDays: number; xpReward: number; activityType: string;
+  participantCount: number; joined: boolean; progress: number; completed: boolean; canLogToday: boolean;
+};
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 
@@ -36,9 +51,12 @@ const TAB_ICONS: Record<string, React.ReactNode> = {
   feed:       <Rss       size={14} strokeWidth={1.5} />,
   groups:     <Users     size={14} strokeWidth={1.5} />,
   challenges: <Target    size={14} strokeWidth={1.5} />,
+  peers:      <Sparkles  size={14} strokeWidth={1.5} />,
 };
 
-type Tab = "feed" | "groups" | "challenges";
+type Tab = "feed" | "groups" | "challenges" | "peers";
+
+type PeerMatch = { id: string; name: string; avatar: string | null; sharedGroups: { id: string; name: string }[] };
 type FeedFilter = "all" | "mygroups" | "trending";
 
 type Reply = {
@@ -125,12 +143,27 @@ function ActivityDot({ activity }: { activity: "active" | "moderate" | "quiet" }
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CommunityPage() {
+  const checkAchievements = useAchievementCheck();
   const [tab, setTab] = useState<Tab>("feed");
-  const [posts, setPosts] = useState(communityPosts);
-  const [groups, setGroups] = useState(supportGroups);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [newPost, setNewPost] = useState("");
-  const [postGroup, setPostGroup] = useState(supportGroups[0].name);
+  const [postGroup, setPostGroup] = useState("");
   const [posting, setPosting] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/community/groups")
+      .then((r) => r.json())
+      .then((d) => {
+        const g: Group[] = d.groups ?? [];
+        setGroups(g);
+        if (!postGroup && g.length > 0) setPostGroup(g[0].name);
+      });
+    fetch("/api/community/posts")
+      .then((r) => r.json())
+      .then((d) => setPosts(d.posts ?? []));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Feed filter
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
@@ -147,7 +180,32 @@ export default function CommunityPage() {
   const [reportSubmitted, setReportSubmitted] = useState(false);
 
   // Challenges
-  const [challenges, setChallenges] = useState(CHALLENGES_DATA);
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [openChallengeTask, setOpenChallengeTask] = useState<Challenge | null>(null);
+
+  const [peerMatches, setPeerMatches] = useState<PeerMatch[]>([]);
+  const [peerLoading, setPeerLoading] = useState(false);
+  const [peerError, setPeerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tab !== "peers") return;
+    setPeerLoading(true);
+    setPeerError(null);
+    fetch("/api/community/peers")
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) { setPeerError(d.error ?? "Something went wrong"); return; }
+        setPeerMatches(d.matches ?? []);
+      })
+      .catch(() => setPeerError("Something went wrong"))
+      .finally(() => setPeerLoading(false));
+  }, [tab]);
+
+  useEffect(() => {
+    fetch("/api/community/challenges")
+      .then((r) => r.json())
+      .then((d) => setChallenges(d.challenges ?? []));
+  }, []);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -160,7 +218,7 @@ export default function CommunityPage() {
     // Always restrict to joined groups only
     const memberPosts = filterGroupName
       ? posts.filter((p) => p.group === filterGroupName)
-      : posts.filter((p) => joinedGroupNames.has(p.group));
+      : posts.filter((p) => p.group !== null && joinedGroupNames.has(p.group));
 
     if (feedFilter === "trending") {
       return [...memberPosts].sort((a, b) => b.likes - a.likes);
@@ -182,11 +240,19 @@ export default function CommunityPage() {
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function toggleLike(id: string) {
+    const post = posts.find((p) => p.id === id);
+    if (!post) return;
+    const action = post.liked ? "unlike" : "like";
     setPosts((p) =>
       p.map((x) =>
         x.id === id ? { ...x, liked: !x.liked, likes: x.liked ? x.likes - 1 : x.likes + 1 } : x
       )
     );
+    fetch("/api/community/posts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId: id, action, postSource: post.source ?? "support" }),
+    });
   }
 
   function toggleReplyLike(postId: string, replyId: string) {
@@ -210,6 +276,11 @@ export default function CommunityPage() {
           : x
       )
     );
+    fetch("/api/community/groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupId: id, action: isJoining ? "join" : "leave", source: group?.source ?? "support" }),
+    }).then(() => { if (isJoining) checkAchievements(); });
     if (isJoining && group) {
       setFilterGroupName(group.name);
       setFeedFilter("mygroups");
@@ -227,25 +298,34 @@ export default function CommunityPage() {
     setFilterGroupName(null);
   }
 
-  function submitPost() {
+  async function submitPost() {
     if (!newPost.trim()) return;
     setPosting(true);
-    setTimeout(() => {
-      const post: Post = {
-        id: `p${Date.now()}`,
+    const content = newPost.trim();
+    const group = groups.find((g) => g.name === postGroup);
+    try {
+      const r = await fetch("/api/community/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, groupId: group?.id, anonymous: true, groupSource: group?.source ?? "support" }),
+      });
+      const d = await r.json();
+      const optimistic: Post = {
+        id: d.post?.id ?? `p${Date.now()}`,
         author: "Anonymous",
         avatar: "○",
         group: postGroup,
-        content: newPost.trim(),
+        content,
         time: "Just now",
         likes: 0,
         replies: 0,
         liked: false,
       };
-      setPosts([post, ...posts]);
+      setPosts((p) => [optimistic, ...p]);
       setNewPost("");
+    } finally {
       setPosting(false);
-    }, 600);
+    }
   }
 
   function submitReply(postId: string) {
@@ -270,8 +350,13 @@ export default function CommunityPage() {
     setReportSubmitted(false);
   }
 
-  function submitReport(_: string) {
+  async function submitReport(reason: string) {
     if (!reportTarget) return;
+    await fetch("/api/community/reports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetId: reportTarget.id, targetType: reportTarget.type, reason }),
+    });
     setReportedIds((prev) => new Set(prev).add(reportTarget.id));
     setReportSubmitted(true);
   }
@@ -281,14 +366,32 @@ export default function CommunityPage() {
     setReportSubmitted(false);
   }
 
-  function joinChallenge(id: string) {
-    setChallenges((prev) => prev.map((c) => (c.id === id ? { ...c, joined: true } : c)));
+  async function joinChallenge(id: string) {
+    setChallenges((prev) => prev.map((c) => (c.id === id ? { ...c, joined: true, canLogToday: true } : c)));
+    await fetch("/api/community/challenges", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ challengeId: id }),
+    });
   }
 
   function logChallengeProgress(id: string) {
-    setChallenges((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, progress: Math.min(c.progress + 1, c.total) } : c))
-    );
+    const challenge = challenges.find((c) => c.id === id);
+    if (challenge) setOpenChallengeTask(challenge);
+  }
+
+  async function completeChallengeLog(challengeId: string, responseData?: Record<string, unknown>) {
+    const r = await fetch(`/api/community/challenges/${challengeId}/log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ responseData }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      setChallenges((prev) =>
+        prev.map((c) => (c.id === challengeId ? { ...c, progress: d.progress ?? c.progress, completed: !!d.completed, canLogToday: false } : c))
+      );
+    }
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -312,7 +415,7 @@ export default function CommunityPage() {
 
       {/* Tab bar */}
       <div className="flex border-b border-stone-100">
-        {(["feed", "groups", "challenges"] as Tab[]).map((t) => (
+        {(["feed", "groups", "challenges", "peers"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -433,7 +536,7 @@ export default function CommunityPage() {
 
             // Derive group accent
             const matchedGroup = groups.find((g) => g.name === post.group);
-            const groupMeta = matchedGroup ? GROUP_META[matchedGroup.id] : null;
+            const groupMeta = matchedGroup ? getGroupMeta(matchedGroup.id) : null;
             const accentBorder = groupMeta?.accentBorder ?? "border-l-4 border-stone-200";
             const tagColor = groupMeta?.tagColor ?? "bg-stone-50 text-stone-600";
 
@@ -630,7 +733,7 @@ export default function CommunityPage() {
                 Your Groups
               </h2>
               {joinedGroups.map((group) => {
-                const meta = GROUP_META[group.id];
+                const meta = getGroupMeta(group.id);
                 return (
                   <div
                     key={group.id}
@@ -646,8 +749,8 @@ export default function CommunityPage() {
                         {meta && <ActivityDot activity={meta.activity} />}
                       </div>
 
-                      {/* Row 2: category pill + members */}
-                      <div className="flex items-center gap-2 ml-8 mb-2">
+                      {/* Row 2: category pill + members + therapist badge */}
+                      <div className="flex items-center gap-2 ml-8 mb-2 flex-wrap">
                         <span
                           className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${meta?.tagColor ?? "bg-stone-50 text-stone-600"}`}
                         >
@@ -656,6 +759,11 @@ export default function CommunityPage() {
                         <span className="text-[10px] text-stone-400">
                           {group.members.toLocaleString()} members
                         </span>
+                        {group.source === "therapist" && group.createdByName && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">
+                            🩺 {group.createdByName}
+                          </span>
+                        )}
                       </div>
 
                       {/* Row 3: description */}
@@ -708,7 +816,7 @@ export default function CommunityPage() {
                 Discover
               </h2>
               {discoverGroups.map((group) => {
-                const meta = GROUP_META[group.id];
+                const meta = getGroupMeta(group.id);
                 return (
                   <div
                     key={group.id}
@@ -725,7 +833,7 @@ export default function CommunityPage() {
                       </div>
 
                       {/* Row 2 */}
-                      <div className="flex items-center gap-2 ml-8 mb-2">
+                      <div className="flex items-center gap-2 ml-8 mb-2 flex-wrap">
                         <span
                           className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${meta?.tagColor ?? "bg-stone-50 text-stone-600"}`}
                         >
@@ -734,6 +842,11 @@ export default function CommunityPage() {
                         <span className="text-[10px] text-stone-400">
                           {group.members.toLocaleString()} members
                         </span>
+                        {group.source === "therapist" && group.createdByName && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">
+                            🩺 {group.createdByName}
+                          </span>
+                        )}
                       </div>
 
                       {/* Row 3 */}
@@ -775,7 +888,8 @@ export default function CommunityPage() {
                 In Progress
               </h2>
               {activeChallenge.map((c) => {
-                const pct = Math.round((c.progress / c.total) * 100);
+                const pct = Math.round((c.progress / c.totalDays) * 100);
+                const daysLeft = Math.max(c.totalDays - c.progress, 0);
                 return (
                   <div
                     key={c.id}
@@ -799,15 +913,15 @@ export default function CommunityPage() {
                     </div>
 
                     {/* Description */}
-                    <p className="text-sm text-stone-500 mt-1 mb-4">{c.desc}</p>
+                    <p className="text-sm text-stone-500 mt-1 mb-4">{c.description}</p>
 
                     {/* Progress section */}
                     <div className="flex justify-between items-baseline mb-1.5 text-xs">
                       <span className="text-stone-700 font-medium">
-                        Day {c.progress} of {c.total}
+                        Day {c.progress} of {c.totalDays}
                       </span>
                       <span className="text-stone-400">
-                        {c.participants.toLocaleString()} joined
+                        {c.participantCount.toLocaleString()} joined
                       </span>
                     </div>
                     <div className="w-full bg-stone-100 rounded-full h-2 mb-1.5">
@@ -816,19 +930,19 @@ export default function CommunityPage() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    {c.daysLeft !== null && (
+                    {!c.completed && (
                       <p className="text-[11px] text-stone-400 mb-4">
-                        {c.daysLeft} days remaining
+                        {daysLeft} day{daysLeft !== 1 ? "s" : ""} remaining
                       </p>
                     )}
 
                     {/* CTA */}
                     <button
                       onClick={() => logChallengeProgress(c.id)}
-                      disabled={c.progress >= c.total}
+                      disabled={c.completed || !c.canLogToday}
                       className="w-full bg-stone-900 text-white text-sm font-medium py-2.5 rounded-xl hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                      {c.progress >= c.total ? "Completed!" : "Log today's activity"}
+                      {c.completed ? "Completed! 🎉" : !c.canLogToday ? "Logged today ✓" : "Log today's activity"}
                     </button>
                   </div>
                 );
@@ -866,11 +980,11 @@ export default function CommunityPage() {
 
                     {/* Title + desc */}
                     <h3 className="text-sm font-semibold text-stone-900 mt-1">{c.title}</h3>
-                    <p className="text-xs text-stone-400 mt-1 leading-relaxed flex-1">{c.desc}</p>
+                    <p className="text-xs text-stone-400 mt-1 leading-relaxed flex-1">{c.description}</p>
 
                     {/* Meta */}
                     <p className="text-[11px] text-stone-400 mt-2">
-                      {c.total} days · {c.participants.toLocaleString()} joined
+                      {c.totalDays} days · {c.participantCount.toLocaleString()} joined
                     </p>
 
                     {/* Join */}
@@ -886,10 +1000,54 @@ export default function CommunityPage() {
             </div>
           )}
 
-          {challenges.every((c) => c.joined) && (
+          {challenges.length > 0 && challenges.every((c) => c.joined) && (
             <p className="text-sm text-stone-400 text-center py-4">
               You&apos;ve joined all available challenges. Keep going!
             </p>
+          )}
+        </div>
+      )}
+
+      {/* ══ Peers tab ═════════════════════════════════════════════════════════ */}
+      {tab === "peers" && (
+        <div className="space-y-4">
+          <div className="bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 text-xs text-stone-500">
+            Matched by the community groups you share — never by diagnosis or clinical data. Turn this on or off anytime in Settings → Privacy.
+          </div>
+          {peerLoading ? (
+            <div className="space-y-2 animate-pulse">
+              {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-white border border-stone-100 rounded-xl" />)}
+            </div>
+          ) : peerError ? (
+            <div className="bg-white border border-stone-100 rounded-xl py-12 text-center">
+              <p className="text-sm text-stone-500">{peerError}</p>
+            </div>
+          ) : peerMatches.length === 0 ? (
+            <div className="bg-white border border-stone-100 rounded-xl py-12 text-center">
+              <p className="text-sm text-stone-400">No matches yet — join a support group to find people like you.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {peerMatches.map((p) => (
+                <div key={p.id} className="bg-white border border-stone-100 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 bg-stone-100 rounded-full flex items-center justify-center text-sm font-semibold text-stone-600 flex-shrink-0 overflow-hidden">
+                    {p.avatar ? <img src={p.avatar} alt="" className="w-full h-full object-cover" /> : p.name[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-stone-800">{p.name}</div>
+                    <div className="text-xs text-stone-400 truncate">
+                      Shares {p.sharedGroups.length} {p.sharedGroups.length === 1 ? "group" : "groups"}: {p.sharedGroups.map((g) => g.name).join(", ")}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setTab("feed"); setFilterGroupName(p.sharedGroups[0]?.name ?? null); }}
+                    className="text-xs border border-stone-200 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 transition-colors flex-shrink-0"
+                  >
+                    View group posts
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -951,6 +1109,22 @@ export default function CommunityPage() {
             )}
           </div>
         </div>
+      )}
+
+      {openChallengeTask && (
+        <TaskActivityModal
+          mission={{
+            id: openChallengeTask.id,
+            title: openChallengeTask.title,
+            description: openChallengeTask.description,
+            category: openChallengeTask.category,
+            duration: 10,
+            xp: openChallengeTask.xpReward,
+            activityType: openChallengeTask.activityType,
+          }}
+          onComplete={(id, data) => { completeChallengeLog(id, data); setOpenChallengeTask(null); }}
+          onClose={() => setOpenChallengeTask(null)}
+        />
       )}
     </div>
   );

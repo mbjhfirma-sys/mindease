@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { QuizQuestion } from "@/lib/mockData";
+type QuizQuestion = { q: string; options: string[]; correct: number; explanation: string };
 
 interface Props {
   title: string;

@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { notifyOfRiskFlag } from "@/lib/notify";
 
 const postSchema = z.object({
   assessmentId: z.string(),
   score: z.number().int().min(0),
   label: z.string(),
   answers: z.array(z.number()),
+  safetyFlagged: z.boolean().default(false),
 });
 
 export async function GET(req: NextRequest) {
@@ -44,6 +46,17 @@ export async function POST(req: NextRequest) {
   const result = await db.assessmentResult.create({
     data: { userId: session.user.id, ...parsed.data },
   });
+
+  if (parsed.data.safetyFlagged) {
+    await db.riskFlag.create({
+      data: {
+        userId: session.user.id, source: "assessment", sourceId: result.id,
+        severity: "high", detail: `${parsed.data.assessmentId.toUpperCase()} assessment flagged a safety-relevant item.`,
+      },
+    });
+    const user = await db.user.findUnique({ where: { id: session.user.id }, select: { name: true, therapistId: true } });
+    if (user) await notifyOfRiskFlag({ id: session.user.id, name: user.name, therapistId: user.therapistId }, `Assessment result may need review.`);
+  }
 
   return NextResponse.json({ ok: true, result }, { status: 201 });
 }

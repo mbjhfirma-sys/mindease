@@ -4,24 +4,39 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import NotificationPanel from "@/components/NotificationPanel";
-import { therapistProfile } from "@/lib/mockData";
 import {
   LayoutDashboard, Users, Calendar, Wrench,
   MessageCircle, BarChart2, UserCircle, LogOut,
 } from "lucide-react";
 
-const NAV = [
-  { href: "/therapist",              label: "Overview",     Icon: LayoutDashboard, exact: true },
-  { href: "/therapist/clients",      label: "Clients",      Icon: Users },
-  { href: "/therapist/appointments", label: "Appointments", Icon: Calendar, badge: therapistProfile.pendingAppointments },
-  { href: "/therapist/missions",     label: "Task Builder", Icon: Wrench },
-  { href: "/therapist/messages",     label: "Messages",     Icon: MessageCircle, badge: therapistProfile.pendingMessages },
-  { href: "/therapist/analytics",    label: "Analytics",    Icon: BarChart2 },
-];
-
 export default function TherapistHeader() {
   const [open, setOpen] = useState(false);
+  const [name, setName] = useState("Therapist");
+  const [pendingAppts, setPendingAppts] = useState(0);
+  const [unreadMsgs, setUnreadMsgs] = useState(0);
   const pathname = usePathname();
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/user").then((r) => r.json()),
+      fetch("/api/therapist/stats").then((r) => r.json()),
+    ]).then(([uData, sData]) => {
+      if (uData.user?.name) setName(uData.user.name);
+      if (sData.stats) {
+        setPendingAppts(sData.stats.pendingAppointments);
+        setUnreadMsgs(sData.stats.unreadMessages);
+      }
+    });
+  }, []);
+
+  const NAV = [
+    { href: "/therapist",              label: "Overview",     Icon: LayoutDashboard, exact: true },
+    { href: "/therapist/clients",      label: "Clients",      Icon: Users },
+    { href: "/therapist/appointments", label: "Appointments", Icon: Calendar, badge: pendingAppts },
+    { href: "/therapist/missions",     label: "Task Builder", Icon: Wrench },
+    { href: "/therapist/messages",     label: "Messages",     Icon: MessageCircle,  badge: unreadMsgs },
+    { href: "/therapist/analytics",    label: "Analytics",    Icon: BarChart2 },
+  ];
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -36,7 +51,7 @@ export default function TherapistHeader() {
         {/* Mobile logo */}
         <div className="flex items-center gap-2 md:hidden">
           <span className="w-7 h-7 bg-stone-900 rounded-lg flex items-center justify-center text-white text-xs font-semibold">M</span>
-          <span className="font-semibold text-stone-800 text-sm">MindEase Pro</span>
+          <span className="font-semibold text-stone-800 text-sm">YouMindo Pro</span>
         </div>
 
         {/* Desktop status */}
@@ -48,7 +63,7 @@ export default function TherapistHeader() {
         <div className="flex items-center gap-2 ml-auto">
           <NotificationPanel role="therapist" />
           <div className="w-7 h-7 bg-stone-100 rounded-full flex items-center justify-center text-xs font-semibold text-stone-600 cursor-pointer hover:bg-stone-200 transition-colors">
-            S
+            {name?.[0] ?? "T"}
           </div>
           {/* Burger — mobile only */}
           <button
@@ -75,11 +90,11 @@ export default function TherapistHeader() {
         <div className="flex items-center justify-between px-4 h-14 border-b border-stone-100 flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-stone-100 rounded-lg flex items-center justify-center text-sm font-semibold text-stone-600">
-              {therapistProfile.name?.[0] ?? "T"}
+              {name?.[0] ?? "T"}
             </div>
             <div>
-              <div className="text-sm font-medium text-stone-800 leading-tight">{therapistProfile.name}</div>
-              <div className="text-[11px] text-stone-400">{therapistProfile.title?.replace("Licensed ", "")}</div>
+              <div className="text-sm font-medium text-stone-800 leading-tight">{name}</div>
+              <div className="text-[11px] text-stone-400">Clinician Portal</div>
             </div>
           </div>
           <button

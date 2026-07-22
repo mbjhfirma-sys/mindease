@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { assessments } from "@/lib/mockData";
+import { useState, useEffect } from "react";
 import { Info, AlertTriangle, Phone, ChevronLeft, BookOpen } from "lucide-react";
+import Link from "next/link";
+import { matchesAssessmentKeywords } from "@/lib/courseRecommendations";
+
+type RecommendedCourse = { id: string; title: string; category: string; tags: string[]; thumbnail: string; color: string };
 
 // ── Option sets ──────────────────────────────────────────────────────────────
 
@@ -66,6 +69,8 @@ type ScoreRange = {
 type ToolDef = {
   id: string;
   shortName: string;
+  title: string;
+  description: string;
   timeframe: string;
   questions: QDef[];
   maxScore: number;
@@ -91,6 +96,8 @@ const TOOLS: Record<string, ToolDef> = {
   a1: {
     id: "a1",
     shortName: "GAD-7",
+    title: "Generalised Anxiety Disorder",
+    description: "A 7-item scale measuring the severity of generalised anxiety over the past two weeks.",
     timeframe: "Over the past 2 weeks, how often have you been bothered by the following problems?",
     minScore: 0,
     maxScore: 21,
@@ -115,6 +122,8 @@ const TOOLS: Record<string, ToolDef> = {
   a2: {
     id: "a2",
     shortName: "PHQ-9",
+    title: "Patient Health Questionnaire",
+    description: "A 9-item scale that scores depression severity and screens for major depressive disorder.",
     timeframe: "Over the last 2 weeks, how often have you been bothered by any of the following problems?",
     minScore: 0,
     maxScore: 27,
@@ -146,6 +155,8 @@ const TOOLS: Record<string, ToolDef> = {
   a3: {
     id: "a3",
     shortName: "CBI",
+    title: "Copenhagen Burnout Inventory",
+    description: "A 12-item scale measuring personal, work, and client-related burnout.",
     timeframe: "How often do you experience the following?",
     minScore: 0,
     maxScore: 40,
@@ -173,6 +184,8 @@ const TOOLS: Record<string, ToolDef> = {
   a4: {
     id: "a4",
     shortName: "PSS-10",
+    title: "Perceived Stress Scale",
+    description: "A 10-item scale measuring your perception of stress over the past month.",
     timeframe: "In the last month, how often have you…",
     minScore: 0,
     maxScore: 40,
@@ -199,6 +212,8 @@ const TOOLS: Record<string, ToolDef> = {
   a5: {
     id: "a5",
     shortName: "ISI",
+    title: "Insomnia Severity Index",
+    description: "A 7-item scale that evaluates the nature, severity, and impact of insomnia.",
     timeframe: "For each question, please rate your current sleep situation.",
     minScore: 0,
     maxScore: 28,
@@ -259,6 +274,8 @@ const TOOLS: Record<string, ToolDef> = {
   a6: {
     id: "a6",
     shortName: "WEMWBS",
+    title: "Warwick–Edinburgh Mental Wellbeing Scale",
+    description: "A 14-item scale capturing positive mental wellbeing over the past two weeks.",
     timeframe: "Below are some statements about feelings and thoughts. Please indicate how often you have felt this way over the last 2 weeks.",
     minScore: 14,
     maxScore: 70,
@@ -288,14 +305,6 @@ const TOOLS: Record<string, ToolDef> = {
   },
 };
 
-// ── Seed history ─────────────────────────────────────────────────────────────
-
-const SEED_HISTORY: HistoryEntry[] = [
-  { id: "h1", toolId: "a2", toolName: "PHQ-9", score: 8, maxScore: 27, label: "Mild depression", date: "Jun 12, 2026", safetyFlagged: false },
-  { id: "h2", toolId: "a1", toolName: "GAD-7", score: 6, maxScore: 21, label: "Mild anxiety", date: "Jun 5, 2026", safetyFlagged: false },
-  { id: "h3", toolId: "a2", toolName: "PHQ-9", score: 11, maxScore: 27, label: "Moderate depression", date: "May 20, 2026", safetyFlagged: false },
-  { id: "h4", toolId: "a1", toolName: "GAD-7", score: 9, maxScore: 21, label: "Mild anxiety", date: "May 13, 2026", safetyFlagged: false },
-];
 
 // ── Scoring helper ────────────────────────────────────────────────────────────
 
@@ -326,10 +335,42 @@ export default function AssessmentPage() {
   const [currentQ, setCurrentQ] = useState(0);
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [safetyFlagged, setSafetyFlagged] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>(SEED_HISTORY);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [recommendedCourses, setRecommendedCourses] = useState<RecommendedCourse[]>([]);
 
   const tool = activeId ? TOOLS[activeId] : null;
-  const activeAssessment = assessments.find((a) => a.id === activeId);
+
+  useEffect(() => {
+    if (view !== "result" || !activeId) return;
+    fetch("/api/courses")
+      .then((r) => r.json())
+      .then((d) => {
+        const courses: RecommendedCourse[] = d.courses ?? [];
+        setRecommendedCourses(courses.filter((c) => matchesAssessmentKeywords(activeId, c)).slice(0, 3));
+      })
+      .catch(() => setRecommendedCourses([]));
+  }, [view, activeId]);
+
+  useEffect(() => {
+    fetch("/api/assessments")
+      .then((r) => r.json())
+      .then((d) => {
+        const entries: HistoryEntry[] = (d.results ?? []).map((r: { id: string; assessmentId: string; score: number; label: string; createdAt: string; safetyFlagged: boolean }) => {
+          const t = TOOLS[r.assessmentId];
+          return {
+            id: r.id,
+            toolId: r.assessmentId,
+            toolName: t?.shortName ?? r.assessmentId,
+            score: r.score,
+            maxScore: t?.maxScore ?? 100,
+            label: r.label,
+            date: new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            safetyFlagged: r.safetyFlagged,
+          };
+        });
+        setHistory(entries);
+      });
+  }, []);
 
   function start(id: string) {
     setActiveId(id);
@@ -363,21 +404,27 @@ export default function AssessmentPage() {
       const score = computeScore(tool, updated);
       const range = getRange(tool, score);
       const didFlag = triggered || safetyFlagged;
+      const answersArr = tool.questions.map((_, i) => updated[i] ?? 0);
 
       setFinalScore(score);
-      setHistory((prev) => [
-        {
-          id: `h${Date.now()}`,
-          toolId: tool.id,
-          toolName: tool.shortName,
-          score,
-          maxScore: tool.maxScore,
-          label: range.label,
-          date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          safetyFlagged: didFlag,
-        },
-        ...prev,
-      ]);
+      const entry: HistoryEntry = {
+        id: `h${Date.now()}`,
+        toolId: tool.id,
+        toolName: tool.shortName,
+        score,
+        maxScore: tool.maxScore,
+        label: range.label,
+        date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        safetyFlagged: didFlag,
+      };
+      setHistory((prev) => [entry, ...prev]);
+
+      fetch("/api/assessments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assessmentId: tool.id, score, label: range.label, answers: answersArr, safetyFlagged: didFlag }),
+      });
+
       setView("result");
     }
   }
@@ -481,7 +528,7 @@ export default function AssessmentPage() {
             <ChevronLeft size={16} strokeWidth={1.5} /> All assessments
           </button>
           <span className="text-xs text-stone-400">
-            {activeAssessment?.title} · {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            {tool?.title} · {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
           </span>
         </div>
 
@@ -540,6 +587,30 @@ export default function AssessmentPage() {
           </div>
         </div>
 
+        {/* Recommended courses */}
+        {recommendedCourses.length > 0 && (
+          <div className="bg-white border border-stone-100 rounded-xl p-5">
+            <p className="text-xs font-medium text-stone-400 uppercase tracking-widest mb-3">Recommended for you</p>
+            <div className="space-y-2">
+              {recommendedCourses.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/dashboard/courses/${c.id}`}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-stone-100 hover:border-stone-300 transition-colors"
+                >
+                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0 ${c.color || "bg-stone-100"}`}>
+                    {c.thumbnail || "📘"}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-stone-800 truncate">{c.title}</div>
+                    <div className="text-xs text-stone-400 truncate">{c.category}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Citation */}
         <div className="bg-white border border-stone-100 rounded-xl px-5 py-4 flex items-start gap-2.5">
           <BookOpen size={13} className="text-stone-400 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
@@ -586,8 +657,9 @@ export default function AssessmentPage() {
       </div>
 
       <div className="space-y-2.5">
-        {assessments.map((a) => {
-          const lastResult = history.find((h) => h.toolId === a.id);
+        {Object.values(TOOLS).map((a) => {
+          const toolHistory = history.filter((h) => h.toolId === a.id);
+          const lastResult = toolHistory[0];
           return (
             <div key={a.id} className="bg-white border border-stone-100 rounded-xl p-5 hover:border-stone-200 transition-colors">
               <div className="flex items-start gap-4">
@@ -602,9 +674,9 @@ export default function AssessmentPage() {
                   </div>
                   <p className="text-xs text-stone-500 leading-relaxed">{a.description}</p>
                   <div className="flex items-center gap-3 mt-2 flex-wrap">
-                    <span className="text-xs text-stone-400">{a.questions} items</span>
+                    <span className="text-xs text-stone-400">{a.questions.length} items</span>
                     <span className="text-stone-200">·</span>
-                    <span className="text-xs text-stone-400">{a.duration}</span>
+                    <span className="text-xs text-stone-400">~{Math.ceil(a.questions.length * 0.5)} min</span>
                     {lastResult && (
                       <>
                         <span className="text-stone-200">·</span>
@@ -633,6 +705,21 @@ export default function AssessmentPage() {
                       style={{ width: `${(lastResult.score / lastResult.maxScore) * 100}%` }}
                     />
                   </div>
+                  {toolHistory.length >= 2 && (
+                    <div className="mt-3 pt-3 border-t border-stone-50">
+                      <div className="text-[10px] text-stone-400 mb-1.5">Score over time</div>
+                      <div className="flex items-end gap-1 h-8">
+                        {[...toolHistory].reverse().map((h, i) => (
+                          <div
+                            key={i}
+                            className="flex-1 rounded-t-sm bg-stone-300"
+                            style={{ height: `${Math.max(4, (h.score / lastResult.maxScore) * 32)}px` }}
+                            title={`${h.score} · ${h.date}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

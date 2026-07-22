@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 
 // ── USA: NPPES NPI Registry ─────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ async function fetchDK(type: string, city: string, limit: number) {
   // Geocode city
   const geoRes = await fetch(
     `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&countrycodes=dk&format=json&limit=1`,
-    { headers: { "User-Agent": "MindEase/1.0" }, next: { revalidate: 86400 } }
+    { headers: { "User-Agent": "YouMindo/1.0" }, next: { revalidate: 86400 } }
   );
   const geoData = (await geoRes.json()) as { lat: string; lon: string }[];
   if (!geoData.length) return { count: 0, providers: [] };
@@ -104,7 +105,7 @@ async function fetchDK(type: string, city: string, limit: number) {
   const fetchPage = async (industry: string, page: number) => {
     const url = `https://www.proff.dk/api/search?industry=${encodeURIComponent(industry)}&size=25&page=${page}`;
     const r = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; MindEase/1.0)", "Accept": "application/json" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; YouMindo/1.0)", "Accept": "application/json" },
       next: { revalidate: 3600 },
     });
     const d = (await r.json()) as { companies?: Record<string, unknown>[] };
@@ -176,6 +177,9 @@ async function fetchDK(type: string, city: string, limit: number) {
 // ── Route Handler ────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const sp = req.nextUrl.searchParams;
   const country = sp.get("country") ?? "us";
   const type = sp.get("type") ?? "therapist";

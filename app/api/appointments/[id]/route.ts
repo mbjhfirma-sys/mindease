@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { AppointmentStatus } from "@prisma/client";
+import { createNotification } from "@/lib/notify";
 
 const patchSchema = z.object({
   status: z.enum(["pending", "confirmed", "completed", "cancelled", "no_show"]).optional(),
@@ -23,7 +24,10 @@ export async function PATCH(
 
   const appt = await db.appointment.findUnique({
     where: { id },
-    include: { therapist: { select: { userId: true } } },
+    include: {
+      client: { select: { id: true, name: true } },
+      therapist: { select: { userId: true, user: { select: { name: true } } } },
+    },
   });
   if (!appt) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -34,8 +38,13 @@ export async function PATCH(
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  if (userRole !== "THERAPIST" && parsed.data.status && parsed.data.status !== "cancelled") {
-    return NextResponse.json({ error: "Clients can only cancel appointments" }, { status: 403 });
+  if (userRole !== "THERAPIST") {
+    if (parsed.data.notes !== undefined || parsed.data.date !== undefined) {
+      return NextResponse.json({ error: "Clients can only cancel appointments" }, { status: 403 });
+    }
+    if (parsed.data.status && parsed.data.status !== "cancelled") {
+      return NextResponse.json({ error: "Clients can only cancel appointments" }, { status: 403 });
+    }
   }
 
   const data: Record<string, unknown> = { ...parsed.data };
@@ -43,6 +52,30 @@ export async function PATCH(
   if (parsed.data.status) data.status = parsed.data.status as AppointmentStatus;
 
   const updated = await db.appointment.update({ where: { id }, data });
+
+  const isTherapist = userRole === "THERAPIST";
+  const otherUserId = isTherapist ? appt.client.id : appt.therapist.userId;
+  const actorName = isTherapist ? appt.therapist.user.name : appt.client.name;
+
+  if (parsed.data.status) {
+    const STATUS_LABEL: Record<string, string> = {
+      confirmed: "confirmed", cancelled: "cancelled", completed: "marked complete", no_show: "marked as a no-show",
+    };
+    await createNotification(otherUserId, {
+      title: `Session ${STATUS_LABEL[parsed.data.status] ?? "updated"}`,
+      body: `${actorName} ${STATUS_LABEL[parsed.data.status] ?? "updated"} your session on ${new Date(updated.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}.`,
+      icon: "📅",
+      href: isTherapist ? "/dashboard/schedule" : "/therapist/appointments",
+    }).catch(() => {});
+  } else if (parsed.data.date) {
+    await createNotification(otherUserId, {
+      title: "Session rescheduled",
+      body: `${actorName} rescheduled your session to ${new Date(updated.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${new Date(updated.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.`,
+      icon: "📅",
+      href: isTherapist ? "/dashboard/schedule" : "/therapist/appointments",
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ ok: true, appointment: updated });
 }
 
@@ -60,8 +93,12 @@ export async function DELETE(
   });
   if (!appt) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const isParticipant = appt.clientId === session.user.id || appt.therapist.userId === session.user.id;
-  if (!isParticipant) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (session.user.role !== "THERAPIST") {
+    return NextResponse.json({ error: "Only therapists can delete appointments" }, { status: 403 });
+  }
+  if (appt.therapist.userId !== session.user.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   await db.appointment.delete({ where: { id } });
   return NextResponse.json({ ok: true });

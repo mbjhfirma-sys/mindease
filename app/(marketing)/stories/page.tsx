@@ -12,7 +12,7 @@ export default function StoriesPage() {
         <span className="text-sage-600 text-sm font-semibold uppercase tracking-wide">Member Stories</span>
         <h1 className="text-4xl md:text-5xl font-bold text-stone-900 mt-2 mb-4">Real People, Real Change</h1>
         <p className="text-stone-500 text-lg max-w-xl mx-auto">
-          Hear from members who have transformed their mental health journey with MindEase.
+          Hear from members who have transformed their mental health journey with YouMindo.
         </p>
       </section>
 

@@ -1,9 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { analyticsData, therapistClients } from "@/lib/mockData";
+
+type ApiClient = {
+  id: string; name: string; email: string; plan: string; level: number; xp: number;
+  recentMoods: { score: number; date: string }[];
+  missionCompletion: number; riskLevel: "low" | "medium" | "high";
+};
+type Client = ApiClient & { moodAvg: number; moodHistory: number[] };
+
+function enrichClient(c: ApiClient): Client {
+  const scores = c.recentMoods.map((m) => m.score);
+  const moodAvg = scores.length
+    ? parseFloat((scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(1))
+    : 3;
+  return { ...c, moodAvg, moodHistory: scores.length ? scores : [3, 3, 3, 3, 3, 3, 3] };
+}
 
 type DateRange = "7d" | "30d" | "90d";
 type EngMetric = "both" | "sessions" | "missions";
@@ -12,22 +26,11 @@ type RiskFilter = "all" | "low" | "medium" | "high";
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
-// Simulated data per date range
-const ENGAGEMENT: Record<DateRange, typeof analyticsData.weeklyEngagement> = {
-  "7d": analyticsData.weeklyEngagement,
-  "30d": analyticsData.weeklyEngagement.map((d) => ({
-    ...d, sessions: Math.round(d.sessions * 4.2), missions: Math.round(d.missions * 4.5),
-  })),
-  "90d": analyticsData.weeklyEngagement.map((d) => ({
-    ...d, sessions: Math.round(d.sessions * 13), missions: Math.round(d.missions * 13.5),
-  })),
-};
+type WeekDay = { day: string; sessions: number; missions: number };
+type Attendance = { total: number; attended: number; cancelled: number; noShow: number };
 
-const ATTENDANCE: Record<DateRange, { total: number; attended: number; cancelled: number; noShow: number }> = {
-  "7d":  { total: 26,  attended: 22, cancelled: 3,  noShow: 1  },
-  "30d": { total: 104, attended: 88, cancelled: 11, noShow: 5  },
-  "90d": { total: 312, attended: 264,cancelled: 31, noShow: 17 },
-};
+const EMPTY_ENGAGEMENT: WeekDay[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => ({ day, sessions: 0, missions: 0 }));
+const EMPTY_ATTENDANCE: Attendance = { total: 0, attended: 0, cancelled: 0, noShow: 0 };
 
 export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState<DateRange>("7d");
@@ -35,6 +38,24 @@ export default function AnalyticsPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [highlightedClient, setHighlightedClient] = useState<string | null>(null);
+  const [therapistClients, setTherapistClients] = useState<Client[]>([]);
+  const [engagement, setEngagement] = useState<WeekDay[]>(EMPTY_ENGAGEMENT);
+  const [attendance, setAttendance] = useState<Attendance>(EMPTY_ATTENDANCE);
+
+  useEffect(() => {
+    fetch("/api/therapist/clients")
+      .then((r) => r.json())
+      .then((d) => setTherapistClients((d.clients ?? []).map(enrichClient)));
+  }, []);
+
+  useEffect(() => {
+    fetch(`/api/therapist/analytics?range=${dateRange}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setEngagement(d.engagement ?? EMPTY_ENGAGEMENT);
+        setAttendance(d.attendance ?? EMPTY_ATTENDANCE);
+      });
+  }, [dateRange]);
 
   // Mood chart hover: { clientId, dayIdx }
   const [moodHover, setMoodHover] = useState<{ id: string; day: number } | null>(null);
@@ -47,9 +68,7 @@ export default function AnalyticsPage() {
   // Attendance hover
   const [attendHover, setAttendHover] = useState<string | null>(null);
 
-  const engagement = ENGAGEMENT[dateRange];
-  const attendance = ATTENDANCE[dateRange];
-  const attendanceRate = ((attendance.attended / attendance.total) * 100).toFixed(1);
+  const attendanceRate = attendance.total > 0 ? ((attendance.attended / attendance.total) * 100).toFixed(1) : "—";
 
   // Derived metrics
   const visibleClients = therapistClients.filter(
@@ -136,7 +155,7 @@ export default function AnalyticsPage() {
           { label: "Active clients", value: visibleClients.length, sub: riskFilter !== "all" ? `${riskFilter} risk` : "all risk levels" },
           { label: "Avg mood score", value: `${avgMood.toFixed(1)} / 5`, sub: `across ${visibleClients.length} clients` },
           { label: "Avg task completion", value: `${Math.round(avgCompletion)}%`, sub: "this period" },
-          { label: "Session attendance", value: `${attendanceRate}%`, sub: `${attendance.attended} / ${attendance.total} sessions` },
+          { label: "Session attendance", value: attendance.total > 0 ? `${attendanceRate}%` : "—", sub: `${attendance.attended} / ${attendance.total} sessions` },
         ].map((s) => (
           <div
             key={s.label}
@@ -384,9 +403,9 @@ export default function AnalyticsPage() {
           </div>
           <div className="space-y-3">
             {[
-              { label: "Low", key: "low" as const, count: analyticsData.riskBreakdown.low, color: "bg-stone-900" },
-              { label: "Medium", key: "medium" as const, count: analyticsData.riskBreakdown.medium, color: "bg-amber-400" },
-              { label: "High", key: "high" as const, count: analyticsData.riskBreakdown.high, color: "bg-red-500" },
+              { label: "Low", key: "low" as const, count: therapistClients.filter((c) => c.riskLevel === "low").length, color: "bg-stone-900" },
+              { label: "Medium", key: "medium" as const, count: therapistClients.filter((c) => c.riskLevel === "medium").length, color: "bg-amber-400" },
+              { label: "High", key: "high" as const, count: therapistClients.filter((c) => c.riskLevel === "high").length, color: "bg-red-500" },
             ].map((r) => {
               const isActive = riskFilter === r.key;
               const isHov = riskHover === r.label;
@@ -407,7 +426,7 @@ export default function AnalyticsPage() {
                   <div className="flex-1 bg-stone-100 rounded-full h-2 overflow-hidden">
                     <div
                       className={`h-2 rounded-full transition-all duration-300 ${r.color}`}
-                      style={{ width: `${(r.count / therapistClients.length) * 100}%` }}
+                      style={{ width: `${therapistClients.length > 0 ? (r.count / therapistClients.length) * 100 : 0}%` }}
                     />
                   </div>
                   <span className={`text-xs font-semibold w-4 text-right flex-shrink-0 transition-colors ${isActive ? "text-stone-900" : "text-stone-600"}`}>
@@ -440,7 +459,7 @@ export default function AnalyticsPage() {
               { label: "No-show",   count: attendance.noShow,    color: "bg-red-400"   },
             ].map((r) => {
               const isHov = attendHover === r.label;
-              const pct = ((r.count / attendance.total) * 100).toFixed(1);
+              const pct = attendance.total > 0 ? ((r.count / attendance.total) * 100).toFixed(1) : "0.0";
               return (
                 <div
                   key={r.label}
@@ -452,7 +471,7 @@ export default function AnalyticsPage() {
                   <div className="relative flex-1 bg-stone-100 rounded-full h-2 overflow-hidden">
                     <div
                       className={`h-2 rounded-full transition-all duration-500 ${r.color}`}
-                      style={{ width: `${(r.count / attendance.total) * 100}%` }}
+                      style={{ width: `${attendance.total > 0 ? (r.count / attendance.total) * 100 : 0}%` }}
                     />
                   </div>
                   <span className="text-xs font-semibold text-stone-700 w-14 text-right flex-shrink-0">

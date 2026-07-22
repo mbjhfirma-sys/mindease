@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { createNotification } from "@/lib/notify";
 
 export async function GET(
   _req: NextRequest,
@@ -67,7 +68,10 @@ export async function POST(
 
   const conversation = await db.conversation.findUnique({
     where: { id },
-    include: { therapist: { select: { userId: true } } },
+    include: {
+      client: { select: { id: true, name: true } },
+      therapist: { select: { userId: true, user: { select: { name: true } } } },
+    },
   });
   if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -80,6 +84,16 @@ export async function POST(
   const message = await db.message.create({
     data: { conversationId: id, fromUserId: userId, text: text.trim() },
   });
+
+  const senderIsClient = userId === conversation.clientId;
+  const senderName = senderIsClient ? conversation.client.name : conversation.therapist.user.name;
+  const recipientId = senderIsClient ? conversation.therapist.userId : conversation.client.id;
+  await createNotification(recipientId, {
+    title: `New message from ${senderName}`,
+    body: text.trim().slice(0, 140),
+    icon: "💬",
+    href: senderIsClient ? "/therapist/messages" : `/dashboard/messages?open=${id}`,
+  }).catch(() => {});
 
   return NextResponse.json({
     ok: true,

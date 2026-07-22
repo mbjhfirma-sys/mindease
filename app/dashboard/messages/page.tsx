@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { messages as allMessages } from "@/lib/mockData";
 import { Phone, Video, Paperclip, ArrowUp, ArrowLeft, X } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Attachment = { name: string; mime: string; size: string };
 type Message = { from: string; text: string; time: string; attachment?: Attachment };
-type Conversation = Omit<(typeof allMessages)[number], "messages"> & { messages: Message[] };
+type Conversation = {
+  id: string; sender: string; avatar: string; preview: string; time: string; unread: number;
+  role?: string; messages: Message[];
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +45,37 @@ function avatarColor(id: string) {
   return AVATAR_COLORS[idx];
 }
 
+// ── Static YouMindo welcome conversation ──────────────────────────────────────
+
+const WELCOME_ID = "youmindo_welcome";
+
+const YOUMINDO_WELCOME: Conversation = {
+  id: WELCOME_ID,
+  sender: "YouMindo Team",
+  avatar: "",
+  preview: "Welcome to YouMindo! We're glad you're here 💚",
+  time: "Today",
+  unread: 0,
+  role: "Mental Wellness Platform",
+  messages: [
+    {
+      from: "YouMindo",
+      text: "Hi there! 👋 Welcome to YouMindo — your personal mental wellness companion.\n\nWe're so glad you're here. This is your secure, private space to grow, reflect, and feel supported — at your own pace.",
+      time: "9:00 AM",
+    },
+    {
+      from: "YouMindo",
+      text: "Here's what's waiting for you in your dashboard:\n\n🌿 Daily Tasks — guided wellness missions every day\n📊 Mood Tracking — understand your emotional patterns over time\n📝 Private Journal — a safe space to reflect and write freely\n🤖 Sage AI — mental health support available 24/7\n👥 Community — connect with others on similar journeys\n📚 Courses — evidence-based mental health content",
+      time: "9:01 AM",
+    },
+    {
+      from: "YouMindo",
+      text: "Remember — every small step counts. Progress isn't always linear, and that's completely okay. 💚\n\nYour assigned therapist will appear here once connected. Until then, explore your dashboard and take things at your own pace.\n\n— The YouMindo Team",
+      time: "9:01 AM",
+    },
+  ],
+};
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function Avatar({ name, id, size = "md" }: { name: string; id: string; size?: "sm" | "md" }) {
@@ -57,9 +90,18 @@ function Avatar({ name, id, size = "md" }: { name: string; id: string; size?: "s
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MessagesPage() {
+  return (
+    <Suspense fallback={null}>
+      <MessagesPageInner />
+    </Suspense>
+  );
+}
+
+function MessagesPageInner() {
   const searchParams = useSearchParams();
-  const [conversations, setConversations] = useState<Conversation[]>(allMessages);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [convsLoading, setConvsLoading] = useState(true);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [chatMsgs, setChatMsgs] = useState<Message[]>([]);
@@ -70,20 +112,46 @@ export default function MessagesPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const open = searchParams.get("open");
-    if (open && allMessages.some((m) => m.id === open)) {
-      setActiveId(open);
-    } else if (window.innerWidth >= 768) {
-      setActiveId(allMessages[0]?.id ?? null);
-    }
+    fetch("/api/messages")
+      .then((r) => r.json())
+      .then((d) => {
+        const apiConvs: Conversation[] = (d.conversations ?? []).map((c: Conversation & { messages?: Message[] }) => ({
+          ...c,
+          messages: c.messages ?? [],
+        }));
+        const convs = [YOUMINDO_WELCOME, ...apiConvs];
+        setConversations(convs);
+        const open = searchParams.get("open");
+        if (open && convs.some((m) => m.id === open)) {
+          setActiveId(open);
+        } else if (window.innerWidth >= 768 && convs.length > 0) {
+          setActiveId(convs[0].id);
+        }
+      })
+      .finally(() => setConvsLoading(false));
   }, [searchParams]);
 
   const activeConvo = conversations.find((c) => c.id === activeId);
 
   useEffect(() => {
     if (!activeId) return;
-    const convo = conversations.find((c) => c.id === activeId);
-    setChatMsgs(convo?.messages ?? []);
+    // Welcome thread: use static messages
+    if (activeId === WELCOME_ID) {
+      setChatMsgs(YOUMINDO_WELCOME.messages);
+      setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c)));
+      setTimeout(() => inputRef.current?.focus(), 100);
+      return;
+    }
+    // Real conversation: fetch full message history from API
+    setChatMsgs([]);
+    fetch(`/api/messages/${activeId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.conversation?.messages) {
+          setChatMsgs(d.conversation.messages);
+        }
+      })
+      .catch(() => {});
     setConversations((prev) =>
       prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c))
     );
@@ -146,7 +214,7 @@ export default function MessagesPage() {
 
   return (
     // Fill the layout's content area edge-to-edge by countering the main padding
-    <div className="flex flex-col -m-4 md:-m-6 h-[calc(100%+2rem)] md:h-[calc(100%+3rem)]">
+    <div className="flex flex-col -m-4 md:-m-6 h-[calc(100%+2rem)] md:h-[calc(100%+3rem)]" suppressHydrationWarning>
       <div className="flex flex-1 min-h-0 overflow-hidden bg-white md:rounded-2xl md:border md:border-stone-100 md:shadow-sm">
 
         {/* ── Conversation list ──────────────────────────────────────────────── */}
@@ -181,8 +249,13 @@ export default function MessagesPage() {
 
           {/* Thread list */}
           <div className="flex-1 overflow-y-auto">
-            {filtered.length === 0 && (
-              <p className="text-sm text-stone-400 text-center py-8">No conversations found</p>
+            {convsLoading && (
+              <div className="space-y-1 p-2 animate-pulse">
+                {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-stone-50 rounded-lg" />)}
+              </div>
+            )}
+            {!convsLoading && filtered.length === 0 && (
+              <p className="text-sm text-stone-400 text-center py-8">No conversations yet</p>
             )}
             {filtered.map((c) => (
               <button
@@ -275,7 +348,7 @@ export default function MessagesPage() {
                               </div>
                             </div>
                           )}
-                          {msg.text && <span>{msg.text}</span>}
+                          {msg.text && <span className="whitespace-pre-line">{msg.text}</span>}
                         </div>
                         <span className="text-[10px] text-stone-400 px-1">{msg.time}</span>
                       </div>
@@ -285,8 +358,17 @@ export default function MessagesPage() {
                 <div ref={bottomRef} />
               </div>
 
+              {/* Locked notice for YouMindo welcome thread */}
+              {activeConvo.id === WELCOME_ID && (
+                <div className="px-4 py-3.5 border-t border-stone-100 flex-shrink-0 bg-stone-50 text-center">
+                  <p className="text-xs text-stone-400">
+                    🌿 This is an automated message from YouMindo — replies are not monitored
+                  </p>
+                </div>
+              )}
+
               {/* Pending file chip */}
-              {pendingFile && (
+              {activeConvo.id !== WELCOME_ID && pendingFile && (
                 <div className="flex items-center gap-2.5 mx-4 mb-2 px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl">
                   <span className="text-lg flex-shrink-0">{fileIcon(pendingFile.mime)}</span>
                   <div className="flex-1 min-w-0">
@@ -302,8 +384,8 @@ export default function MessagesPage() {
                 </div>
               )}
 
-              {/* Input bar */}
-              <div className="px-4 py-3 border-t border-stone-100 flex-shrink-0 bg-white">
+              {/* Input bar — hidden for the YouMindo welcome thread */}
+              {activeConvo.id !== WELCOME_ID && <div className="px-4 py-3 border-t border-stone-100 flex-shrink-0 bg-white">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -336,7 +418,7 @@ export default function MessagesPage() {
                     <ArrowUp size={13} strokeWidth={2.5} />
                   </button>
                 </div>
-              </div>
+              </div>}
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center text-center p-8">

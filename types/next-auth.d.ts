@@ -5,6 +5,9 @@ declare module "next-auth" {
     user: {
       id: string;
       role: "CLIENT" | "THERAPIST" | "ADMIN";
+      therapistStatus?: "pending" | "approved" | "rejected" | null;
+      hasOnboarded?: boolean;
+      profileCompleted?: boolean;
     } & DefaultSession["user"];
   }
 
@@ -18,5 +21,8 @@ declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     id: string;
     role: "CLIENT" | "THERAPIST" | "ADMIN";
+    therapistStatus?: "pending" | "approved" | "rejected" | null;
+    hasOnboarded?: boolean;
+    profileCompleted?: boolean;
   }
 }

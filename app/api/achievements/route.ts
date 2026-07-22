@@ -1,31 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { BADGE_DEFINITIONS, BADGE_ELIGIBILITY, type UserStats } from "@/lib/achievements";
+import { createNotification } from "@/lib/notify";
 
-const awardSchema = z.object({
-  badgeId: z.string(),
-});
-
-export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const [achievements, moodCount, journalCount, missionCompletions, courseProgress] = await Promise.all([
-    db.achievement.findMany({ where: { userId: session.user.id } }),
-    db.moodEntry.count({ where: { userId: session.user.id } }),
-    db.journalEntry.count({ where: { userId: session.user.id } }),
-    db.missionCompletion.count({ where: { userId: session.user.id } }),
-    db.courseProgress.count({ where: { userId: session.user.id, completed: true } }),
+async function computeStats(userId: string): Promise<UserStats> {
+  const [moodCount, journalCount, missionCompletions, courseProgress, communityGroups, recentMoods] = await Promise.all([
+    db.moodEntry.count({ where: { userId } }),
+    db.journalEntry.count({ where: { userId } }),
+    db.missionCompletion.count({ where: { userId } }),
+    db.courseProgress.count({ where: { userId, completed: true } }),
+    db.groupMembership.count({ where: { userId } }),
+    db.moodEntry.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 30, select: { createdAt: true } }),
   ]);
-
-  // Calculate streak from mood entries
-  const recentMoods = await db.moodEntry.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 30,
-    select: { createdAt: true },
-  });
 
   let streak = 0;
   const today = new Date();
@@ -40,31 +27,49 @@ export async function GET() {
     if (hasEntry) streak++;
   }
 
-  return NextResponse.json({
-    achievements,
-    stats: {
-      streak,
-      moodEntries: moodCount,
-      journalEntries: journalCount,
-      missionsCompleted: missionCompletions,
-      lessonsCompleted: courseProgress,
-    },
-  });
+  return {
+    streak,
+    moodEntries: moodCount,
+    journalEntries: journalCount,
+    missionsCompleted: missionCompletions,
+    lessonsCompleted: courseProgress,
+    communityGroups,
+  };
 }
 
-export async function POST(req: NextRequest) {
+export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = awardSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  const userId = session.user.id;
+  const [stats, existing] = await Promise.all([
+    computeStats(userId),
+    db.achievement.findMany({ where: { userId } }),
+  ]);
 
-  const achievement = await db.achievement.upsert({
-    where: { userId_badgeId: { userId: session.user.id, badgeId: parsed.data.badgeId } },
-    update: {},
-    create: { userId: session.user.id, badgeId: parsed.data.badgeId },
-  });
+  const earnedIds = new Set(existing.map((a) => a.badgeId));
+  const newlyEligible = BADGE_DEFINITIONS.filter(
+    (b) => !earnedIds.has(b.badgeId) && (BADGE_ELIGIBILITY[b.badgeId]?.(stats) ?? false)
+  );
 
-  return NextResponse.json({ ok: true, achievement });
+  let achievements = existing;
+  if (newlyEligible.length > 0) {
+    const created = await db.$transaction(
+      newlyEligible.map((b) => db.achievement.create({ data: { userId, badgeId: b.badgeId } }))
+    );
+    achievements = [...existing, ...created];
+
+    await Promise.all(
+      newlyEligible.map((b) =>
+        createNotification(userId, {
+          title: "New milestone unlocked! 🏆",
+          body: `${b.label} — ${b.desc}`,
+          icon: "🏆",
+          href: "/dashboard/achievements",
+        }).catch(() => {})
+      )
+    );
+  }
+
+  return NextResponse.json({ achievements, newlyEarned: newlyEligible, stats });
 }

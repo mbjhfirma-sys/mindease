@@ -24,18 +24,18 @@ const coverage: Article[] = [
     outlet: "TIME",
     logo: "TIME",
     headline: "The App Bringing Therapy to the Gaps Between Sessions",
-    subheading: "MindEase is quietly doing what hundreds of mental health apps have promised and failed to deliver.",
+    subheading: "YouMindo is quietly doing what hundreds of mental health apps have promised and failed to deliver.",
     author: "Eleanor Marsh",
     date: "May 14, 2026",
     readTime: "8 min read",
-    quote: "MindEase is quietly doing what hundreds of mental health apps have promised and failed to deliver: making evidence-based care genuinely continuous.",
+    quote: "YouMindo is quietly doing what hundreds of mental health apps have promised and failed to deliver: making evidence-based care genuinely continuous.",
     body: [
-      "It's 11:43 on a Tuesday night, and Sarah, 29, is having a panic attack. Her therapist is asleep. Her next appointment isn't until Thursday. Three years ago, she would have been alone with it. Tonight, she opens MindEase, starts a guided breathing exercise, and begins filling out a thought record she'll share with her therapist in two days.",
-      "This is the gap that MindEase was built to fill — the 166 hours between a weekly therapy session that most mental health apps have promised to address, and almost none have. The idea isn't new. But the execution, built by a team led by Dr. Sarah Chen, a London-based clinical psychologist who walked away from a thriving private practice to build it, is something different.",
+      "It's 11:43 on a Tuesday night, and Sarah, 29, is having a panic attack. Her therapist is asleep. Her next appointment isn't until Thursday. Three years ago, she would have been alone with it. Tonight, she opens YouMindo, starts a guided breathing exercise, and begins filling out a thought record she'll share with her therapist in two days.",
+      "This is the gap that YouMindo was built to fill — the 166 hours between a weekly therapy session that most mental health apps have promised to address, and almost none have. The idea isn't new. But the execution, built by a team led by Dr. Sarah Chen, a London-based clinical psychologist who walked away from a thriving private practice to build it, is something different.",
       "\"I kept watching my patients make genuine progress in session and then lose it between appointments,\" Dr. Chen told TIME from her office in East London. \"There was no scaffolding. They'd go home, the week would happen to them, and by the time I saw them again, half the work had unravelled. I needed to build the scaffolding.\"",
-      "The scaffolding, as MindEase calls it, is a combination of structured journalling, daily mood tracking, cognitive-behavioural exercises, a peer support community, and a direct line between clients and their therapists — not for messaging, but for data. Therapists see how their clients' week actually went before the session begins. It changes the entire conversation.",
-      "The results are striking. In an independent study published in the Journal of Digital Mental Health earlier this year, MindEase users reported a 47% reduction in anxiety symptoms after eight weeks — more than double the improvement seen in a control group using standard self-help resources. Ninety-four percent said they felt 'more supported between sessions' than they had before.",
-      "None of this means apps should replace therapists, and Dr. Chen is emphatic about that. MindEase's therapist network — over 1,200 licensed practitioners — is central to the product, not optional. \"We're not trying to be therapy,\" she says. \"We're trying to make therapy work better.\"",
+      "The scaffolding, as YouMindo calls it, is a combination of structured journalling, daily mood tracking, cognitive-behavioural exercises, a peer support community, and a direct line between clients and their therapists — not for messaging, but for data. Therapists see how their clients' week actually went before the session begins. It changes the entire conversation.",
+      "The results are striking. In an independent study published in the Journal of Digital Mental Health earlier this year, YouMindo users reported a 47% reduction in anxiety symptoms after eight weeks — more than double the improvement seen in a control group using standard self-help resources. Ninety-four percent said they felt 'more supported between sessions' than they had before.",
+      "None of this means apps should replace therapists, and Dr. Chen is emphatic about that. YouMindo's therapist network — over 1,200 licensed practitioners — is central to the product, not optional. \"We're not trying to be therapy,\" she says. \"We're trying to make therapy work better.\"",
     ],
     url: "#",
     color: "bg-red-600",
@@ -45,18 +45,18 @@ const coverage: Article[] = [
   {
     outlet: "TechCrunch",
     logo: "TC",
-    headline: "MindEase Raises $40M Series B to Expand Therapist Network",
-    subheading: "The round, led by a16z, values MindEase at $280M and marks one of the largest mental health tech raises in Europe this year.",
+    headline: "YouMindo Raises $40M Series B to Expand Therapist Network",
+    subheading: "The round, led by a16z, values YouMindo at $280M and marks one of the largest mental health tech raises in Europe this year.",
     author: "James Kovacs",
     date: "March 3, 2026",
     readTime: "5 min read",
-    quote: "The round, led by Andreessen Horowitz, values MindEase at $280M and marks one of the largest mental health tech raises in Europe this year.",
+    quote: "The round, led by Andreessen Horowitz, values YouMindo at $280M and marks one of the largest mental health tech raises in Europe this year.",
     body: [
-      "Mental health platform MindEase has closed a $40 million Series B round led by Andreessen Horowitz, with participation from existing investors LocalGlobe and Balderton Capital. The raise values the London-based company at approximately $280 million — a significant step up from the $75 million valuation it carried after its Series A in 2023.",
-      "The funds will be used primarily to expand MindEase's therapist network, currently at 1,200 licensed practitioners across the UK, US, and Australia, to 5,000 by the end of 2027. A portion will also go toward launching in six new markets, including Canada, Germany, and the Netherlands.",
-      "\"We've proved the model works at this scale,\" said MindEase CEO and co-founder Dr. Sarah Chen in a statement. \"Now we need to build the infrastructure to make it work at ten times the scale. That means more therapists, more languages, and more clinical rigour as we grow.\"",
-      "MindEase currently serves over 280,000 users across 34 countries and has seen revenue grow 180% year-over-year. Unlike many consumer wellness apps, the company generates revenue through a mix of individual subscriptions and B2B contracts with NHS trusts and private insurers, giving it an unusually diversified revenue base for a company at this stage.",
-      "Martin Holt, General Partner at Andreessen Horowitz who led the deal, cited MindEase's clinical outcomes as the key differentiator. \"There are a hundred apps telling people to meditate. MindEase is actually measuring whether it's working and publishing the results. That's rare, and it matters.\"",
+      "Mental health platform YouMindo has closed a $40 million Series B round led by Andreessen Horowitz, with participation from existing investors LocalGlobe and Balderton Capital. The raise values the London-based company at approximately $280 million — a significant step up from the $75 million valuation it carried after its Series A in 2023.",
+      "The funds will be used primarily to expand YouMindo's therapist network, currently at 1,200 licensed practitioners across the UK, US, and Australia, to 5,000 by the end of 2027. A portion will also go toward launching in six new markets, including Canada, Germany, and the Netherlands.",
+      "\"We've proved the model works at this scale,\" said YouMindo CEO and co-founder Dr. Sarah Chen in a statement. \"Now we need to build the infrastructure to make it work at ten times the scale. That means more therapists, more languages, and more clinical rigour as we grow.\"",
+      "YouMindo currently serves over 280,000 users across 34 countries and has seen revenue grow 180% year-over-year. Unlike many consumer wellness apps, the company generates revenue through a mix of individual subscriptions and B2B contracts with NHS trusts and private insurers, giving it an unusually diversified revenue base for a company at this stage.",
+      "Martin Holt, General Partner at Andreessen Horowitz who led the deal, cited YouMindo's clinical outcomes as the key differentiator. \"There are a hundred apps telling people to meditate. YouMindo is actually measuring whether it's working and publishing the results. That's rare, and it matters.\"",
       "The company says it plans to remain profitable at current scale while deploying the new capital for growth — a deliberate choice, according to CTO Marcus Webb, to avoid the trap of growth-at-all-costs that has felled several mental health unicorns in recent years.",
     ],
     url: "#",
@@ -66,18 +66,18 @@ const coverage: Article[] = [
   {
     outlet: "Forbes",
     logo: "F",
-    headline: "How MindEase Is Closing the Mental Health Access Gap",
-    subheading: "At a time when NHS waiting lists stretch past 18 months, MindEase's hybrid model offers a glimpse of what the future of mental health care could look like.",
+    headline: "How YouMindo Is Closing the Mental Health Access Gap",
+    subheading: "At a time when NHS waiting lists stretch past 18 months, YouMindo's hybrid model offers a glimpse of what the future of mental health care could look like.",
     author: "Priya Nair",
     date: "February 18, 2026",
     readTime: "6 min read",
-    quote: "At a time when NHS waiting lists stretch past 18 months, MindEase's hybrid model offers a glimpse of what the future of mental health care could look like.",
+    quote: "At a time when NHS waiting lists stretch past 18 months, YouMindo's hybrid model offers a glimpse of what the future of mental health care could look like.",
     body: [
       "In January 2026, NHS England reported that the average wait time for mental health support had reached 19.3 weeks — a record high. For many patients, especially those with moderate anxiety or depression who don't meet the threshold for urgent care, waiting nearly five months for a first appointment is simply not viable.",
-      "MindEase's hybrid model doesn't solve the supply problem — there aren't suddenly more therapists — but it does something arguably more important: it makes the therapists who do exist dramatically more effective. By giving clinicians real-time data on their clients' mood, sleep, thought patterns, and completed exercises, sessions become more targeted. Therapists report spending less time on \"what happened this week\" and more on the actual therapeutic work.",
-      "\"In traditional therapy, the clinician is working half-blind,\" says Dr. Priya Patel, MindEase's Chief Clinical Officer. \"You see someone for 50 minutes once a week. They're usually presenting their best self, or a curated version of the week. Our data gives the therapist a much more accurate picture.\"",
-      "For NHS trusts, this efficiency gain has real financial implications. MindEase has published data from a partnership with two NHS mental health trusts showing that clients using the platform alongside therapy required, on average, 22% fewer sessions to reach treatment goals. For a service under enormous capacity pressure, that's significant.",
-      "The company has also thought carefully about the patients who can't access therapy at all. Its free tier — which includes unlimited mood tracking, a full library of CBT exercises, and access to the peer support community — is used by approximately 60% of its users who have no therapist on the platform. For these users, MindEase is the only structured mental health support they have.",
+      "YouMindo's hybrid model doesn't solve the supply problem — there aren't suddenly more therapists — but it does something arguably more important: it makes the therapists who do exist dramatically more effective. By giving clinicians real-time data on their clients' mood, sleep, thought patterns, and completed exercises, sessions become more targeted. Therapists report spending less time on \"what happened this week\" and more on the actual therapeutic work.",
+      "\"In traditional therapy, the clinician is working half-blind,\" says Dr. Priya Patel, YouMindo's Chief Clinical Officer. \"You see someone for 50 minutes once a week. They're usually presenting their best self, or a curated version of the week. Our data gives the therapist a much more accurate picture.\"",
+      "For NHS trusts, this efficiency gain has real financial implications. YouMindo has published data from a partnership with two NHS mental health trusts showing that clients using the platform alongside therapy required, on average, 22% fewer sessions to reach treatment goals. For a service under enormous capacity pressure, that's significant.",
+      "The company has also thought carefully about the patients who can't access therapy at all. Its free tier — which includes unlimited mood tracking, a full library of CBT exercises, and access to the peer support community — is used by approximately 60% of its users who have no therapist on the platform. For these users, YouMindo is the only structured mental health support they have.",
       "Whether apps can substitute for therapy is still debated among clinicians. But as waiting lists grow and funding shrinks, the more important question may be: given the alternative is nothing, what role can they play?",
     ],
     url: "#",
@@ -88,18 +88,18 @@ const coverage: Article[] = [
     outlet: "Psychology Today",
     logo: "PT",
     headline: "Digital CBT Tools: A Clinical Perspective",
-    subheading: "We put MindEase's therapeutic features through a rigorous clinical lens. What we found surprised us.",
+    subheading: "We put YouMindo's therapeutic features through a rigorous clinical lens. What we found surprised us.",
     author: "Dr. Richard Osei, PhD",
     date: "January 9, 2026",
     readTime: "7 min read",
     quote: "The structured journalling and thought-record features show real clinical sophistication. This isn't gamified wellness — it's a genuine extension of the therapeutic process.",
     body: [
-      "As a clinical psychologist who has been practising CBT for over 15 years, I have viewed the proliferation of mental health apps with considerable scepticism. Most are thin wrappers around mindfulness audio tracks or mood emoji — aesthetically pleasing but clinically shallow. I expected MindEase to be more of the same.",
-      "I was wrong. What MindEase has built in its thought record and behavioural activation tools is a genuine, if simplified, implementation of core CBT techniques. The thought record follows the standard ABC model — Activating event, Beliefs, Consequences — and guides users through cognitive restructuring in a way that, while not a substitute for a trained clinician, is clinically sound.",
-      "The sleep module is particularly impressive. It implements a digital version of sleep restriction therapy and sleep hygiene education that closely mirrors published clinical protocols. I would not have expected to see sleep restriction therapy — a technique that requires careful pacing and is genuinely challenging for patients — implemented responsibly in a consumer app. MindEase manages it.",
-      "My primary concern, shared with the company directly, is around the boundary between self-guided tools and clinical intervention. Users in acute distress need to be directed to appropriate human support, not handed another exercise. To their credit, MindEase has invested significantly in crisis detection and escalation pathways — the app surfaces crisis resources proactively when certain mood patterns are detected.",
-      "The therapist integration is where MindEase genuinely separates itself from competitors. The ability for clinicians to see client data, assign targeted exercises, and review journal entries before sessions is a meaningful clinical tool. I have begun recommending it to clients and, tentatively, to colleagues.",
-      "This is not a replacement for therapy. But as digital adjuncts to clinical care go, MindEase is the most clinically rigorous tool I have reviewed.",
+      "As a clinical psychologist who has been practising CBT for over 15 years, I have viewed the proliferation of mental health apps with considerable scepticism. Most are thin wrappers around mindfulness audio tracks or mood emoji — aesthetically pleasing but clinically shallow. I expected YouMindo to be more of the same.",
+      "I was wrong. What YouMindo has built in its thought record and behavioural activation tools is a genuine, if simplified, implementation of core CBT techniques. The thought record follows the standard ABC model — Activating event, Beliefs, Consequences — and guides users through cognitive restructuring in a way that, while not a substitute for a trained clinician, is clinically sound.",
+      "The sleep module is particularly impressive. It implements a digital version of sleep restriction therapy and sleep hygiene education that closely mirrors published clinical protocols. I would not have expected to see sleep restriction therapy — a technique that requires careful pacing and is genuinely challenging for patients — implemented responsibly in a consumer app. YouMindo manages it.",
+      "My primary concern, shared with the company directly, is around the boundary between self-guided tools and clinical intervention. Users in acute distress need to be directed to appropriate human support, not handed another exercise. To their credit, YouMindo has invested significantly in crisis detection and escalation pathways — the app surfaces crisis resources proactively when certain mood patterns are detected.",
+      "The therapist integration is where YouMindo genuinely separates itself from competitors. The ability for clinicians to see client data, assign targeted exercises, and review journal entries before sessions is a meaningful clinical tool. I have begun recommending it to clients and, tentatively, to colleagues.",
+      "This is not a replacement for therapy. But as digital adjuncts to clinical care go, YouMindo is the most clinically rigorous tool I have reviewed.",
     ],
     url: "#",
     color: "bg-purple-700",
@@ -109,17 +109,17 @@ const coverage: Article[] = [
     outlet: "Wired",
     logo: "W",
     headline: "Can an App Actually Make You Mentally Healthier?",
-    subheading: "We looked at the evidence. The honest answer, based on MindEase's published outcome data, is: probably yes — for some people, some of the time.",
+    subheading: "We looked at the evidence. The honest answer, based on YouMindo's published outcome data, is: probably yes — for some people, some of the time.",
     author: "Chloe Winters",
     date: "December 2, 2025",
     readTime: "9 min read",
-    quote: "The honest answer, based on MindEase's published outcome data, appears to be yes — at least for mild to moderate anxiety and depression.",
+    quote: "The honest answer, based on YouMindo's published outcome data, appears to be yes — at least for mild to moderate anxiety and depression.",
     body: [
       "The mental health app market is estimated to be worth $6 billion globally and is growing at roughly 16% per year. Nearly all of that value is built on an assumption that has, until recently, received relatively little independent scrutiny: that the apps work.",
       "Most don't, or at least not verifiably. A 2024 review of 494 mental health apps in the App Store found that only 3.4% cited any peer-reviewed evidence for their efficacy. Of those, most studies were funded by the companies themselves, had tiny sample sizes, or had follow-up periods of less than four weeks.",
-      "MindEase is one of the exceptions. The company has published three independent outcome studies in the past two years, the most recent of which appeared in JAMA Psychiatry in November. That study, a randomised controlled trial with 1,200 participants across the UK and US, found statistically significant reductions in GAD-7 and PHQ-9 scores — standard measures of anxiety and depression — after eight and sixteen weeks of use.",
+      "YouMindo is one of the exceptions. The company has published three independent outcome studies in the past two years, the most recent of which appeared in JAMA Psychiatry in November. That study, a randomised controlled trial with 1,200 participants across the UK and US, found statistically significant reductions in GAD-7 and PHQ-9 scores — standard measures of anxiety and depression — after eight and sixteen weeks of use.",
       "The effect sizes are modest by clinical standards: comparable to what you might expect from a guided self-help programme, and meaningfully smaller than face-to-face CBT. But the comparison may be unfair. For the majority of people who can't access therapy at all, 'modest' beats 'nothing' by a significant margin.",
-      "The more interesting finding in the JAMA study was the interaction effect between app use and concurrent therapy. Users who were seeing a therapist and using MindEase showed outcomes roughly 35% better than users who were doing either alone. This is what MindEase's founders have always claimed the product is for: augmentation, not replacement.",
+      "The more interesting finding in the JAMA study was the interaction effect between app use and concurrent therapy. Users who were seeing a therapist and using YouMindo showed outcomes roughly 35% better than users who were doing either alone. This is what YouMindo's founders have always claimed the product is for: augmentation, not replacement.",
       "The study is not without limitations. All participants were self-selected, which likely means they were more motivated than average. And eight weeks is still a short window for measuring mental health outcomes. But in a market full of unsubstantiated claims, publishing an RCT in JAMA is a meaningful act of intellectual honesty.",
     ],
     url: "#",
@@ -129,19 +129,19 @@ const coverage: Article[] = [
   {
     outlet: "The Guardian",
     logo: "G",
-    headline: "MindEase and the Quest to Democratise Therapy",
-    subheading: "What's striking about MindEase's approach is the refusal to pretend that technology alone is the answer.",
+    headline: "YouMindo and the Quest to Democratise Therapy",
+    subheading: "What's striking about YouMindo's approach is the refusal to pretend that technology alone is the answer.",
     author: "Amara Diallo",
     date: "October 21, 2025",
     readTime: "7 min read",
-    quote: "What's striking about MindEase's approach is the refusal to pretend that technology alone is the answer. It positions itself as a bridge, not a replacement.",
+    quote: "What's striking about YouMindo's approach is the refusal to pretend that technology alone is the answer. It positions itself as a bridge, not a replacement.",
     body: [
       "In the summer of 2023, Nina Okafor was referred to an NHS mental health service after a period of severe depression. She was told the waiting time for therapy would be approximately 14 months. \"I cried when I heard that,\" she tells me over coffee in Hackney. \"Not because I was surprised, but because I was. I knew it was bad but I didn't think it was that bad.\"",
-      "Today, Okafor is the Head of Community at MindEase — a turn of events she describes as the kind of thing that only makes sense in retrospect. During her wait for NHS therapy, she found MindEase through a friend. She started using it daily. \"It wasn't therapy,\" she says carefully. \"But it was structure when I had none. It was somewhere to put the thoughts.\" When her appointment finally came, she was, by her account, significantly further along in her recovery than she would have been otherwise.",
-      "MindEase's origin story is not unusual in the mental health space. What distinguishes it is the care with which the founders have thought about what technology can and cannot do. Dr. Sarah Chen, who left a successful private practice to start the company, is almost anxiously precise about the limits of her product. \"I've seen what good therapy looks like,\" she says. \"We're not that. We're trying to be the thing that makes the therapy work better, or that fills the gap when therapy isn't available. Those are two different things, and we try to be honest about which one we're doing for which user.\"",
-      "This clarity of purpose runs through the product in ways that are easy to miss. Unlike most wellness apps, MindEase has a crisis detection system that actively monitors for language and mood patterns associated with suicidal ideation and escalates to human support. It has a formal clinical advisory board that reviews all content before publication. Its free tier is genuinely full-featured — not a funnel.",
+      "Today, Okafor is the Head of Community at YouMindo — a turn of events she describes as the kind of thing that only makes sense in retrospect. During her wait for NHS therapy, she found YouMindo through a friend. She started using it daily. \"It wasn't therapy,\" she says carefully. \"But it was structure when I had none. It was somewhere to put the thoughts.\" When her appointment finally came, she was, by her account, significantly further along in her recovery than she would have been otherwise.",
+      "YouMindo's origin story is not unusual in the mental health space. What distinguishes it is the care with which the founders have thought about what technology can and cannot do. Dr. Sarah Chen, who left a successful private practice to start the company, is almost anxiously precise about the limits of her product. \"I've seen what good therapy looks like,\" she says. \"We're not that. We're trying to be the thing that makes the therapy work better, or that fills the gap when therapy isn't available. Those are two different things, and we try to be honest about which one we're doing for which user.\"",
+      "This clarity of purpose runs through the product in ways that are easy to miss. Unlike most wellness apps, YouMindo has a crisis detection system that actively monitors for language and mood patterns associated with suicidal ideation and escalates to human support. It has a formal clinical advisory board that reviews all content before publication. Its free tier is genuinely full-featured — not a funnel.",
       "The company is not without tensions. Scaling a mental health service inevitably involves trade-offs between clinical rigour and commercial growth. The therapist network, currently 1,200 strong, is growing faster than the company's capacity to verify credentials to its own standards. Chen acknowledges this. \"We are being stretched,\" she says. \"We know it.\"",
-      "But in a sector where most companies have outsourced their conscience to the marketing department, MindEase's willingness to say it out loud feels significant.",
+      "But in a sector where most companies have outsourced their conscience to the marketing department, YouMindo's willingness to say it out loud feels significant.",
     ],
     url: "#",
     color: "bg-blue-600",
@@ -170,16 +170,16 @@ export default function PressPage() {
           <div className="max-w-xl">
             <div className="text-xs text-sage-300 uppercase tracking-widest font-medium mb-4">Press & Media</div>
             <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-6">
-              MindEase in the news
+              YouMindo in the news
             </h1>
             <p className="text-sage-200 text-[17px] leading-relaxed mb-8">
               We're building in the open. For press enquiries, interview requests, or appearances — reach out to our press team directly.
             </p>
             <a
-              href="mailto:press@mindease.com"
+              href="mailto:press@youmindo.com"
               className="inline-flex items-center justify-center gap-2 bg-white text-stone-900 text-sm font-semibold px-6 py-3 rounded-full hover:bg-stone-100 transition-colors"
             >
-              ✉️ press@mindease.com
+              ✉️ press@youmindo.com
             </a>
           </div>
         </div>
@@ -296,7 +296,7 @@ export default function PressPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <span className="text-sage-400">✉️</span>
-                  <a href="mailto:press@mindease.com" className="text-white text-sm hover:text-sage-200 transition-colors">press@mindease.com</a>
+                  <a href="mailto:press@youmindo.com" className="text-white text-sm hover:text-sage-200 transition-colors">press@youmindo.com</a>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sage-400">📞</span>
@@ -304,7 +304,7 @@ export default function PressPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sage-400">📍</span>
-                  <span className="text-sage-200 text-sm">MindEase Ltd · 30 Cannon Street · London · EC4M 6XH</span>
+                  <span className="text-sage-200 text-sm">YouMindo Ltd · 30 Cannon Street · London · EC4M 6XH</span>
                 </div>
               </div>
             </div>

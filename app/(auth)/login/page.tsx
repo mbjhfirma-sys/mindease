@@ -1,49 +1,78 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { signIn, getSession } from "next-auth/react";
+import Logo from "@/components/Logo";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const justRegistered = searchParams.get("registered") === "1";
+  const pendingReview = searchParams.get("pending") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [useBackupCode, setUseBackupCode] = useState(false);
+  const [requires2FA, setRequires2FA] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
+    if (!requires2FA) {
+      setLoading(true);
+      const precheck = await fetch("/api/auth/requires-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      }).then((r) => r.json()).catch(() => ({ requires2FA: false }));
+
+      if (precheck.requires2FA) {
+        setRequires2FA(true);
+        setLoading(false);
+        return;
+      }
+    }
+
+    setLoading(true);
     const result = await signIn("credentials", {
       email,
       password,
+      totpCode: requires2FA ? totpCode : undefined,
       redirect: false,
     });
 
     setLoading(false);
 
     if (result?.error) {
-      setError("Invalid email or password.");
+      setError(requires2FA ? "Invalid code. Please try again." : "Invalid email or password.");
       return;
     }
 
-    // Redirect based on role — fetch session to determine destination
-    const res = await fetch("/api/user");
-    const data = await res.json();
-    const role = data?.user?.role;
-    router.push(role === "THERAPIST" ? "/therapist" : "/dashboard");
+    const session = await getSession();
+    const role = (session?.user as { role?: string } | null)?.role;
+    const destination = role === "THERAPIST" ? "/therapist" : role === "ADMIN" ? "/admin" : "/dashboard";
+    router.push(destination);
   }
 
   return (
     <div className="min-h-screen bg-cream flex">
       {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-sage-700 flex-col justify-between p-12 text-white">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-lg">
-          <span className="w-8 h-8 bg-sage-500 rounded-lg flex items-center justify-center text-sm">🌿</span>
-          MindEase
+        <Link href="/" className="flex items-center">
+          <Logo variant="white" height={26} />
         </Link>
         <div>
           <div className="text-5xl mb-6">🧠</div>
@@ -58,7 +87,7 @@ export default function LoginPage() {
               {[...Array(5)].map((_, i) => <span key={i} className="text-amber-400 text-sm">★</span>)}
             </div>
             <p className="text-sage-100 text-sm italic mb-3">
-              "MindEase has genuinely changed how I handle stress. I feel more equipped than ever."
+              "YouMindo has genuinely changed how I handle stress. I feel more equipped than ever."
             </p>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-sage-400 rounded-full flex items-center justify-center">👩</div>
@@ -69,19 +98,30 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-        <p className="text-sage-400 text-sm">© 2025 MindEase</p>
+        <p className="text-sage-400 text-sm">© 2025 YouMindo</p>
       </div>
 
       {/* Right panel */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
-          <Link href="/" className="lg:hidden flex items-center gap-2 font-semibold text-sage-800 mb-8">
-            <span className="w-7 h-7 bg-sage-700 rounded-md flex items-center justify-center text-white text-xs">🌿</span>
-            MindEase
+          <Link href="/" className="lg:hidden flex items-center mb-8">
+            <Logo height={24} />
           </Link>
 
           <h1 className="text-2xl font-bold text-stone-900 mb-1">Welcome back</h1>
           <p className="text-stone-500 text-sm mb-6">Sign in to your account</p>
+
+          {justRegistered && pendingReview && (
+            <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+              Account created! Your professional profile is pending review by the
+              YouMindo team — you&apos;ll get full access once you&apos;re approved.
+            </div>
+          )}
+          {justRegistered && !pendingReview && (
+            <div className="mb-4 px-4 py-3 bg-sage-50 border border-sage-200 rounded-xl text-sm text-sage-800">
+              Account created! Sign in to get started.
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -98,7 +138,8 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 required
-                className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-sage-500 bg-white"
+                disabled={requires2FA}
+                className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-sage-500 bg-white disabled:bg-stone-50 disabled:text-stone-500"
               />
             </div>
             <div>
@@ -112,15 +153,50 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-sage-500 bg-white"
+                disabled={requires2FA}
+                className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-sage-500 bg-white disabled:bg-stone-50 disabled:text-stone-500"
               />
             </div>
+
+            {requires2FA && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium text-stone-700">
+                    {useBackupCode ? "Backup code" : "Authentication code"}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setUseBackupCode((v) => !v); setTotpCode(""); }}
+                    className="text-sage-600 text-xs hover:underline"
+                  >
+                    {useBackupCode ? "Use authenticator code instead" : "Use a backup code instead"}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                  placeholder={useBackupCode ? "XXXX-XXXX" : "123456"}
+                  autoFocus
+                  required
+                  className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm tracking-widest focus:outline-none focus:border-sage-500 bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => { setRequires2FA(false); setTotpCode(""); setError(""); }}
+                  className="text-xs text-stone-400 hover:text-stone-700 mt-1.5"
+                >
+                  ← Back
+                </button>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-sage-700 text-white font-semibold text-sm py-3 rounded-xl hover:bg-sage-800 transition-colors disabled:opacity-50"
             >
-              {loading ? "Signing in…" : "Sign In"}
+              {loading ? "Signing in…" : requires2FA ? "Verify & Sign In" : "Sign In"}
             </button>
           </form>
 

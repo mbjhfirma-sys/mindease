@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Logo from "./Logo";
 
 export default function Footer() {
   return (
@@ -7,9 +8,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
           {/* Brand */}
           <div className="md:col-span-1">
-            <Link href="/" className="flex items-center gap-2 font-semibold text-white text-lg mb-4">
-              <span className="w-8 h-8 bg-sage-500 rounded-lg flex items-center justify-center text-white text-sm">🌿</span>
-              MindEase
+            <Link href="/" className="flex items-center mb-4">
+              <Logo variant="white" height={26} />
             </Link>
             <p className="text-sage-200 text-sm leading-relaxed">
               Find support, guidance, and balance on your mental health journey.
@@ -25,9 +25,9 @@ export default function Footer() {
 
           {/* Links */}
           <div>
-            <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Platform</h4>
+            <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Services</h4>
             <ul className="space-y-2.5">
-              {[["Pricing", "/pricing"], ["Stories", "/stories"], ["Resources", "/resources"], ["Dashboard", "/dashboard"]].map(([label, href]) => (
+              {[["Mindfulness & Meditation", "/mindfulness-meditation"], ["One-on-One Therapy", "/therapy"], ["Wellness Coaching", "/coaching"], ["Pricing", "/pricing"], ["Stories", "/stories"], ["Resources", "/resources"], ["Dashboard", "/dashboard"]].map(([label, href]) => (
                 <li key={label}>
                   <Link href={href} className="text-sage-300 hover:text-white text-sm transition-colors">{label}</Link>
                 </li>
@@ -73,7 +73,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-sage-700 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-sage-400">
-          <p>© 2025 MindEase. All rights reserved.</p>
+          <p>© 2025 YouMindo. All rights reserved.</p>
           <div className="flex gap-5">
             <a href="#" className="hover:text-sage-200 transition-colors">Privacy Policy</a>
             <a href="#" className="hover:text-sage-200 transition-colors">Terms of Service</a>

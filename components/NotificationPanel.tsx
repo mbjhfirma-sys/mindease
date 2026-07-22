@@ -1,20 +1,32 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { mockNotifications, type NotificationItem } from "@/lib/mockData";
 
-type Props = {
-  role: "client" | "therapist";
+type NotificationItem = {
+  id: string;
+  title: string;
+  body: string;
+  icon?: string | null;
+  read: boolean;
+  createdAt: string;
 };
 
-export default function NotificationPanel({ role }: Props) {
+type Props = {
+  role: "client" | "therapist" | "admin";
+};
+
+export default function NotificationPanel({ role: _role }: Props) {
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<NotificationItem[]>(() =>
-    mockNotifications.filter((n) => n.for === role || n.for === "both")
-  );
+  const [items, setItems] = useState<NotificationItem[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
   const unread = items.filter((n) => !n.read).length;
+
+  useEffect(() => {
+    fetch("/api/notifications")
+      .then((r) => r.json())
+      .then((d) => setItems(d.notifications ?? []));
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -26,15 +38,17 @@ export default function NotificationPanel({ role }: Props) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  function markAllRead() {
+  async function markAllRead() {
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) });
   }
 
-  function markRead(id: string) {
+  async function markRead(id: string) {
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
   }
 
-  const isTherapist = role === "therapist";
+  const isTherapist = _role === "therapist" || _role === "admin";
 
   return (
     <div className="relative" ref={ref}>
@@ -101,13 +115,15 @@ export default function NotificationPanel({ role }: Props) {
                     !n.read ? "bg-sage-50" : ""
                   }`}
                 >
-                  <span className="text-lg mt-0.5 shrink-0">{n.icon}</span>
+                  <span className="text-lg mt-0.5 shrink-0">{n.icon ?? "🔔"}</span>
                   <div className="min-w-0">
                     <p className={`text-sm leading-snug ${!n.read ? "font-semibold text-stone-800" : "font-medium text-stone-600"}`}>
                       {n.title}
                     </p>
                     <p className="text-xs text-stone-400 mt-0.5 leading-snug">{n.body}</p>
-                    <p className="text-[11px] text-stone-300 mt-1">{n.time}</p>
+                    <p className="text-[11px] text-stone-300 mt-1">
+                      {new Date(n.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    </p>
                   </div>
                   {!n.read && (
                     <span className="shrink-0 mt-1.5 w-2 h-2 rounded-full bg-sage-500" />

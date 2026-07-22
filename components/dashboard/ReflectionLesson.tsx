@@ -35,7 +35,7 @@ export default function ReflectionLesson({ title, prompt, onComplete }: Props) {
           onClick={onComplete}
           className="bg-sage-700 text-white font-semibold px-8 py-3 rounded-xl hover:bg-sage-800 transition-colors"
         >
-          Continue to Next Lesson →
+          Continue →
         </button>
       </div>
     );

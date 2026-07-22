@@ -1,267 +1,282 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { scheduleItems, clientAppointments, userProfile, therapistProfile, messages, type ClientAppointment } from "@/lib/mockData";
-import VideoCallModal from "@/components/therapist/VideoCallModal";
+import { ChevronLeft, ChevronRight, CalendarDays, Clock, Video, Phone, MapPin } from "lucide-react";
+import VideoCallRoom from "@/components/video/VideoCallRoom";
 import BookingModal from "@/components/dashboard/BookingModal";
+import { getJoinWindow } from "@/lib/video";
 
-const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const today = new Date();
-const todayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][today.getDay()];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const typeColors: Record<string, string> = {
-  session: "bg-amber-100 border-amber-300 text-amber-800",
-  therapy: "bg-blue-100 border-blue-300 text-blue-800",
-  course: "bg-sage-100 border-sage-300 text-sage-800",
-  group: "bg-purple-100 border-purple-300 text-purple-800",
+type AssignedTherapist = {
+  id: string;
+  userId: string;
+  title: string | null;
+  specializations: string[];
+  rating: number;
+  user: { name: string; avatar: string | null };
 };
 
-const typeLabels: Record<string, string> = {
-  session: "Meditation",
-  therapy: "Therapy",
-  course: "Course",
-  group: "Group",
+type Appt = {
+  id: string;
+  date: Date;
+  day: string;
+  time: string;
+  therapistName: string;
+  therapistId: string;
+  duration: string;
+  durationMin: number;
+  notes?: string | null;
+  status: string;
+  type: string;
 };
 
-const typeIcons: Record<string, string> = {
-  session: "🧘",
-  therapy: "🧠",
-  course: "📚",
-  group: "🤝",
+function parseAppt(raw: {
+  id: string; date: string; duration: number; type: string; status: string;
+  therapist: { id: string; user: { name: string } }; notes?: string | null;
+}): Appt {
+  const d = new Date(raw.date);
+  return {
+    id: raw.id,
+    date: d,
+    day: DAY_NAMES[d.getDay()],
+    time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    therapistName: raw.therapist.user.name,
+    therapistId: raw.therapist.id,
+    durationMin: raw.duration,
+    duration: raw.duration < 60
+      ? `${raw.duration} min`
+      : `${Math.floor(raw.duration / 60)}h${raw.duration % 60 ? ` ${raw.duration % 60}m` : ""}`,
+    notes: raw.notes,
+    status: raw.status,
+    type: raw.type,
+  };
+}
+
+const TYPE_ICON: Record<string, React.ReactNode> = {
+  video:     <Video size={12} />,
+  in_person: <MapPin size={12} />,
+  phone:     <Phone size={12} />,
+};
+const TYPE_LABEL: Record<string, string> = {
+  video: "Video", in_person: "In person", phone: "Phone",
 };
 
-type ScheduleItem = (typeof scheduleItems)[number];
+const STATUS_STYLE: Record<string, string> = {
+  confirmed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  pending:   "bg-amber-50  text-amber-700  border-amber-200",
+  completed: "bg-stone-50  text-stone-500  border-stone-200",
+  cancelled: "bg-red-50    text-red-500    border-red-200",
+  no_show:   "bg-red-50    text-red-500    border-red-200",
+};
+const STATUS_LABEL: Record<string, string> = {
+  confirmed: "Confirmed", pending: "Awaiting confirmation",
+  completed: "Completed", cancelled: "Cancelled", no_show: "No-show",
+};
 
-function SessionDetailModal({
-  session,
-  onClose,
-  onCancel,
-}: {
-  session: ScheduleItem;
-  onClose: () => void;
-  onCancel: (id: string) => void;
-}) {
-  const [confirming, setConfirming] = useState(false);
+function getWeekStart(offsetWeeks: number): Date {
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + offsetWeeks * 7);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
 
-  function handleCancel() {
-    onCancel(session.id);
-    onClose();
-  }
+function getWeekDays(weekStart: Date) {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return { name: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i], date: d };
+  });
+}
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      onClick={onClose}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
 
-      {/* Sheet */}
-      <div
-        className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Drag handle (mobile) */}
-        <div className="flex justify-center pt-3 pb-1 sm:hidden">
-          <div className="w-10 h-1 rounded-full bg-stone-200" />
-        </div>
+function formatDateFull(d: Date) {
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+}
 
-        {/* Icon + header */}
-        <div className="px-6 pt-4 pb-5">
-          <div className="flex items-start gap-4">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 ${
-              session.type === "session" ? "bg-amber-100" :
-              session.type === "therapy" ? "bg-blue-100" :
-              session.type === "course" ? "bg-sage-100" :
-              "bg-purple-100"
-            }`}>
-              {typeIcons[session.type]}
-            </div>
-            <div className="flex-1 min-w-0 pt-1">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${typeColors[session.type]}`}>
-                  {typeLabels[session.type]}
-                </span>
-              </div>
-              <h2 className="text-base font-bold text-stone-900 leading-snug">{session.title}</h2>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-stone-400 hover:text-stone-600 transition-colors p-1 flex-shrink-0"
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M13.5 4.5L4.5 13.5M4.5 4.5L13.5 13.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </div>
+function formatDateShort(d: Date) {
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
 
-          {/* Meta row */}
-          <div className="flex flex-wrap gap-3 mt-4">
-            <div className="flex items-center gap-1.5 text-xs text-stone-500">
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.2"/><path d="M6.5 3.5V6.5L8.5 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-              {session.time}
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-stone-500">
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1.5" y="2.5" width="10" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><path d="M4.5 1v3M8.5 1v3M1.5 6h10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-              {session.day}
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-stone-500">
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 6.5h9M6.5 2v9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-              {session.duration}
-            </div>
-          </div>
-
-          {/* Description */}
-          <p className="mt-4 text-sm text-stone-600 leading-relaxed">{session.description}</p>
-        </div>
-
-        {/* Actions */}
-        <div className="px-6 pb-6 pt-2 flex flex-col gap-2">
-          {confirming ? (
-            <>
-              <p className="text-xs text-stone-500 text-center mb-1">
-                Are you sure you want to cancel <span className="font-semibold text-stone-700">{session.title}</span>?
-              </p>
-              <button
-                onClick={handleCancel}
-                className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors"
-              >
-                Yes, Cancel Session
-              </button>
-              <button
-                onClick={() => setConfirming(false)}
-                className="w-full py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-sm font-semibold transition-colors"
-              >
-                Keep It
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setConfirming(true)}
-                className="w-full py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold border border-red-100 transition-colors"
-              >
-                Cancel Session
-              </button>
-              <button
-                onClick={onClose}
-                className="w-full py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-sm font-semibold transition-colors"
-              >
-                Close
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function formatCountdown(ms: number): string {
+  const totalMin = Math.ceil(ms / 60_000);
+  if (totalMin < 60) return `${totalMin}m`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}h${m ? ` ${m}m` : ""}`;
 }
 
 export default function SchedulePage() {
   const router = useRouter();
-  const [activeDay, setActiveDay] = useState(todayName);
-  const [activeCall, setActiveCall] = useState<ClientAppointment | null>(null);
-  const [showBooking, setShowBooking] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<ScheduleItem | null>(null);
-  const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
+  const [allAppts,        setAllAppts]        = useState<Appt[]>([]);
+  const [therapist,       setTherapist]       = useState<AssignedTherapist | null>(null);
+  const [loading,         setLoading]         = useState(true);
+  const [weekOffset,      setWeekOffset]      = useState(0);
+  const [selectedDate,    setSelectedDate]    = useState<Date>(new Date());
+  const [activeCall,      setActiveCall]      = useState<Appt | null>(null);
+  const [showBooking,     setShowBooking]     = useState(false);
+  const [startingConversation, setStartingConversation] = useState(false);
 
-  const therapistConvoId = messages.find(
-    (m) => m.sender === userProfile.therapist
-  )?.id ?? null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  const activeScheduleItems = scheduleItems.filter((s) => !cancelledIds.has(s.id));
-  const dayItems = activeScheduleItems.filter((s) => s.day === activeDay);
+  const weekStart = getWeekStart(weekOffset);
+  const weekEnd   = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23,59,59,999);
+  const weekDays  = getWeekDays(weekStart);
 
-  function getAppointment(day: string, time: string) {
-    return clientAppointments.find((a) => a.day === day && a.time === time && a.status === "confirmed");
+  const weekLabel = (() => {
+    const s = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const e = weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${s} – ${e}`;
+  })();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [apptRes, userRes] = await Promise.all([
+        fetch("/api/appointments", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/user",         { cache: "no-store" }).then((r) => r.json()),
+      ]);
+
+      const rawAppts = apptRes.appointments ?? [];
+      setAllAppts(rawAppts.map(parseAppt));
+
+      if (userRes.user?.assignedTherapist) {
+        setTherapist(userRes.user.assignedTherapist);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Keeps "Available in Xm" join-window countdowns fresh without a network round trip.
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 20_000);
+    return () => clearInterval(id);
+  }, []);
+
+  async function messageTherapist() {
+    if (!therapist || startingConversation) return;
+    setStartingConversation(true);
+    try {
+      const r = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ therapistId: therapist.id }),
+      });
+      const d = await r.json();
+      router.push(r.ok && d.conversationId ? `/dashboard/messages?open=${d.conversationId}` : "/dashboard/messages");
+    } finally {
+      setStartingConversation(false);
+    }
   }
 
-  const daysWithActivity = new Set([
-    ...activeScheduleItems.map((s) => s.day),
-    ...clientAppointments.map((a) => a.day),
-  ]);
+  // Appointments helpers
+  const now = new Date();
+  const upcoming = allAppts
+    .filter((a) => a.date > now && a.status !== "cancelled")
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  function handleCancel(id: string) {
-    setCancelledIds((prev) => new Set([...prev, id]));
+  const weekAppts = allAppts.filter(
+    (a) => a.date >= weekStart && a.date <= weekEnd && a.status !== "cancelled"
+  );
+
+  const dayAppts = allAppts
+    .filter((a) => isSameDay(a.date, selectedDate) && a.status !== "cancelled")
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const daysWithAppt = new Set(
+    weekAppts.map((a) => a.date.toDateString())
+  );
+
+  const nextSession = upcoming[0] ?? null;
+
+  const pendingCount = allAppts.filter((a) => a.status === "pending").length;
+
+  function initials(name: string) {
+    return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   }
 
   return (
     <>
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
+      <div className="max-w-3xl mx-auto space-y-5 pb-10">
+
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-stone-900">My Schedule</h1>
-            <p className="text-stone-500 mt-1 text-sm">
+            <p className="text-sm text-stone-500 mt-0.5">
               {today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </p>
           </div>
           <button
             onClick={() => setShowBooking(true)}
-            className="bg-sage-700 text-white font-semibold text-sm px-4 py-2 rounded-xl hover:bg-sage-800 transition-colors"
+            className="bg-sage-700 hover:bg-sage-800 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
           >
             + Book Session
           </button>
         </div>
 
-        {/* Therapist assignment card */}
-        {userProfile.therapist ? (
+        {/* ── Therapist card ─────────────────────────────────────────────────── */}
+        {loading ? (
+          <div className="h-28 bg-white rounded-2xl border border-stone-100 animate-pulse" />
+        ) : therapist ? (
           <div className="bg-white rounded-2xl border border-stone-100 p-5">
             <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center text-2xl flex-shrink-0">
-                {therapistProfile.avatar}
+              {/* Avatar */}
+              <div className="w-14 h-14 rounded-2xl bg-sage-100 text-sage-800 flex items-center justify-center text-lg font-bold flex-shrink-0">
+                {initials(therapist.user.name)}
               </div>
+
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-stone-900 text-sm">{therapistProfile.name}</h3>
-                  <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full">Your Therapist</span>
+                <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                  <h3 className="font-bold text-stone-900 text-sm">{therapist.user.name}</h3>
+                  <span className="text-[10px] font-semibold bg-sage-100 text-sage-800 px-2 py-0.5 rounded-full">Your Therapist</span>
                 </div>
-                <p className="text-xs text-stone-500 mt-0.5">{therapistProfile.title}</p>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {therapistProfile.specialisations.map((s) => (
-                    <span key={s} className="text-xs bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{s}</span>
-                  ))}
-                </div>
+                <p className="text-xs text-stone-500">{therapist.title ?? "Licensed Mental Health Professional"}</p>
+                {therapist.specializations.length > 0 && (
+                  <p className="text-[11px] text-stone-400 mt-0.5 truncate">
+                    {therapist.specializations.slice(0, 3).join(" · ")}
+                  </p>
+                )}
               </div>
-              <div className="text-right flex-shrink-0 hidden sm:block">
-                {(() => {
-                  const next = clientAppointments.find((a) => a.status === "confirmed");
-                  return next ? (
-                    <div>
-                      <div className="text-xs text-stone-400 mb-0.5">Next session</div>
-                      <div className="text-xs font-semibold text-stone-800">{next.date}</div>
-                      <div className="text-xs text-stone-500">{next.time} · {next.duration}</div>
+
+              {/* Next session pill */}
+              <div className="flex-shrink-0 hidden sm:block text-right">
+                {nextSession ? (
+                  <div>
+                    <div className="text-[10px] text-stone-400 mb-0.5 uppercase tracking-wide font-medium">Next session</div>
+                    <div className="text-xs font-semibold text-stone-800">
+                      {formatDateShort(nextSession.date)}
                     </div>
-                  ) : (
-                    <div className="text-xs text-stone-400">No upcoming sessions</div>
-                  );
-                })()}
+                    <div className="text-[11px] text-stone-500">{nextSession.time} · {nextSession.duration}</div>
+                    <span className={`inline-block text-[10px] font-semibold border px-2 py-0.5 rounded-full mt-1 ${STATUS_STYLE[nextSession.status] ?? ""}`}>
+                      {STATUS_LABEL[nextSession.status] ?? nextSession.status}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-stone-400">No upcoming sessions</span>
+                )}
               </div>
             </div>
-            {(() => {
-              const next = clientAppointments.find((a) => a.status === "confirmed");
-              return next ? (
-                <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between sm:hidden">
-                  <div>
-                    <div className="text-xs text-stone-400">Next session</div>
-                    <div className="text-xs font-semibold text-stone-800">{next.date} · {next.time}</div>
-                  </div>
-                </div>
-              ) : null;
-            })()}
-            <div className="mt-4 flex gap-2">
+
+            <div className="flex gap-2 mt-4">
               <button
-                onClick={() =>
-                  router.push(
-                    therapistConvoId
-                      ? `/dashboard/messages?open=${therapistConvoId}`
-                      : "/dashboard/messages"
-                  )
-                }
-                className="text-xs font-semibold bg-sage-700 hover:bg-sage-800 text-white px-4 py-2 rounded-xl transition-colors"
+                onClick={messageTherapist}
+                disabled={startingConversation}
+                className="text-xs font-semibold bg-sage-700 hover:bg-sage-800 text-white px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
               >
-                Message
+                {startingConversation ? "Opening…" : "Message"}
               </button>
               <button
                 onClick={() => setShowBooking(true)}
@@ -269,55 +284,82 @@ export default function SchedulePage() {
               >
                 Book Session
               </button>
-              <div className="ml-auto flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-                <span className="text-xs text-stone-500">Available today</span>
-              </div>
             </div>
           </div>
         ) : (
           <div className="bg-stone-50 rounded-2xl border border-dashed border-stone-200 p-6 text-center">
             <div className="text-3xl mb-2">🔍</div>
-            <h3 className="font-semibold text-stone-700 text-sm mb-1">No therapist assigned yet</h3>
-            <p className="text-stone-400 text-xs mb-4">Connect with a licensed therapist to get personalised support.</p>
-            <button className="text-xs font-semibold bg-sage-700 hover:bg-sage-800 text-white px-5 py-2 rounded-xl transition-colors">
+            <h3 className="font-semibold text-stone-700 text-sm mb-1">No therapist connected yet</h3>
+            <p className="text-stone-400 text-xs mb-4">Connect with a YouMindo-verified therapist to get personalised support.</p>
+            <button
+              onClick={() => router.push("/dashboard/find")}
+              className="text-xs font-semibold bg-sage-700 hover:bg-sage-800 text-white px-5 py-2 rounded-xl transition-colors"
+            >
               Find a Therapist
             </button>
           </div>
         )}
 
-        {/* Week strip */}
-        <div className="bg-white rounded-2xl p-4 border border-stone-100">
-          <div className="grid grid-cols-7 gap-2">
-            {days.map((day, i) => {
-              const isToday = day === todayName;
-              const isActive = day === activeDay;
-              const hasItems = daysWithActivity.has(day);
-              const date = new Date(today);
-              date.setDate(today.getDate() - today.getDay() + i + 1);
-              const hasCall = clientAppointments.some((a) => a.day === day && a.status === "confirmed");
+        {/* ── Pending alert ──────────────────────────────────────────────────── */}
+        {!loading && pendingCount > 0 && (
+          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+            <Clock size={15} className="text-amber-600 flex-shrink-0" />
+            <p className="text-xs text-amber-800 font-medium">
+              {pendingCount} session{pendingCount > 1 ? "s" : ""} awaiting your therapist's confirmation.
+            </p>
+          </div>
+        )}
 
+        {/* ── Week navigator + strip ─────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
+          {/* Week nav */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-stone-50">
+            <button
+              onClick={() => setWeekOffset((w) => w - 1)}
+              className="p-1.5 rounded-lg text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="flex items-center gap-2">
+              <CalendarDays size={13} className="text-stone-400" />
+              <span className="text-xs font-semibold text-stone-700">{weekLabel}</span>
+              {weekOffset !== 0 && (
+                <button
+                  onClick={() => { setWeekOffset(0); setSelectedDate(new Date()); }}
+                  className="text-[10px] font-semibold text-sage-700 bg-sage-50 px-2 py-0.5 rounded-full hover:bg-sage-100 transition-colors"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setWeekOffset((w) => w + 1)}
+              className="p-1.5 rounded-lg text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          {/* Day pills */}
+          <div className="grid grid-cols-7 gap-1.5 p-3">
+            {weekDays.map(({ name, date }) => {
+              const isToday   = isSameDay(date, new Date());
+              const isSelected = isSameDay(date, selectedDate);
+              const hasAppt   = daysWithAppt.has(date.toDateString());
               return (
                 <button
-                  key={day}
-                  onClick={() => setActiveDay(day)}
+                  key={name}
+                  onClick={() => setSelectedDate(new Date(date))}
                   className={`flex flex-col items-center gap-1 py-3 rounded-xl transition-colors ${
-                    isActive
-                      ? "bg-sage-700 text-white"
-                      : isToday
-                      ? "bg-sage-50 text-sage-700"
-                      : "hover:bg-stone-50 text-stone-600"
+                    isSelected ? "bg-sage-700 text-white" :
+                    isToday    ? "bg-sage-50 text-sage-800 ring-1 ring-sage-200" :
+                    "hover:bg-stone-50 text-stone-600"
                   }`}
                 >
-                  <span className="text-xs font-medium">{day}</span>
-                  <span className={`text-base font-bold ${isActive ? "text-white" : ""}`}>
-                    {date.getDate()}
-                  </span>
-                  {(hasItems || hasCall) && (
-                    <div className="flex gap-0.5">
-                      {hasItems && <div className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-white" : "bg-sage-400"}`} />}
-                      {hasCall && <div className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-white/70" : "bg-blue-400"}`} />}
-                    </div>
+                  <span className="text-[10px] font-semibold uppercase">{name}</span>
+                  <span className="text-sm font-bold">{date.getDate()}</span>
+                  {hasAppt && (
+                    <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : "bg-sage-500"}`} />
                   )}
                 </button>
               );
@@ -325,190 +367,213 @@ export default function SchedulePage() {
           </div>
         </div>
 
-        {/* Day sessions */}
+        {/* ── Selected day sessions ──────────────────────────────────────────── */}
         <div>
-          <h2 className="text-base font-bold text-stone-700 mb-4">
-            {activeDay === todayName ? "Today" : activeDay} — {dayItems.length} session{dayItems.length !== 1 ? "s" : ""}
-            {clientAppointments.some((a) => a.day === activeDay) ? ` + therapy call` : ""}
+          <h2 className="text-sm font-bold text-stone-700 mb-3 flex items-center gap-2">
+            {isSameDay(selectedDate, new Date()) ? "Today" : formatDateFull(selectedDate)}
+            <span className="text-xs font-normal text-stone-400">· {dayAppts.length} session{dayAppts.length !== 1 ? "s" : ""}</span>
           </h2>
 
-          {/* Confirmed therapy call card for this day */}
-          {(() => {
-            const appts = clientAppointments.filter((a) => a.day === activeDay);
-            if (appts.length === 0) return null;
-            return appts.map((appt) => (
-              <div
-                key={appt.id}
-                className="mb-3 border-2 border-blue-200 bg-blue-50 rounded-2xl p-5 flex items-center gap-5"
+          {loading ? (
+            <div className="space-y-2 animate-pulse">
+              {[1, 2].map((i) => <div key={i} className="h-20 bg-white border border-stone-100 rounded-2xl" />)}
+            </div>
+          ) : dayAppts.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-stone-100 px-6 py-10 text-center">
+              <p className="text-stone-400 text-sm">No sessions on this day.</p>
+              <button
+                onClick={() => setShowBooking(true)}
+                className="mt-3 text-xs font-semibold text-sage-700 hover:text-sage-900 transition-colors"
               >
-                <div className="text-center min-w-[52px]">
-                  <div className="text-sm font-bold text-blue-800">{appt.time.split(" ")[0]}</div>
-                  <div className="text-xs text-blue-600">{appt.time.split(" ")[1]}</div>
-                </div>
-                <div className="w-px h-10 bg-blue-200" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm text-blue-900">Therapy Session</div>
-                  <div className="text-xs text-blue-600 mt-0.5">{appt.therapistName} · {appt.duration}</div>
-                  {appt.notes && <div className="text-xs text-blue-500 mt-0.5 italic">{appt.notes}</div>}
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                    appt.status === "confirmed"
-                      ? "bg-blue-100 text-blue-700 border border-blue-200"
-                      : "bg-stone-100 text-stone-500 border border-stone-200"
-                  }`}>
-                    {appt.status === "confirmed" ? "Confirmed" : "Pending"}
-                  </span>
-                  {appt.status === "confirmed" && (
-                    <button
-                      onClick={() => setActiveCall(appt)}
-                      className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg transition-colors"
-                    >
-                      Join →
-                    </button>
-                  )}
-                </div>
-              </div>
-            ));
-          })()}
-
-          {dayItems.length === 0 && !clientAppointments.some((a) => a.day === activeDay) ? (
-            <div className="bg-white rounded-2xl border border-stone-100 p-12 text-center">
-              <div className="text-5xl mb-4">☀️</div>
-              <h3 className="font-semibold text-stone-700 mb-1">Free day!</h3>
-              <p className="text-stone-400 text-sm">No sessions scheduled. Use this time to rest or explore a new course.</p>
+                + Book a session
+              </button>
             </div>
           ) : (
-            <div className="space-y-3">
-              {dayItems.map((session) => {
-                const appt = getAppointment(session.day, session.time);
-                return (
-                  <div
-                    key={session.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedSession(session)}
-                    onKeyDown={(e) => e.key === "Enter" && setSelectedSession(session)}
-                    className={`cursor-pointer border rounded-2xl p-5 flex items-center gap-5 transition-all hover:shadow-sm hover:scale-[1.01] active:scale-[0.99] ${typeColors[session.type]}`}
-                  >
-                    <div className="text-center min-w-[52px]">
-                      <div className="text-sm font-bold">{session.time.split(" ")[0]}</div>
-                      <div className="text-xs opacity-70">{session.time.split(" ")[1]}</div>
-                    </div>
-                    <div className="w-px h-10 bg-current opacity-20" />
-                    <div className="flex-1">
-                      <div className="font-semibold text-sm">{session.title}</div>
-                      <div className="text-xs opacity-70 mt-0.5">{session.duration}</div>
-                    </div>
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-xs font-semibold uppercase tracking-wide opacity-70">
-                        {typeLabels[session.type]}
-                      </span>
-                      {appt ? (
-                        <button
-                          onClick={() => setActiveCall(appt)}
-                          className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
-                        >
-                          Join →
-                        </button>
-                      ) : (
-                        <span className="text-lg">{typeIcons[session.type]}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="space-y-2.5">
+              {dayAppts.map((appt) => (
+                <SessionCard
+                  key={appt.id}
+                  appt={appt}
+                  onJoin={() => setActiveCall(appt)}
+                />
+              ))}
             </div>
           )}
         </div>
 
-        {/* All This Week */}
-        <div>
-          <h2 className="text-base font-bold text-stone-700 mb-4">All This Week</h2>
-          <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
-            {activeScheduleItems.map((s, i) => (
-              <button
-                key={s.id}
-                onClick={() => setSelectedSession(s)}
-                className={`w-full text-left flex items-center gap-4 px-5 py-4 hover:bg-stone-50 transition-colors ${
-                  i < activeScheduleItems.length - 1 ? "border-b border-stone-100" : ""
-                }`}
-              >
-                <div className="w-10 text-center">
-                  <div className="text-xs text-stone-400">{s.day}</div>
-                </div>
-                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                  s.type === "therapy" ? "bg-blue-400" :
-                  s.type === "group" ? "bg-purple-400" :
-                  s.type === "course" ? "bg-sage-400" :
-                  "bg-amber-400"
-                }`} />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-stone-800">{s.title}</div>
-                  <div className="text-xs text-stone-400">{s.time} · {s.duration}</div>
-                </div>
-                {getAppointment(s.day, s.time) ? (
-                  <span
-                    onClick={(e) => { e.stopPropagation(); setActiveCall(getAppointment(s.day, s.time)!); }}
-                    className="text-xs bg-stone-900 hover:bg-stone-800 text-white px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer"
-                  >
-                    Join
-                  </span>
-                ) : (
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${typeColors[s.type]}`}>
-                    {typeLabels[s.type]}
-                  </span>
-                )}
-              </button>
-            ))}
+        {/* ── All upcoming sessions ──────────────────────────────────────────── */}
+        {!loading && upcoming.length > 0 && (
+          <div>
+            <h2 className="text-sm font-bold text-stone-700 mb-3">All Upcoming Sessions</h2>
+            <div className="bg-white rounded-2xl border border-stone-100 divide-y divide-stone-50 overflow-hidden">
+              {upcoming.map((appt) => {
+                const joinWindow = getJoinWindow(appt.date, appt.durationMin);
+                return (
+                <div key={appt.id} className="flex items-center gap-4 px-5 py-4">
+                  {/* Date block */}
+                  <div className="flex-shrink-0 w-12 text-center">
+                    <div className="text-[10px] font-bold text-stone-400 uppercase">
+                      {appt.date.toLocaleDateString("en-US", { month: "short" })}
+                    </div>
+                    <div className="text-xl font-bold text-stone-900 leading-none">
+                      {appt.date.getDate()}
+                    </div>
+                  </div>
 
-            {/* Upcoming confirmed calls not in scheduleItems */}
-            {clientAppointments.filter((a) =>
-              a.status === "confirmed" &&
-              !activeScheduleItems.some((s) => s.day === a.day && s.time === a.time)
-            ).map((appt) => (
-              <div
-                key={appt.id}
-                className="flex items-center gap-4 px-5 py-4 border-t border-stone-100 bg-blue-50/40"
-              >
-                <div className="w-10 text-center">
-                  <div className="text-xs text-stone-400">{appt.day}</div>
+                  <div className="w-px h-10 bg-stone-100 flex-shrink-0" />
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs font-semibold text-stone-800">
+                        {appt.therapistName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-stone-400 flex-wrap">
+                      <span>{appt.time}</span>
+                      <span>·</span>
+                      <span>{appt.duration}</span>
+                      <span>·</span>
+                      <span className="flex items-center gap-1">
+                        {TYPE_ICON[appt.type]}
+                        {TYPE_LABEL[appt.type] ?? appt.type}
+                      </span>
+                    </div>
+                    {appt.notes && (
+                      <p className="text-[11px] text-stone-400 italic mt-0.5 truncate">{appt.notes}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={`text-[10px] font-semibold border px-2 py-1 rounded-full whitespace-nowrap ${STATUS_STYLE[appt.status] ?? ""}`}>
+                      {STATUS_LABEL[appt.status] ?? appt.status}
+                    </span>
+                    {appt.status === "confirmed" && appt.type === "video" && joinWindow.isOpen && (
+                      <button
+                        onClick={() => setActiveCall(appt)}
+                        className="text-xs bg-stone-900 hover:bg-stone-800 text-white px-3 py-1.5 rounded-lg font-semibold transition-colors"
+                      >
+                        Join
+                      </button>
+                    )}
+                    {appt.status === "confirmed" && appt.type === "video" && !joinWindow.isOpen && new Date() < joinWindow.opensAt && (
+                      <span className="text-[10px] text-stone-400 font-medium whitespace-nowrap">
+                        Available in {formatCountdown(joinWindow.opensInMs)}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="w-2 h-2 rounded-full flex-shrink-0 bg-blue-400" />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-stone-800">Therapy Session — {appt.therapistName}</div>
-                  <div className="text-xs text-stone-400">{appt.time} · {appt.duration}{appt.notes ? ` · ${appt.notes}` : ""}</div>
-                </div>
-                <button
-                  onClick={() => setActiveCall(appt)}
-                  className="text-xs bg-stone-900 hover:bg-stone-800 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
-                >
-                  Join
-                </button>
-              </div>
-            ))}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* ── Empty state: has therapist but no sessions booked ─────────────── */}
+        {!loading && therapist && allAppts.filter((a) => a.status !== "cancelled").length === 0 && (
+          <div className="bg-white rounded-2xl border border-stone-100 p-10 text-center">
+            <div className="text-4xl mb-3">📅</div>
+            <h3 className="font-semibold text-stone-800 mb-1">No sessions booked yet</h3>
+            <p className="text-stone-400 text-sm mb-5">
+              Book your first session with {therapist.user.name} to get started.
+            </p>
+            <button
+              onClick={() => setShowBooking(true)}
+              className="bg-sage-700 hover:bg-sage-800 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors"
+            >
+              Book First Session
+            </button>
+          </div>
+        )}
+
+        {/* ── No therapist + no sessions ────────────────────────────────────── */}
+        {!loading && !therapist && allAppts.length === 0 && (
+          <div className="bg-stone-50 rounded-2xl border border-stone-100 p-10 text-center">
+            <div className="text-4xl mb-3">🌿</div>
+            <h3 className="font-semibold text-stone-800 mb-1">Your schedule is clear</h3>
+            <p className="text-stone-400 text-sm mb-5">
+              Connect with a therapist and book your first session to see it here.
+            </p>
+            <button
+              onClick={() => router.push("/dashboard/find")}
+              className="bg-sage-700 hover:bg-sage-800 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors"
+            >
+              Find a Therapist
+            </button>
+          </div>
+        )}
       </div>
 
-      {selectedSession && (
-        <SessionDetailModal
-          session={selectedSession}
-          onClose={() => setSelectedSession(null)}
-          onCancel={handleCancel}
-        />
-      )}
-
       {activeCall && (
-        <VideoCallModal
-          clientName={activeCall.therapistName}
+        <VideoCallRoom
+          appointmentId={activeCall.id}
+          otherPartyName={activeCall.therapistName}
           sessionType={activeCall.type}
-          duration={activeCall.duration}
+          durationLabel={activeCall.duration}
           onEnd={() => setActiveCall(null)}
         />
       )}
 
-      {showBooking && <BookingModal onClose={() => setShowBooking(false)} />}
+      {showBooking && (
+        <BookingModal
+          therapistId={therapist?.id}
+          therapistName={therapist?.user.name}
+          therapistTitle={therapist?.title ?? undefined}
+          onClose={() => setShowBooking(false)}
+        />
+      )}
     </>
+  );
+}
+
+// ── Session card ──────────────────────────────────────────────────────────────
+
+function SessionCard({ appt, onJoin }: { appt: Appt; onJoin: () => void }) {
+  const joinWindow = getJoinWindow(appt.date, appt.durationMin);
+  const borderColor = {
+    video:     "border-l-blue-400",
+    in_person: "border-l-sage-500",
+    phone:     "border-l-purple-400",
+  }[appt.type] ?? "border-l-stone-300";
+
+  return (
+    <div className={`bg-white rounded-2xl border border-stone-100 border-l-4 ${borderColor} px-5 py-4 flex items-center gap-4`}>
+      <div className="text-center min-w-[52px] flex-shrink-0">
+        <div className="text-base font-bold text-stone-800">{appt.time.split(" ")[0]}</div>
+        <div className="text-xs text-stone-400">{appt.time.split(" ")[1]}</div>
+      </div>
+      <div className="w-px h-10 bg-stone-100 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-stone-800 leading-snug">
+          Session with {appt.therapistName}
+        </p>
+        <div className="flex items-center gap-2 text-[11px] text-stone-400 mt-0.5 flex-wrap">
+          <span className="flex items-center gap-1">
+            {TYPE_ICON[appt.type]}
+            {TYPE_LABEL[appt.type] ?? appt.type}
+          </span>
+          <span>·</span>
+          <span>{appt.duration}</span>
+        </div>
+        {appt.notes && <p className="text-xs text-stone-400 italic mt-0.5 truncate">{appt.notes}</p>}
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className={`text-[10px] font-semibold border px-2 py-1 rounded-full ${STATUS_STYLE[appt.status] ?? ""}`}>
+          {STATUS_LABEL[appt.status] ?? appt.status}
+        </span>
+        {appt.status === "confirmed" && appt.type === "video" && joinWindow.isOpen && (
+          <button
+            onClick={onJoin}
+            className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg transition-colors"
+          >
+            Join →
+          </button>
+        )}
+        {appt.status === "confirmed" && appt.type === "video" && !joinWindow.isOpen && new Date() < joinWindow.opensAt && (
+          <span className="text-[10px] text-stone-400 font-medium whitespace-nowrap">
+            Available in {formatCountdown(joinWindow.opensInMs)}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }

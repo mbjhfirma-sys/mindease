@@ -1,45 +1,40 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 
 interface Props {
   title: string;
   duration: string;
+  audioUrl?: string | null;
   onComplete: () => void;
 }
 
-export default function AudioLesson({ title, duration, onComplete }: Props) {
+export default function AudioLesson({ title, duration, audioUrl, onComplete }: Props) {
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [total, setTotal] = useState(0);
   const [completed, setCompleted] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Parse duration string like "20 min" to seconds
-  const totalSeconds = parseInt(duration) * 60;
-  // For demo, use 30 seconds as simulated total
-  const simulatedTotal = 30;
-
-  useEffect(() => {
-    if (!playing) return;
-    intervalRef.current = setInterval(() => {
-      setElapsed((e) => {
-        if (e + 1 >= simulatedTotal) {
-          setPlaying(false);
-          setCompleted(true);
-          return simulatedTotal;
-        }
-        return e + 1;
-      });
-    }, 1000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [playing]);
-
-  const progress = elapsed / simulatedTotal;
+  const progress = total > 0 ? elapsed / total : 0;
 
   function formatTime(sec: number) {
     const m = Math.floor(sec / 60);
-    const s = sec % 60;
+    const s = Math.floor(sec % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  function togglePlay() {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) el.pause();
+    else el.play();
+  }
+
+  function seekTo(pct: number) {
+    const el = audioRef.current;
+    if (!el || !total) return;
+    el.currentTime = Math.max(0, Math.min(total, pct * total));
   }
 
   const chapters = [
@@ -47,7 +42,7 @@ export default function AudioLesson({ title, duration, onComplete }: Props) {
     { label: "Body relaxation", at: "2:00" },
     { label: "Deepening the practice", at: "5:00" },
     { label: "Core guidance", at: "10:00" },
-    { label: "Integration & return", at: `${parseInt(duration) - 2}:00` },
+    { label: "Integration & return", at: `${Math.max(parseInt(duration) - 2, 0)}:00` },
   ];
 
   if (completed) {
@@ -84,37 +79,48 @@ export default function AudioLesson({ title, duration, onComplete }: Props) {
         <h3 className="font-bold text-lg mb-1">{title}</h3>
         <p className="text-sage-300 text-sm mb-6">{duration} · Guided session</p>
 
-        {/* Progress bar */}
-        <div
-          className="w-full bg-sage-600 rounded-full h-1.5 mb-2 cursor-pointer"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const pct = (e.clientX - rect.left) / rect.width;
-            setElapsed(Math.floor(pct * simulatedTotal));
-          }}
-        >
-          <div
-            className="bg-amber-400 h-1.5 rounded-full transition-all duration-1000"
-            style={{ width: `${progress * 100}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-xs text-sage-400 mb-6">
-          <span>{formatTime(elapsed)}</span>
-          <span className="text-sage-500 text-xs">(demo — {simulatedTotal}s simulation of {duration})</span>
-          <span>{duration}</span>
-        </div>
+        {audioUrl ? (
+          <>
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onLoadedMetadata={(e) => setTotal(e.currentTarget.duration)}
+              onTimeUpdate={(e) => setElapsed(e.currentTarget.currentTime)}
+              onEnded={() => { setPlaying(false); setCompleted(true); }}
+            />
 
-        {/* Controls */}
-        <div className="flex items-center justify-center gap-6">
-          <button onClick={() => setElapsed(Math.max(0, elapsed - 10))} className="text-sage-300 hover:text-white text-xl transition-colors">⏮</button>
-          <button
-            onClick={() => setPlaying(!playing)}
-            className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-sage-800 hover:scale-105 transition-all shadow-lg"
-          >
-            <span className="text-2xl ml-0.5">{playing ? "⏸" : "▶"}</span>
-          </button>
-          <button onClick={() => setElapsed(Math.min(simulatedTotal, elapsed + 10))} className="text-sage-300 hover:text-white text-xl transition-colors">⏭</button>
-        </div>
+            {/* Progress bar */}
+            <div
+              className="w-full bg-sage-600 rounded-full h-1.5 mb-2 cursor-pointer"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                seekTo((e.clientX - rect.left) / rect.width);
+              }}
+            >
+              <div className="bg-amber-400 h-1.5 rounded-full transition-all" style={{ width: `${progress * 100}%` }} />
+            </div>
+            <div className="flex justify-between text-xs text-sage-400 mb-6">
+              <span>{formatTime(elapsed)}</span>
+              <span>{total ? formatTime(total) : duration}</span>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center justify-center gap-6">
+              <button onClick={() => seekTo(Math.max(0, (elapsed - 10) / total))} className="text-sage-300 hover:text-white text-xl transition-colors">⏮</button>
+              <button
+                onClick={togglePlay}
+                className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-sage-800 hover:scale-105 transition-all shadow-lg"
+              >
+                <span className="text-2xl ml-0.5">{playing ? "⏸" : "▶"}</span>
+              </button>
+              <button onClick={() => seekTo(Math.min(total, (elapsed + 10) / total))} className="text-sage-300 hover:text-white text-xl transition-colors">⏭</button>
+            </div>
+          </>
+        ) : (
+          <p className="text-sage-300 text-sm">Audio coming soon</p>
+        )}
       </div>
 
       {/* Tips while listening */}
@@ -131,24 +137,24 @@ export default function AudioLesson({ title, duration, onComplete }: Props) {
       </div>
 
       {/* Chapter markers */}
-      <div>
-        <h4 className="font-semibold text-stone-700 text-sm mb-3">Session chapters:</h4>
-        <div className="space-y-2">
-          {chapters.map((c) => (
-            <div key={c.label} className="flex items-center gap-3 text-sm">
-              <span className="text-stone-400 text-xs w-12 flex-shrink-0">{c.at}</span>
-              <div className="w-1.5 h-1.5 bg-sage-300 rounded-full flex-shrink-0" />
-              <span className="text-stone-600">{c.label}</span>
-            </div>
-          ))}
+      {audioUrl && (
+        <div>
+          <h4 className="font-semibold text-stone-700 text-sm mb-3">Session chapters:</h4>
+          <div className="space-y-2">
+            {chapters.map((c) => (
+              <div key={c.label} className="flex items-center gap-3 text-sm">
+                <span className="text-stone-400 text-xs w-12 flex-shrink-0">{c.at}</span>
+                <div className="w-1.5 h-1.5 bg-sage-300 rounded-full flex-shrink-0" />
+                <span className="text-stone-600">{c.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
-
-      {elapsed > 0 && !completed && (
-        <button onClick={onComplete} className="w-full mt-6 border border-stone-200 text-stone-500 text-sm py-2.5 rounded-xl hover:bg-stone-50 transition-colors">
-          Mark as complete and continue →
-        </button>
       )}
+
+      <button onClick={onComplete} className="w-full mt-6 border border-stone-200 text-stone-500 text-sm py-2.5 rounded-xl hover:bg-stone-50 transition-colors">
+        Mark as complete and continue →
+      </button>
     </div>
   );
 }

@@ -164,7 +164,7 @@ export default function PricingPage() {
           <div className="text-4xl mb-4">🛡️</div>
           <h2 className="text-2xl font-bold text-stone-900 mb-3">30-Day Money-Back Guarantee</h2>
           <p className="text-stone-500 mb-6">
-            Try MindEase risk-free. If you're not completely satisfied in the first 30 days, we'll refund you fully — no questions asked.
+            Try YouMindo risk-free. If you're not completely satisfied in the first 30 days, we'll refund you fully — no questions asked.
           </p>
           <Link
             href="/register"

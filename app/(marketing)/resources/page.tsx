@@ -87,6 +87,15 @@ const articles = [
 
 const categories = ["All", "Mindfulness", "Sleep", "Therapy", "Self-Care", "Anxiety", "Stress"];
 
+const resourceLinks: Record<string, string> = {
+  r1: "#articles",
+  r2: "/mindfulness-meditation",
+  r3: "/mindfulness-meditation",
+  r4: "#crisis",
+  r5: "/therapy",
+  r6: "#articles",
+};
+
 const moodFilters = [
   { label: "😰 I'm anxious", value: "anxious" },
   { label: "😔 Feeling low", value: "low" },
@@ -201,9 +210,10 @@ export default function ResourcesPage() {
       <section className="px-6 pb-16 bg-cream">
         <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-6">
           {resources.map((r) => (
-            <div
+            <a
               key={r.id}
-              className="bg-white rounded-3xl p-7 border border-stone-100 hover:shadow-md transition-all cursor-pointer group"
+              href={resourceLinks[r.id] ?? "#articles"}
+              className="bg-white rounded-3xl p-7 border border-stone-100 hover:shadow-md hover:border-sage-200 transition-all cursor-pointer group"
             >
               <div className={`w-14 h-14 ${r.color} rounded-2xl flex items-center justify-center text-2xl mb-5`}>
                 {r.icon}
@@ -215,13 +225,13 @@ export default function ResourcesPage() {
               <span className="text-sage-600 text-xs font-semibold bg-sage-50 px-3 py-1 rounded-full">
                 {r.count}
               </span>
-            </div>
+            </a>
           ))}
         </div>
       </section>
 
       {/* Featured articles */}
-      <section className="py-16 px-6 bg-white">
+      <section id="articles" className="py-16 px-6 bg-white scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -230,7 +240,14 @@ export default function ResourcesPage() {
                 <p className="text-xs text-stone-400 mt-0.5">🔖 {bookmarks.size} saved</p>
               )}
             </div>
-            <a href="#" className="text-sage-700 text-sm font-semibold hover:underline">View all →</a>
+            {(activeCategory !== "All" || activeMood) && (
+              <button
+                onClick={() => { setActiveCategory("All"); setActiveMood(null); }}
+                className="text-sage-700 text-sm font-semibold hover:underline"
+              >
+                View all →
+              </button>
+            )}
           </div>
 
           {/* Mood quick-filter */}
@@ -292,7 +309,7 @@ export default function ResourcesPage() {
       </section>
 
       {/* Crisis resources */}
-      <section className="py-16 px-6 bg-red-50 border border-red-100">
+      <section id="crisis" className="py-16 px-6 bg-red-50 border border-red-100 scroll-mt-16">
         <div className="max-w-3xl mx-auto text-center">
           <div className="text-3xl mb-4">🆘</div>
           <h2 className="text-2xl font-bold text-stone-900 mb-3">In Crisis? Get Help Now</h2>

@@ -18,60 +18,60 @@ const channels = [
     icon: "💬",
     title: "Support",
     desc: "Questions about your account, the app, or a subscription.",
-    detail: "support@mindease.com",
+    detail: "support@youmindo.com",
     resp: "Response within 4 hours",
-    href: "mailto:support@mindease.com",
+    href: "mailto:support@youmindo.com",
   },
   {
     icon: "📰",
     title: "Press & media",
     desc: "Interview requests, press coverage, or media assets.",
-    detail: "press@mindease.com",
+    detail: "press@youmindo.com",
     resp: "Response within 24 hours",
-    href: "mailto:press@mindease.com",
+    href: "mailto:press@youmindo.com",
   },
   {
     icon: "🤝",
     title: "Partnerships",
     desc: "Integrations, clinical research, or enterprise enquiries.",
-    detail: "partners@mindease.com",
+    detail: "partners@youmindo.com",
     resp: "Response within 48 hours",
-    href: "mailto:partners@mindease.com",
+    href: "mailto:partners@youmindo.com",
   },
   {
     icon: "💼",
     title: "Careers",
     desc: "Open roles, speculative applications, or general hiring questions.",
-    detail: "careers@mindease.com",
+    detail: "careers@youmindo.com",
     resp: "Response within 3–5 days",
-    href: "mailto:careers@mindease.com",
+    href: "mailto:careers@youmindo.com",
   },
 ];
 
 const faqs = [
   {
-    q: "Is MindEase free to use?",
+    q: "Is YouMindo free to use?",
     a: "Yes — our core features are free forever with no credit card required. We offer a paid plan for users who want access to therapist sessions, advanced analytics, and the full tools library.",
   },
   {
     q: "How do I cancel my subscription?",
-    a: "Go to Settings → Subscription → Cancel anytime. There's no penalty and your data stays accessible on the free tier. You can also email support@mindease.com and we'll handle it for you.",
+    a: "Go to Settings → Subscription → Cancel anytime. There's no penalty and your data stays accessible on the free tier. You can also email support@youmindo.com and we'll handle it for you.",
   },
   {
     q: "Is my data private?",
     a: "Completely. We never sell data, never use it for advertising, and give you full control to export or delete everything at any time. Read our Privacy Policy for the full picture.",
   },
   {
-    q: "How do I find a therapist through MindEase?",
+    q: "How do I find a therapist through YouMindo?",
     a: "After signing up, go to Find a Therapist in the dashboard. You can filter by specialism, language, session format (video/phone/text), and availability. All therapists on our network are licensed and verified.",
   },
   {
     q: "Do you work with the NHS or health insurers?",
-    a: "We're an approved digital wellbeing provider for several NHS trusts and are in conversations with major insurers. Contact partnerships@mindease.com for details.",
+    a: "We're an approved digital wellbeing provider for several NHS trusts and are in conversations with major insurers. Contact partnerships@youmindo.com for details.",
   },
   {
     q: "I'm in crisis. Where should I go?",
-    a: "If you're in immediate danger, call 999 (UK) or 911 (US). For mental health crisis support, call or text 988 (US) or the Samaritans on 116 123 (UK, free, 24/7). MindEase is not a crisis service.",
+    a: "If you're in immediate danger, call 999 (UK) or 911 (US). For mental health crisis support, call or text 988 (US) or the Samaritans on 116 123 (UK, free, 24/7). YouMindo is not a crisis service.",
   },
 ];
 
@@ -218,7 +218,7 @@ export default function ContactPage() {
             <div className="mt-5 bg-stone-50 border border-stone-100 rounded-2xl p-5">
               <div className="text-sm font-semibold text-stone-900 mb-2">📍 Head office</div>
               <div className="text-xs text-stone-500 leading-relaxed">
-                MindEase Ltd<br />
+                YouMindo Ltd<br />
                 30 Cannon Street<br />
                 London, EC4M 6XH<br />
                 United Kingdom

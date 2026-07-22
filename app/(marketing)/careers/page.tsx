@@ -69,9 +69,9 @@ const roles: Role[] = [
     location: "Remote (UK, US, AU)",
     type: "Part-time / Contractor",
     salary: "£75 – £110 per session",
-    summary: "Grow your private practice through MindEase while offering your clients continuity of care between sessions. We handle scheduling, infrastructure, and billing so you can focus entirely on the work.",
+    summary: "Grow your private practice through YouMindo while offering your clients continuity of care between sessions. We handle scheduling, infrastructure, and billing so you can focus entirely on the work.",
     responsibilities: [
-      "Provide individual therapy sessions via the MindEase platform (video, phone, or text)",
+      "Provide individual therapy sessions via the YouMindo platform (video, phone, or text)",
       "Use our therapist portal to review client journals, assign tasks, and track progress",
       "Collaborate with our clinical team on content and feature feedback",
       "Maintain appropriate clinical documentation within the platform",
@@ -117,7 +117,7 @@ const roles: Role[] = [
     salary: "£38,000 – £50,000",
     summary: "Be the bridge between our users and the product team. Identify patterns, solve problems proactively, and make sure every person who comes to us for help actually finds it.",
     responsibilities: [
-      "Own the onboarding and ongoing relationship for MindEase users and therapist partners",
+      "Own the onboarding and ongoing relationship for YouMindo users and therapist partners",
       "Identify churn signals early and intervene with empathy and practical solutions",
       "Document user feedback and surface patterns to the product team weekly",
       "Create and maintain help centre content, tutorials, and FAQs",
@@ -140,7 +140,7 @@ const roles: Role[] = [
     salary: "£75,000 – £100,000",
     summary: "Work on how AI can responsibly augment clinical care — from outcome prediction to care-plan personalisation. You'll publish your work, collaborate with universities, and keep us clinically honest.",
     responsibilities: [
-      "Design and run studies to evaluate the effectiveness of MindEase features",
+      "Design and run studies to evaluate the effectiveness of YouMindo features",
       "Build and validate predictive models for mood, risk, and intervention response",
       "Publish research in peer-reviewed journals and present at conferences",
       "Partner with NHS trusts and universities on joint research programs",
@@ -161,7 +161,7 @@ const perks = [
   { icon: "🌍", title: "Work from anywhere", desc: "Fully remote with optional offices in London and New York. Work from wherever you do your best thinking." },
   { icon: "📚", title: "£2,000 learning budget", desc: "Annual budget for courses, books, conferences, or anything that makes you better at your craft." },
   { icon: "🏖️", title: "35 days holiday", desc: "More than the UK minimum. We mean it — use them. Unused days roll over once." },
-  { icon: "💰", title: "Equity for everyone", desc: "Every full-time employee gets meaningful equity from day one. When MindEase succeeds, you do too." },
+  { icon: "💰", title: "Equity for everyone", desc: "Every full-time employee gets meaningful equity from day one. When YouMindo succeeds, you do too." },
   { icon: "👶", title: "Generous parental leave", desc: "26 weeks fully paid for all parents, regardless of gender or how your family was formed." },
 ];
 
@@ -172,7 +172,7 @@ const referralSources = [
   "Job board (Indeed, Glassdoor, etc.)",
   "Twitter / X",
   "From a friend or colleague",
-  "MindEase website",
+  "YouMindo website",
   "Press or media article",
   "Other",
 ];
@@ -260,7 +260,7 @@ export default function CareersPage() {
             Work that actually matters
           </h1>
           <p className="text-sage-200 text-[17px] leading-relaxed max-w-2xl mx-auto">
-            Every engineer, designer, and clinician at MindEase is working on the same thing: making mental health support accessible to everyone who needs it. If that sounds like the kind of problem you want to spend your career on, read on.
+            Every engineer, designer, and clinician at YouMindo is working on the same thing: making mental health support accessible to everyone who needs it. If that sounds like the kind of problem you want to spend your career on, read on.
           </p>
         </div>
       </section>
@@ -476,7 +476,7 @@ export default function CareersPage() {
                   <h3 className="text-base font-bold text-stone-900 mb-2">Application sent!</h3>
                   <p className="text-sm text-stone-500 leading-relaxed max-w-xs">
                     Thanks, <strong>{form.name.trim().split(" ")[0]}</strong>. We've received your application for{" "}
-                    <strong>{modal.type === "role" ? modal.role.title : "a position at MindEase"}</strong> and will be in touch at <strong>{form.email}</strong>.
+                    <strong>{modal.type === "role" ? modal.role.title : "a position at YouMindo"}</strong> and will be in touch at <strong>{form.email}</strong>.
                   </p>
                   <p className="text-xs text-stone-400 mt-3">We aim to respond within 5 business days.</p>
                   <button
@@ -610,7 +610,7 @@ export default function CareersPage() {
                       placeholder={
                         modal.type === "speculative"
                           ? "Tell us what you'd build, what you care about, and what kind of work lights you up…"
-                          : "Tell us why this role and why MindEase. No template answers — we want to hear how you actually think…"
+                          : "Tell us why this role and why YouMindo. No template answers — we want to hear how you actually think…"
                       }
                       className="w-full border border-stone-200 text-sm px-3.5 py-2.5 rounded-xl focus:outline-none focus:border-sage-400 focus:ring-1 focus:ring-sage-100 transition-all resize-none"
                     />

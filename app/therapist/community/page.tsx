@@ -1,14 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Plus, X, Check, Users, Globe, Lock, Pencil, Trash2,
   MessageCircle, Pin, ChevronRight, Heart, Send, ShieldCheck,
-  Link,
 } from "lucide-react";
-import { therapistClients } from "@/lib/mockData";
-
-// ── Types ──────────────────────────────────────────────────────────────────────
 
 type Privacy = "open" | "invite";
 type CommunityStatus = "active" | "archived";
@@ -52,139 +48,6 @@ interface Reply {
   likes: number;
 }
 
-// ── Seed data ──────────────────────────────────────────────────────────────────
-
-const SEED_COMMUNITIES: Community[] = [
-  {
-    id: "tc1",
-    name: "Anxiety & Calm",
-    description: "A safe space for clients managing anxiety to share techniques, progress, and encouragement.",
-    category: "Anxiety",
-    icon: "🌿",
-    privacy: "open",
-    status: "active",
-    members: 14,
-    postCount: 47,
-    createdAt: "Mar 12, 2025",
-    isOwner: true,
-  },
-  {
-    id: "tc2",
-    name: "Sleep Better Together",
-    description: "Focus on sleep hygiene, rest routines, and overcoming insomnia with peer support.",
-    category: "Sleep",
-    icon: "🌙",
-    privacy: "open",
-    status: "active",
-    members: 9,
-    postCount: 22,
-    createdAt: "Apr 3, 2025",
-    isOwner: true,
-  },
-  {
-    id: "tc3",
-    name: "Grief & Healing",
-    description: "Compassionate space for processing loss, grief, and life transitions.",
-    category: "Grief",
-    icon: "🕊️",
-    privacy: "invite",
-    status: "active",
-    members: 6,
-    postCount: 31,
-    createdAt: "May 18, 2025",
-    isOwner: true,
-  },
-  {
-    id: "tc4",
-    name: "Mindful Mornings",
-    description: "Daily mindfulness check-ins and morning routine accountability for all clients.",
-    category: "Mindfulness",
-    icon: "☀️",
-    privacy: "open",
-    status: "active",
-    members: 31,
-    postCount: 112,
-    createdAt: "Jan 8, 2025",
-    isOwner: false,
-    createdByName: "Dr. James Okafor",
-  },
-  {
-    id: "tc5",
-    name: "CBT Practice Lab",
-    description: "Clients share real-world CBT exercises, thought records, and progress with peers.",
-    category: "Other",
-    icon: "🧘",
-    privacy: "invite",
-    status: "active",
-    members: 18,
-    postCount: 64,
-    createdAt: "Feb 14, 2025",
-    isOwner: false,
-    createdByName: "Dr. Priya Nair",
-  },
-];
-
-const SEED_POSTS: CommunityPost[] = [
-  {
-    id: "tp1", communityId: "tc1", author: "Anonymous", avatar: "🌱",
-    content: "Used the 4-7-8 breathing technique before my presentation today and it actually worked. First time in years I felt somewhat calm going into a stressful situation.",
-    time: "2h ago", likes: 8, liked: false, replies: 3, pinned: true, flagged: false,
-  },
-  {
-    id: "tp2", communityId: "tc1", author: "Anonymous", avatar: "🍃",
-    content: "Has anyone tried grounding exercises while commuting? I've been doing the 5-4-3-2-1 method on the bus and getting some weird looks but it genuinely helps.",
-    time: "5h ago", likes: 12, liked: false, replies: 5, pinned: false, flagged: false,
-  },
-  {
-    id: "tp3", communityId: "tc2", author: "Anonymous", avatar: "⭐",
-    content: "Day 14 of no screens after 9pm. Sleep quality is noticeably better — falling asleep in under 20 minutes now vs the 1–2 hours it used to take.",
-    time: "1d ago", likes: 19, liked: false, replies: 6, pinned: true, flagged: false,
-  },
-  {
-    id: "tp4", communityId: "tc2", author: "Anonymous", avatar: "🌙",
-    content: "Struggled last night even with the routine. Any tips for when anxiety spikes at bedtime?",
-    time: "3h ago", likes: 4, liked: false, replies: 2, pinned: false, flagged: false,
-  },
-  {
-    id: "tp5", communityId: "tc3", author: "Anonymous", avatar: "🕊️",
-    content: "Six months since I lost my mom. Some days still feel impossible. But this group has helped me feel less alone in it.",
-    time: "4h ago", likes: 21, liked: false, replies: 8, pinned: false, flagged: false,
-  },
-  {
-    id: "tp6", communityId: "tc3", author: "Anonymous", avatar: "🌷",
-    content: "Started a memory box this week — photos, notes, small things that remind me of him. My therapist suggested it. It hurts but also feels healing.",
-    time: "1d ago", likes: 14, liked: false, replies: 4, pinned: true, flagged: false,
-  },
-];
-
-const SEED_REPLIES: Record<string, Reply[]> = {
-  tp1: [
-    { id: "tr1-1", author: "Anonymous", avatar: "🌊", content: "That's amazing — I've been working up to trying 4-7-8 for weeks. What helped you remember to actually do it in the moment?", time: "1h ago", liked: false, likes: 5 },
-    { id: "tr1-2", author: "Anonymous", avatar: "🍀", content: "First panic-free week is such a milestone. It genuinely does get easier from here.", time: "45m ago", liked: false, likes: 3 },
-    { id: "tr1-3", author: "Dr. Sarah Mitchell", avatar: "👩‍⚕️", content: "So proud of this progress! The 4-7-8 technique is excellent for exactly these situations. Keep building that habit.", time: "30m ago", liked: false, likes: 7 },
-  ],
-  tp2: [
-    { id: "tr2-1", author: "Anonymous", avatar: "🌱", content: "Yes! I do box breathing on my commute. People definitely notice but it genuinely works. You're not alone.", time: "4h ago", liked: false, likes: 8 },
-    { id: "tr2-2", author: "Anonymous", avatar: "🌷", content: "I just close my eyes and pretend I'm asleep 😄 nobody questions it.", time: "3h ago", liked: false, likes: 11 },
-  ],
-  tp3: [
-    { id: "tr3-1", author: "Anonymous", avatar: "⭐", content: "Day 9 here and already noticing a difference. How long until you saw the real shift?", time: "23h ago", liked: false, likes: 6 },
-    { id: "tr3-2", author: "Anonymous", avatar: "🌙", content: "This is inspiring me to actually try. The screen thing felt impossible but 20 minutes to sleep sounds worth it.", time: "20h ago", liked: false, likes: 4 },
-    { id: "tr3-3", author: "Dr. Sarah Mitchell", avatar: "👩‍⚕️", content: "14 days is a great benchmark — the research suggests it takes about 2 weeks for the brain to reset its sleep-wake signals. Keep it up!", time: "18h ago", liked: false, likes: 9 },
-  ],
-  tp5: [
-    { id: "tr5-1", author: "Anonymous", avatar: "🕊️", content: "Six months is still so raw. Thank you for sharing this — it takes courage.", time: "3h ago", liked: false, likes: 12 },
-    { id: "tr5-2", author: "Anonymous", avatar: "🌷", content: "You're not alone. This group has helped me too. One day at a time.", time: "2h ago", liked: false, likes: 9 },
-    { id: "tr5-3", author: "Dr. Sarah Mitchell", avatar: "👩‍⚕️", content: "Thank you for trusting this community with something so personal. Grief doesn't follow a schedule — what you're feeling is completely valid.", time: "1h ago", liked: false, likes: 14 },
-  ],
-  tp6: [
-    { id: "tr6-1", author: "Anonymous", avatar: "🌿", content: "A memory box is such a beautiful idea. I might try this too.", time: "22h ago", liked: false, likes: 7 },
-    { id: "tr6-2", author: "Dr. Sarah Mitchell", avatar: "👩‍⚕️", content: "Memory boxes are a wonderful grief tool — they honour the person while giving your feelings a physical home. How are you feeling after starting it?", time: "20h ago", liked: false, likes: 10 },
-  ],
-};
-
-// ── Constants ──────────────────────────────────────────────────────────────────
-
 const CATEGORIES = [
   "Anxiety", "Depression", "Grief", "Sleep", "Trauma",
   "Relationships", "Stress", "Mindfulness", "Self-esteem", "Other",
@@ -202,13 +65,11 @@ const BLANK_FORM = {
 
 type Mode = "list" | "create" | "edit" | "view";
 
-// ── Helper components ──────────────────────────────────────────────────────────
-
 function PrivacyBadge({ privacy }: { privacy: Privacy }) {
   if (privacy === "open") {
     return (
       <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-        <Globe size={9} strokeWidth={2} /> Open
+        <Globe size={9} strokeWidth={2} /> Open to all
       </span>
     );
   }
@@ -219,13 +80,14 @@ function PrivacyBadge({ privacy }: { privacy: Privacy }) {
   );
 }
 
-// ── Community card ─────────────────────────────────────────────────────────────
+function fmtDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch { return iso; }
+}
 
 function CommunityCard({
-  community,
-  onEdit,
-  onDelete,
-  onView,
+  community, onEdit, onDelete, onView,
 }: {
   community: Community;
   onEdit?: () => void;
@@ -248,41 +110,25 @@ function CommunityCard({
           </p>
           <div className="flex items-center gap-3 mt-2 text-[11px] text-stone-400">
             <span className="bg-stone-100 text-stone-600 font-medium px-2 py-0.5 rounded-full">{community.category}</span>
-            {community.isOwner
-              ? <span>Created {community.createdAt}</span>
-              : <span>By <span className="font-medium text-stone-500">{community.createdByName}</span></span>
-            }
+            <span>Created {fmtDate(community.createdAt)}</span>
           </div>
         </div>
-
         <div className="flex items-center gap-1 flex-shrink-0">
           {community.isOwner && onEdit && (
-            <button
-              onClick={onEdit}
-              title="Edit community"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition-all"
-            >
+            <button onClick={onEdit} title="Edit" className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition-all">
               <Pencil size={14} strokeWidth={1.5} />
             </button>
           )}
           {community.isOwner && onDelete && (
-            <button
-              onClick={onDelete}
-              title="Delete community"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-500 transition-all"
-            >
+            <button onClick={onDelete} title="Delete" className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-500 transition-all">
               <Trash2 size={14} strokeWidth={1.5} />
             </button>
           )}
-          <button
-            onClick={onView}
-            className="ml-1 text-stone-300 hover:text-stone-500 transition-colors"
-          >
+          <button onClick={onView} className="ml-1 text-stone-300 hover:text-stone-500 transition-colors">
             <ChevronRight size={16} strokeWidth={1.5} />
           </button>
         </div>
       </div>
-
       <div className="flex items-center gap-4 px-5 py-3 border-t border-stone-50 bg-stone-50/50 rounded-b-xl">
         <div className="flex items-center gap-1.5 text-xs text-stone-500">
           <Users size={12} strokeWidth={1.5} />
@@ -292,50 +138,102 @@ function CommunityCard({
           <MessageCircle size={12} strokeWidth={1.5} />
           <span><span className="font-semibold text-stone-700">{community.postCount}</span> posts</span>
         </div>
-        <button
-          onClick={onView}
-          className="ml-auto text-xs font-medium text-stone-600 hover:text-stone-900 transition-colors"
-        >
-          {community.isOwner ? "Manage →" : "View →"}
+        <button onClick={onView} className="ml-auto text-xs font-medium text-stone-600 hover:text-stone-900 transition-colors">
+          Manage →
         </button>
       </div>
     </div>
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
-
 export default function TherapistCommunityPage() {
-  const [communities, setCommunities] = useState<Community[]>(SEED_COMMUNITIES);
-  const [posts, setPosts] = useState<CommunityPost[]>(SEED_POSTS);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [loadingCommunities, setLoadingCommunities] = useState(true);
+  const [loadingPosts, setLoadingPosts] = useState(false);
   const [mode, setMode] = useState<Mode>("list");
   const [activeCommunityId, setActiveCommunityId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(BLANK_FORM);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Post compose
   const [newPost, setNewPost] = useState("");
   const [posting, setPosting] = useState(false);
 
-  // Invite (inline in create/edit form)
-  const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
-  const [invitedClients, setInvitedClients] = useState<Record<string, Set<string>>>({});
-  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
-  const [linkCopied, setLinkCopied] = useState(false);
-  const [invitesSent, setInvitesSent] = useState(false);
-
-  // Replies
-  const [repliesByPost, setRepliesByPost] = useState<Record<string, Reply[]>>(SEED_REPLIES);
+  const [repliesByPost, setRepliesByPost] = useState<Record<string, Reply[]>>({});
+  const [loadedReplyPosts, setLoadedReplyPosts] = useState<Set<string>>(new Set());
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
-  const [replyTargets, setReplyTargets] = useState<Record<string, string | null>>({});
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const activeCommunity = useMemo(
-    () => communities.find((c) => c.id === activeCommunityId) ?? null,
-    [communities, activeCommunityId]
-  );
+  // Load communities from API
+  const loadCommunities = useCallback(() => {
+    setLoadingCommunities(true);
+    setFetchError(null);
+    fetch("/api/therapist/community", { cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error ?? `HTTP ${r.status}`);
+        }
+        return r.json();
+      })
+      .then((d) => {
+        const groups = (d.groups ?? []).map((g: {
+          id: string; name: string; description: string | null; category: string; icon: string;
+          privacy: Privacy; status: CommunityStatus; memberCount: number; postCount: number; createdAt: string;
+        }) => ({
+          id: g.id,
+          name: g.name,
+          description: g.description ?? "",
+          category: g.category,
+          icon: g.icon,
+          privacy: g.privacy,
+          status: g.status,
+          members: g.memberCount,
+          postCount: g.postCount,
+          createdAt: g.createdAt,
+          isOwner: true,
+        }));
+        setCommunities(groups);
+      })
+      .catch((e: Error) => setFetchError(e.message))
+      .finally(() => setLoadingCommunities(false));
+  }, []);
+
+  useEffect(() => { loadCommunities(); }, [loadCommunities]);
+
+  // Load posts when viewing a community
+  const loadPosts = useCallback((communityId: string) => {
+    setLoadingPosts(true);
+    fetch(`/api/therapist/community/${communityId}/posts`, { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const formatted: CommunityPost[] = (d.posts ?? []).map((p: {
+          id: string; groupId: string; author: string; authorId: string; content: string;
+          pinned: boolean; flagged: boolean; likes: number; liked: boolean; replyCount: number; createdAt: string;
+        }) => ({
+          id: p.id,
+          communityId: p.groupId,
+          author: p.author,
+          avatar: "👩‍⚕️",
+          content: p.content,
+          time: timeAgo(new Date(p.createdAt)),
+          likes: p.likes,
+          liked: p.liked,
+          replies: p.replyCount,
+          pinned: p.pinned,
+          flagged: p.flagged,
+        }));
+        setPosts(formatted);
+      })
+      .catch(() => setPosts([]))
+      .finally(() => setLoadingPosts(false));
+  }, []);
+
+  const activeCommunity = useMemo(() => communities.find((c) => c.id === activeCommunityId) ?? null, [communities, activeCommunityId]);
 
   const activePosts = useMemo(
     () => posts
@@ -344,13 +242,7 @@ export default function TherapistCommunityPage() {
     [posts, activeCommunityId]
   );
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
-
-  function openCreate() {
-    setForm(BLANK_FORM);
-    setSaved(false);
-    setMode("create");
-  }
+  function openCreate() { setForm(BLANK_FORM); setSaved(false); setMode("create"); }
 
   function openEdit(c: Community) {
     setEditingId(c.id);
@@ -362,7 +254,9 @@ export default function TherapistCommunityPage() {
   function openView(id: string) {
     setActiveCommunityId(id);
     setNewPost("");
+    setPosts([]);
     setMode("view");
+    loadPosts(id);
   }
 
   function goList() {
@@ -370,270 +264,154 @@ export default function TherapistCommunityPage() {
     setEditingId(null);
     setActiveCommunityId(null);
     setSaved(false);
-    setJustCreatedId(null);
-    setSelectedClients(new Set());
-    setInvitesSent(false);
-    setLinkCopied(false);
   }
 
-  function commitCreate() {
-    if (!form.name.trim()) return;
-    const id = `tc${Date.now()}`;
-    const c: Community = {
-      id,
-      name: form.name.trim(),
-      description: form.description.trim(),
-      category: form.category,
-      icon: form.icon,
-      privacy: form.privacy,
-      status: "active",
-      members: 0,
-      postCount: 0,
-      createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      isOwner: true,
-    };
-    setCommunities([c, ...communities]);
-    setSaved(true);
-    if (form.privacy === "invite") {
-      setJustCreatedId(id);
-    } else {
+  async function commitCreate() {
+    if (!form.name.trim() || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/therapist/community", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setSaved(true);
+      loadCommunities();
       setTimeout(goList, 1200);
+    } finally {
+      setSaving(false);
     }
   }
 
-  function commitEdit() {
-    if (!form.name.trim() || !editingId) return;
-    setCommunities((prev) =>
-      prev.map((c) =>
-        c.id === editingId
-          ? { ...c, name: form.name.trim(), description: form.description.trim(), category: form.category, icon: form.icon, privacy: form.privacy }
-          : c
-      )
-    );
-    setSaved(true);
-    setTimeout(goList, 1200);
+  async function commitEdit() {
+    if (!form.name.trim() || !editingId || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/therapist/community/${editingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setSaved(true);
+      loadCommunities();
+      setTimeout(goList, 1200);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function toggleClientSelection(clientId: string) {
-    setSelectedClients((prev) => {
-      const next = new Set(prev);
-      next.has(clientId) ? next.delete(clientId) : next.add(clientId);
-      return next;
-    });
-  }
-
-  function copyInviteLink(communityId: string) {
-    navigator.clipboard.writeText(`https://mindease.app/join/${communityId}`).catch(() => {});
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2000);
-  }
-
-  function sendInvites(communityId: string) {
-    if (!communityId || selectedClients.size === 0) return;
-    setInvitedClients((prev) => {
-      const existing = new Set(prev[communityId] ?? []);
-      selectedClients.forEach((id) => existing.add(id));
-      return { ...prev, [communityId]: existing };
-    });
-    setSelectedClients(new Set());
-    setInvitesSent(true);
-  }
-
-  function renderInviteSection(communityId: string) {
-    const alreadyInvited = invitedClients[communityId] ?? new Set<string>();
-    const uninvited = therapistClients.filter((c) => !alreadyInvited.has(c.id));
-    const inviteLink = `https://mindease.app/join/${communityId}`;
-    return (
-      <div className="pt-5 mt-5 border-t border-stone-100 space-y-4">
-        <p className="text-xs font-medium text-stone-500 uppercase tracking-widest">Invite clients</p>
-
-        {/* Link row */}
-        <div>
-          <p className="text-[11px] text-stone-400 mb-2">Share this link with anyone you want to invite:</p>
-          <div className="flex gap-2">
-            <div className="flex-1 flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 min-w-0">
-              <Link size={11} strokeWidth={1.5} className="text-stone-400 flex-shrink-0" />
-              <span className="text-xs text-stone-600 truncate">{inviteLink}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => copyInviteLink(communityId)}
-              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border transition-all flex-shrink-0 ${
-                linkCopied
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "border-stone-200 text-stone-600 hover:bg-stone-50"
-              }`}
-            >
-              {linkCopied ? <Check size={12} strokeWidth={2.5} /> : <Link size={12} strokeWidth={1.5} />}
-              {linkCopied ? "Copied!" : "Copy"}
-            </button>
-          </div>
-        </div>
-
-        {/* Client list */}
-        <div>
-          <p className="text-[11px] text-stone-400 mb-2">Or invite your clients directly:</p>
-          {invitesSent ? (
-            <div className="py-5 text-center bg-emerald-50 rounded-xl border border-emerald-100">
-              <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <Check size={14} className="text-emerald-600" strokeWidth={2.5} />
-              </div>
-              <p className="text-xs font-medium text-emerald-800">Invites sent!</p>
-              <p className="text-[11px] text-emerald-600 mt-0.5">Clients will receive an invitation to join.</p>
-            </div>
-          ) : (
-            <>
-              {alreadyInvited.size > 0 && (
-                <div className="mb-2 space-y-1">
-                  {therapistClients.filter((c) => alreadyInvited.has(c.id)).map((client) => (
-                    <div key={client.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-stone-50 border border-stone-100 opacity-60">
-                      <div className="w-6 h-6 bg-stone-200 rounded-full flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0">
-                        {client.name[0]}
-                      </div>
-                      <div className="flex-1 text-xs font-medium text-stone-700 truncate">{client.name}</div>
-                      <span className="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded-full">Invited</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {uninvited.length === 0 ? (
-                <p className="text-xs text-stone-400 text-center py-3">All clients have already been invited.</p>
-              ) : (
-                <>
-                  <div className="space-y-1 mb-3">
-                    {uninvited.map((client) => {
-                      const selected = selectedClients.has(client.id);
-                      return (
-                        <button
-                          key={client.id}
-                          type="button"
-                          onClick={() => toggleClientSelection(client.id)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-all ${
-                            selected ? "bg-stone-900 border-stone-900" : "border-stone-200 hover:border-stone-400 bg-white"
-                          }`}
-                        >
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 ${selected ? "bg-white/20 text-white" : "bg-stone-100 text-stone-600"}`}>
-                            {client.name[0]}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className={`text-xs font-medium truncate ${selected ? "text-white" : "text-stone-800"}`}>{client.name}</div>
-                            <div className={`text-[10px] truncate ${selected ? "text-white/60" : "text-stone-400"}`}>{client.condition[0]}</div>
-                          </div>
-                          {selected && <Check size={12} className="text-white flex-shrink-0" strokeWidth={2.5} />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => sendInvites(communityId)}
-                    disabled={selectedClients.size === 0}
-                    className="w-full bg-stone-900 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Send invites{selectedClients.size > 0 ? ` (${selectedClients.size})` : ""}
-                  </button>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteId) return;
-    setCommunities((prev) => prev.filter((c) => c.id !== deleteId));
-    setPosts((prev) => prev.filter((p) => p.communityId !== deleteId));
+    await fetch(`/api/therapist/community/${deleteId}`, { method: "DELETE" });
     setDeleteId(null);
+    loadCommunities();
   }
 
   function toggleLike(id: string) {
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p
-      )
-    );
+    const post = posts.find((p) => p.id === id);
+    if (!post || !activeCommunityId) return;
+    const action = post.liked ? "unlike" : "like";
+    setPosts((prev) => prev.map((p) => p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p));
+    fetch(`/api/therapist/community/${activeCommunityId}/posts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+  }
+
+  function loadReplies(postId: string) {
+    if (!activeCommunityId || loadedReplyPosts.has(postId)) return;
+    fetch(`/api/therapist/community/${activeCommunityId}/posts/${postId}`, { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const formatted: Reply[] = (d.replies ?? []).map((r: {
+          id: string; author: string; content: string; createdAt: string; likes: number; liked: boolean;
+        }) => ({
+          id: r.id, author: r.author, avatar: "👩‍⚕️", content: r.content,
+          time: timeAgo(new Date(r.createdAt)), likes: r.likes, liked: r.liked,
+        }));
+        setRepliesByPost((prev) => ({ ...prev, [postId]: formatted }));
+        setLoadedReplyPosts((prev) => new Set(prev).add(postId));
+      })
+      .catch(() => {});
   }
 
   function toggleReplyLike(postId: string, replyId: string) {
+    if (!activeCommunityId) return;
+    const reply = (repliesByPost[postId] ?? []).find((r) => r.id === replyId);
+    if (!reply) return;
+    const action = reply.liked ? "unlike" : "like";
     setRepliesByPost((prev) => ({
       ...prev,
       [postId]: (prev[postId] ?? []).map((r) =>
         r.id === replyId ? { ...r, liked: !r.liked, likes: r.liked ? r.likes - 1 : r.likes + 1 } : r
       ),
     }));
+    fetch(`/api/therapist/community/${activeCommunityId}/posts/${postId}/replies/${replyId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
   }
 
-  function replyToComment(postId: string, authorName: string) {
-    setExpandedPost(postId);
-    setReplyTargets((prev) => ({ ...prev, [postId]: authorName }));
-    setReplyInputs((prev) => ({ ...prev, [postId]: `@${authorName} ` }));
-  }
-
-  function clearReplyTarget(postId: string) {
-    setReplyTargets((prev) => ({ ...prev, [postId]: null }));
-  }
-
-  function submitReply(postId: string) {
+  async function submitReply(postId: string) {
     const text = replyInputs[postId]?.trim();
-    if (!text) return;
-    const reply: Reply = {
-      id: `tr-${Date.now()}`,
-      author: "Dr. Sarah Mitchell",
-      avatar: "👩‍⚕️",
-      content: text,
-      time: "Just now",
-      liked: false,
-      likes: 0,
-    };
-    setRepliesByPost((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), reply] }));
-    setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, replies: p.replies + 1 } : p)));
+    if (!text || !activeCommunityId) return;
     setReplyInputs((prev) => ({ ...prev, [postId]: "" }));
-    setReplyTargets((prev) => ({ ...prev, [postId]: null }));
-  }
-
-  function togglePin(id: string) {
-    setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, pinned: !p.pinned } : p)));
-  }
-
-  function deletePost(id: string) {
-    const post = posts.find((p) => p.id === id);
-    setPosts((prev) => prev.filter((p) => p.id !== id));
-    if (post) {
-      setCommunities((prev) =>
-        prev.map((c) => (c.id === post.communityId ? { ...c, postCount: Math.max(0, c.postCount - 1) } : c))
-      );
+    const res = await fetch(`/api/therapist/community/${activeCommunityId}/posts/${postId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: text }),
+    });
+    const d = await res.json();
+    if (res.ok && d.reply) {
+      const reply: Reply = { id: d.reply.id, author: d.reply.author, avatar: "👩‍⚕️", content: d.reply.content, time: "Just now", liked: false, likes: 0 };
+      setRepliesByPost((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), reply] }));
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, replies: p.replies + 1 } : p));
     }
   }
 
-  function submitPost() {
-    if (!newPost.trim() || !activeCommunityId) return;
-    setPosting(true);
-    setTimeout(() => {
-      const post: CommunityPost = {
-        id: `tp${Date.now()}`,
-        communityId: activeCommunityId,
-        author: "Dr. Sarah Mitchell",
-        avatar: "👩‍⚕️",
-        content: newPost.trim(),
-        time: "Just now",
-        likes: 0,
-        liked: false,
-        replies: 0,
-        pinned: false,
-        flagged: false,
-      };
-      setPosts((prev) => [post, ...prev]);
-      setCommunities((prev) =>
-        prev.map((c) => (c.id === activeCommunityId ? { ...c, postCount: c.postCount + 1 } : c))
-      );
-      setNewPost("");
-      setPosting(false);
-    }, 500);
+  function togglePin(id: string) {
+    const post = posts.find((p) => p.id === id);
+    if (!post || !activeCommunityId) return;
+    const pinned = !post.pinned;
+    setPosts((prev) => prev.map((p) => p.id === id ? { ...p, pinned } : p));
+    fetch(`/api/therapist/community/${activeCommunityId}/posts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned }),
+    });
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  async function deletePost(id: string) {
+    const post = posts.find((p) => p.id === id);
+    setPosts((prev) => prev.filter((p) => p.id !== id));
+    if (post && activeCommunityId) {
+      setCommunities((prev) => prev.map((c) => c.id === activeCommunityId ? { ...c, postCount: Math.max(0, c.postCount - 1) } : c));
+      await fetch(`/api/therapist/community/${activeCommunityId}/posts/${id}`, { method: "DELETE" }).catch(() => {});
+    }
+  }
+
+  async function submitPost() {
+    if (!newPost.trim() || !activeCommunityId || posting) return;
+    setPosting(true);
+    try {
+      const res = await fetch(`/api/therapist/community/${activeCommunityId}/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newPost.trim() }),
+      });
+      if (res.ok) {
+        setNewPost("");
+        loadPosts(activeCommunityId);
+        setCommunities((prev) => prev.map((c) => c.id === activeCommunityId ? { ...c, postCount: c.postCount + 1 } : c));
+      }
+    } finally {
+      setPosting(false);
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
@@ -648,17 +426,12 @@ export default function TherapistCommunityPage() {
           )}
           <div>
             <h1 className="text-2xl font-semibold text-stone-900">
-              {mode === "create"
-                ? "New Community"
-                : mode === "edit"
-                ? "Edit Community"
-                : mode === "view" && activeCommunity
-                ? activeCommunity.name
+              {mode === "create" ? "New Community"
+                : mode === "edit" ? "Edit Community"
+                : mode === "view" && activeCommunity ? activeCommunity.name
                 : "Communities"}
             </h1>
-            {mode === "list" && (
-              <p className="text-sm text-stone-500 mt-1">Create and manage communities for your clients</p>
-            )}
+            {mode === "list" && <p className="text-sm text-stone-500 mt-1">Create and manage communities for your clients</p>}
             {mode === "view" && activeCommunity && (
               <p className="text-sm text-stone-500 mt-0.5">{activeCommunity.category} · {activeCommunity.members} members</p>
             )}
@@ -666,23 +439,14 @@ export default function TherapistCommunityPage() {
         </div>
 
         {mode === "list" && (
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 bg-stone-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-stone-800 transition-colors"
-          >
+          <button onClick={openCreate} className="flex items-center gap-1.5 bg-stone-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-stone-800 transition-colors">
             <Plus size={15} strokeWidth={2} /> Create community
           </button>
         )}
-
-        {mode === "view" && activeCommunity && activeCommunity.isOwner && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => openEdit(activeCommunity)}
-              className="flex items-center gap-1.5 border border-stone-200 text-stone-700 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-stone-50 transition-colors"
-            >
-              <Pencil size={13} strokeWidth={1.5} /> Edit
-            </button>
-          </div>
+        {mode === "view" && activeCommunity && (
+          <button onClick={() => openEdit(activeCommunity)} className="flex items-center gap-1.5 border border-stone-200 text-stone-700 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-stone-50 transition-colors">
+            <Pencil size={13} strokeWidth={1.5} /> Edit
+          </button>
         )}
       </div>
 
@@ -690,34 +454,14 @@ export default function TherapistCommunityPage() {
       {(mode === "create" || mode === "edit") && (
         <div className="bg-white border border-stone-100 rounded-xl p-6">
           {saved ? (
-            justCreatedId ? (
-              <div className="space-y-0">
-                <div className="flex items-center gap-3 py-6 border-b border-stone-100">
-                  <div className="w-8 h-8 bg-emerald-50 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Check size={14} className="text-emerald-600" strokeWidth={2.5} />
-                  </div>
-                  <p className="text-sm font-semibold text-stone-800">Community created! Invite your clients below.</p>
-                </div>
-                {renderInviteSection(justCreatedId)}
-                <div className="pt-4 mt-2 border-t border-stone-100">
-                  <button
-                    onClick={goList}
-                    className="w-full bg-stone-900 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-stone-800 transition-colors"
-                  >
-                    Done
-                  </button>
-                </div>
+            <div className="py-14 text-center">
+              <div className="w-10 h-10 bg-stone-900 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Check size={18} className="text-white" strokeWidth={2.5} />
               </div>
-            ) : (
-              <div className="py-14 text-center">
-                <div className="w-10 h-10 bg-stone-900 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Check size={18} className="text-white" strokeWidth={2.5} />
-                </div>
-                <p className="text-sm font-medium text-stone-800">
-                  {mode === "edit" ? "Changes saved" : "Community created"}
-                </p>
-              </div>
-            )
+              <p className="text-sm font-medium text-stone-800">
+                {mode === "edit" ? "Changes saved" : "Community created"}
+              </p>
+            </div>
           ) : (
             <div className="space-y-5">
               {/* Icon picker */}
@@ -725,113 +469,66 @@ export default function TherapistCommunityPage() {
                 <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">Icon</label>
                 <div className="flex flex-wrap gap-2">
                   {ICON_OPTIONS.map((icon) => (
-                    <button
-                      key={icon}
-                      type="button"
-                      onClick={() => setForm({ ...form, icon })}
-                      className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${
-                        form.icon === icon
-                          ? "bg-stone-900 ring-2 ring-stone-900 ring-offset-1"
-                          : "bg-stone-50 hover:bg-stone-100 border border-stone-100"
-                      }`}
-                    >
+                    <button key={icon} type="button" onClick={() => setForm({ ...form, icon })}
+                      className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${form.icon === icon ? "bg-stone-900 ring-2 ring-stone-900 ring-offset-1" : "bg-stone-50 hover:bg-stone-100 border border-stone-100"}`}>
                       {icon}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Name */}
               <div>
-                <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-1.5">
-                  Community name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-1.5">Community name <span className="text-red-400">*</span></label>
+                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="e.g. Anxiety & Calm"
-                  className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
-                />
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors" />
               </div>
 
-              {/* Description */}
               <div>
                 <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-1.5">Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
                   placeholder="What is this community about? Who should join?"
-                  rows={3}
-                  className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 resize-none focus:outline-none focus:border-stone-400 transition-colors"
-                />
+                  rows={3} className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 resize-none focus:outline-none focus:border-stone-400 transition-colors" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Category */}
                 <div>
                   <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-1.5">Category</label>
-                  <select
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
-                  >
+                  <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors">
                     {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </div>
 
-                {/* Privacy */}
                 <div>
-                  <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-1.5">Privacy</label>
+                  <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-1.5">Visibility</label>
                   <div className="flex gap-2">
                     {(["open", "invite"] as Privacy[]).map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setForm({ ...form, privacy: p })}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border text-sm font-medium transition-all ${
-                          form.privacy === p
-                            ? "bg-stone-900 border-stone-900 text-white"
-                            : "border-stone-200 text-stone-600 hover:border-stone-400"
-                        }`}
-                      >
+                      <button key={p} type="button" onClick={() => setForm({ ...form, privacy: p })}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border text-sm font-medium transition-all ${form.privacy === p ? "bg-stone-900 border-stone-900 text-white" : "border-stone-200 text-stone-600 hover:border-stone-400"}`}>
                         {p === "open" ? <Globe size={13} strokeWidth={1.5} /> : <Lock size={13} strokeWidth={1.5} />}
-                        {p === "open" ? "Open" : "Invite only"}
+                        {p === "open" ? "Open to all" : "Invite only"}
                       </button>
                     ))}
                   </div>
                   <p className="text-[11px] text-stone-400 mt-1.5">
                     {form.privacy === "open"
-                      ? "Any client can discover and join this community."
-                      : "Only clients you invite can join this community."}
+                      ? "Any user on the platform can discover and join."
+                      : "Only clients you invite can join."}
                   </p>
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="flex gap-2 pt-3 border-t border-stone-100">
-                <button
-                  type="button"
-                  onClick={goList}
-                  className="flex-1 border border-stone-200 text-sm py-2.5 rounded-lg hover:bg-stone-50 transition-colors text-stone-600"
-                >
+                <button type="button" onClick={goList} className="flex-1 border border-stone-200 text-sm py-2.5 rounded-lg hover:bg-stone-50 transition-colors text-stone-600">
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  onClick={mode === "create" ? commitCreate : commitEdit}
-                  disabled={!form.name.trim()}
-                  className="flex-1 bg-stone-900 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  {mode === "create" ? "Create community" : "Save changes"}
+                <button type="button" onClick={mode === "create" ? commitCreate : commitEdit}
+                  disabled={!form.name.trim() || saving}
+                  className="flex-1 bg-stone-900 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                  {saving ? "Saving…" : mode === "create" ? "Create community" : "Save changes"}
                 </button>
               </div>
-
-              {/* Inline invite section — edit mode only, invite-only communities */}
-              {mode === "edit" && form.privacy === "invite" && editingId && (
-                <div className="mt-4 pt-4 border-t border-stone-100">
-                  {renderInviteSection(editingId)}
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -840,16 +537,14 @@ export default function TherapistCommunityPage() {
       {/* ══ Community feed view ══════════════════════════════════════════════════ */}
       {mode === "view" && activeCommunity && (
         <div className="space-y-4">
-          {/* Community info card */}
+          {/* Info card */}
           <div className="bg-white border border-stone-100 rounded-xl p-5 flex items-center gap-4">
             <div className="w-14 h-14 bg-stone-50 rounded-xl flex items-center justify-center text-3xl flex-shrink-0">
               {activeCommunity.icon}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
-                  {activeCommunity.category}
-                </span>
+                <span className="text-xs font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">{activeCommunity.category}</span>
                 <PrivacyBadge privacy={activeCommunity.privacy} />
               </div>
               <p className="text-sm text-stone-500 mt-1 leading-relaxed">{activeCommunity.description || <span className="italic text-stone-300">No description</span>}</p>
@@ -862,54 +557,41 @@ export default function TherapistCommunityPage() {
             </div>
           </div>
 
-          {/* Moderation notice / read-only notice */}
-          {activeCommunity.isOwner ? (
-            <div className="flex items-start gap-2 bg-stone-50 border border-stone-100 rounded-lg px-4 py-3 text-xs text-stone-500">
-              <ShieldCheck size={13} strokeWidth={1.5} className="flex-shrink-0 mt-0.5 text-stone-400" />
-              <span>You are the moderator of this community. You can pin important posts or remove content that violates guidelines.</span>
-            </div>
-          ) : (
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg px-4 py-3 text-xs text-amber-700">
-              <Lock size={13} strokeWidth={1.5} className="flex-shrink-0 mt-0.5" />
-              <span>This community is managed by <span className="font-medium">{activeCommunity.createdByName}</span>. You can view posts but cannot moderate or post announcements.</span>
-            </div>
-          )}
+          <div className="flex items-start gap-2 bg-stone-50 border border-stone-100 rounded-lg px-4 py-3 text-xs text-stone-500">
+            <ShieldCheck size={13} strokeWidth={1.5} className="flex-shrink-0 mt-0.5 text-stone-400" />
+            <span>You are the moderator. Members post anonymously — you post as yourself.</span>
+          </div>
 
-          {/* Post compose — owners only */}
-          {activeCommunity.isOwner && (
-            <div className="bg-white border border-stone-100 rounded-xl p-4">
-              <label className="text-xs font-medium text-stone-500 mb-2 block">Post an announcement or message</label>
-              <div className="flex gap-3 mb-3">
-                <div className="w-7 h-7 bg-stone-900 rounded-full flex items-center justify-center text-xs text-white flex-shrink-0 mt-0.5">
-                  D
-                </div>
-                <textarea
-                  value={newPost}
-                  onChange={(e) => setNewPost(e.target.value.slice(0, 500))}
-                  placeholder="Write something for your community…"
-                  rows={3}
-                  className="flex-1 text-sm text-stone-700 placeholder-stone-400 resize-none focus:outline-none leading-relaxed"
-                />
-              </div>
-              <div className="flex items-center justify-between border-t border-stone-100 pt-3">
-                <span className="text-[10px] text-stone-400">{newPost.length}/500</span>
-                <button
-                  onClick={submitPost}
-                  disabled={!newPost.trim() || posting}
-                  className="bg-stone-900 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
-                >
-                  <Send size={11} strokeWidth={2} />
-                  {posting ? "Posting…" : "Post"}
-                </button>
-              </div>
+          {/* Post compose */}
+          <div className="bg-white border border-stone-100 rounded-xl p-4">
+            <label className="text-xs font-medium text-stone-500 mb-2 block">Post an announcement or message</label>
+            <div className="flex gap-3 mb-3">
+              <div className="w-7 h-7 bg-stone-900 rounded-full flex items-center justify-center text-xs text-white flex-shrink-0 mt-0.5">👩‍⚕️</div>
+              <textarea value={newPost} onChange={(e) => setNewPost(e.target.value.slice(0, 500))}
+                placeholder="Write something for your community…" rows={3}
+                className="flex-1 text-sm text-stone-700 placeholder-stone-400 resize-none focus:outline-none leading-relaxed" />
             </div>
-          )}
+            <div className="flex items-center justify-between border-t border-stone-100 pt-3">
+              <span className="text-[10px] text-stone-400">{newPost.length}/500</span>
+              <button onClick={submitPost} disabled={!newPost.trim() || posting}
+                className="bg-stone-900 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5">
+                <Send size={11} strokeWidth={2} />
+                {posting ? "Posting…" : "Post"}
+              </button>
+            </div>
+          </div>
 
           {/* Posts */}
-          {activePosts.length === 0 && (
+          {loadingPosts && (
+            <div className="space-y-3 animate-pulse">
+              {[1, 2, 3].map((i) => <div key={i} className="h-24 bg-white border border-stone-100 rounded-xl" />)}
+            </div>
+          )}
+
+          {!loadingPosts && activePosts.length === 0 && (
             <div className="bg-white border border-stone-100 rounded-xl py-12 text-center">
               <p className="text-sm font-medium text-stone-700 mb-1">No posts yet</p>
-              <p className="text-xs text-stone-400">Be the first to post — your clients will see it here.</p>
+              <p className="text-xs text-stone-400">Be the first to post — your community members will see it here.</p>
             </div>
           )}
 
@@ -917,153 +599,79 @@ export default function TherapistCommunityPage() {
             const isExpanded = expandedPost === post.id;
             const postReplies = repliesByPost[post.id] ?? [];
             return (
-              <div
-                key={post.id}
-                className={`bg-white border rounded-2xl overflow-hidden ${
-                  post.pinned ? "border-stone-300 border-l-4 border-l-stone-700" : "border-stone-100"
-                }`}
-              >
+              <div key={post.id} className={`bg-white border rounded-2xl overflow-hidden ${post.pinned ? "border-stone-300 border-l-4 border-l-stone-700" : "border-stone-100"}`}>
                 <div className="p-5">
                   {post.pinned && (
                     <div className="flex items-center gap-1 text-[10px] text-stone-500 font-medium uppercase tracking-wider mb-2">
                       <Pin size={10} strokeWidth={2} /> Pinned
                     </div>
                   )}
-
                   <div className="flex items-center gap-2.5 mb-3">
-                    <div className="w-7 h-7 bg-stone-100 rounded-full flex items-center justify-center text-xs flex-shrink-0">
-                      {post.avatar}
-                    </div>
+                    <div className="w-7 h-7 bg-stone-100 rounded-full flex items-center justify-center text-xs flex-shrink-0">{post.avatar}</div>
                     <div className="flex-1">
                       <div className="text-xs font-medium text-stone-700">{post.author}</div>
                       <div className="text-[10px] text-stone-400">{post.time}</div>
                     </div>
                   </div>
-
                   <p className="text-sm text-stone-700 leading-relaxed">{post.content}</p>
-
                   <div className="flex items-center gap-4 mt-4 pt-3 border-t border-stone-50">
-                    <button
-                      onClick={() => toggleLike(post.id)}
-                      className={`flex items-center gap-1.5 text-xs transition-colors ${
-                        post.liked ? "text-rose-500" : "text-stone-400 hover:text-stone-600"
-                      }`}
-                    >
-                      <Heart size={13} strokeWidth={1.5} fill={post.liked ? "currentColor" : "none"} />
-                      {post.likes}
+                    <button onClick={() => toggleLike(post.id)}
+                      className={`flex items-center gap-1.5 text-xs transition-colors ${post.liked ? "text-rose-500" : "text-stone-400 hover:text-stone-600"}`}>
+                      <Heart size={13} strokeWidth={1.5} fill={post.liked ? "currentColor" : "none"} /> {post.likes}
                     </button>
-                    <button
-                      onClick={() => setExpandedPost(isExpanded ? null : post.id)}
-                      className={`flex items-center gap-1.5 text-xs transition-colors ${
-                        isExpanded ? "text-stone-800 font-medium" : "text-stone-400 hover:text-stone-600"
-                      }`}
-                    >
+                    <button onClick={() => { setExpandedPost(isExpanded ? null : post.id); if (!isExpanded) loadReplies(post.id); }}
+                      className={`flex items-center gap-1.5 text-xs transition-colors ${isExpanded ? "text-stone-800 font-medium" : "text-stone-400 hover:text-stone-600"}`}>
                       <MessageCircle size={13} strokeWidth={1.5} />
                       {post.replies} {post.replies === 1 ? "reply" : "replies"}
                     </button>
-
-                    {/* Moderator controls — owners only */}
-                    {activeCommunity.isOwner && (
-                      <div className="ml-auto flex items-center gap-1">
-                        <button
-                          onClick={() => togglePin(post.id)}
-                          title={post.pinned ? "Unpin" : "Pin post"}
-                          className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${
-                            post.pinned
-                              ? "bg-stone-900 text-white"
-                              : "text-stone-400 hover:bg-stone-100 hover:text-stone-700"
-                          }`}
-                        >
-                          <Pin size={12} strokeWidth={1.5} />
-                        </button>
-                        <button
-                          onClick={() => deletePost(post.id)}
-                          title="Remove post"
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-500 transition-all"
-                        >
-                          <Trash2 size={12} strokeWidth={1.5} />
-                        </button>
-                      </div>
-                    )}
+                    <div className="ml-auto flex items-center gap-1">
+                      <button onClick={() => togglePin(post.id)} title={post.pinned ? "Unpin" : "Pin"}
+                        className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${post.pinned ? "bg-stone-900 text-white" : "text-stone-400 hover:bg-stone-100 hover:text-stone-700"}`}>
+                        <Pin size={12} strokeWidth={1.5} />
+                      </button>
+                      <button onClick={() => deletePost(post.id)} title="Remove"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-500 transition-all">
+                        <Trash2 size={12} strokeWidth={1.5} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Replies panel */}
                 {isExpanded && (
                   <div className="border-t border-stone-100 bg-stone-50/60">
                     {postReplies.length > 0 ? (
                       <div className="divide-y divide-stone-100">
                         {postReplies.map((reply) => (
                           <div key={reply.id} className="px-5 py-4 flex gap-2.5">
-                            <div className="w-6 h-6 bg-stone-100 rounded-full flex items-center justify-center text-[11px] flex-shrink-0 mt-0.5">
-                              {reply.avatar}
-                            </div>
+                            <div className="w-6 h-6 bg-stone-100 rounded-full flex items-center justify-center text-[11px] flex-shrink-0 mt-0.5">{reply.avatar}</div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-[11px] font-medium ${reply.author === "Dr. Sarah Mitchell" ? "text-stone-900" : "text-stone-600"}`}>
-                                  {reply.author}
-                                </span>
+                                <span className="text-[11px] font-medium text-stone-600">{reply.author}</span>
                                 <span className="text-[10px] text-stone-400">{reply.time}</span>
                               </div>
                               <p className="text-xs text-stone-700 leading-relaxed">{reply.content}</p>
-                              <div className="flex items-center gap-3 mt-2">
-                                <button
-                                  onClick={() => toggleReplyLike(post.id, reply.id)}
-                                  className={`flex items-center gap-1 text-[11px] transition-colors ${
-                                    reply.liked ? "text-rose-500" : "text-stone-400 hover:text-stone-600"
-                                  }`}
-                                >
-                                  <Heart size={11} strokeWidth={1.5} fill={reply.liked ? "currentColor" : "none"} />
-                                  {reply.likes}
-                                </button>
-                                <button
-                                  onClick={() => replyToComment(post.id, reply.author)}
-                                  className="text-[11px] text-stone-400 hover:text-stone-700 transition-colors font-medium"
-                                >
-                                  Reply
-                                </button>
-                              </div>
+                              <button onClick={() => toggleReplyLike(post.id, reply.id)}
+                                className={`flex items-center gap-1 text-[11px] mt-2 transition-colors ${reply.liked ? "text-rose-500" : "text-stone-400 hover:text-stone-600"}`}>
+                                <Heart size={11} strokeWidth={1.5} fill={reply.liked ? "currentColor" : "none"} /> {reply.likes}
+                              </button>
                             </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="px-5 py-4 text-xs text-stone-400">No replies yet. Be the first to respond.</p>
+                      <p className="px-5 py-4 text-xs text-stone-400">No replies yet.</p>
                     )}
-
-                    {/* Reply compose */}
-                    <div className="border-t border-stone-100">
-                      {replyTargets[post.id] && (
-                        <div className="px-4 pt-2.5 flex items-center gap-1.5">
-                          <span className="text-[11px] text-stone-500">Replying to</span>
-                          <span className="text-[11px] font-semibold text-stone-800">@{replyTargets[post.id]}</span>
-                          <button
-                            onClick={() => clearReplyTarget(post.id)}
-                            className="text-stone-400 hover:text-stone-600 transition-colors ml-0.5"
-                          >
-                            <X size={11} strokeWidth={2} />
-                          </button>
-                        </div>
-                      )}
-                      <div className="px-4 py-3 flex gap-2.5 items-center">
-                        <div className="w-6 h-6 bg-stone-900 rounded-full flex items-center justify-center text-[11px] text-white flex-shrink-0">
-                          D
-                        </div>
-                        <input
-                          value={replyInputs[post.id] ?? ""}
-                          onChange={(e) => setReplyInputs((prev) => ({ ...prev, [post.id]: e.target.value }))}
-                          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submitReply(post.id)}
-                          placeholder="Write a reply…"
-                          className="flex-1 text-xs text-stone-700 placeholder-stone-400 bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-stone-300"
-                        />
-                        <button
-                          onClick={() => submitReply(post.id)}
-                          disabled={!replyInputs[post.id]?.trim()}
-                          className="text-xs bg-stone-900 text-white px-2.5 py-1.5 rounded-lg disabled:opacity-30 hover:bg-stone-800 transition-colors flex-shrink-0"
-                        >
-                          <Send size={10} strokeWidth={2} />
-                        </button>
-                      </div>
+                    <div className="px-4 py-3 border-t border-stone-100 flex gap-2.5 items-center">
+                      <div className="w-6 h-6 bg-stone-900 rounded-full flex items-center justify-center text-[11px] text-white flex-shrink-0">👩‍⚕️</div>
+                      <input value={replyInputs[post.id] ?? ""}
+                        onChange={(e) => setReplyInputs((prev) => ({ ...prev, [post.id]: e.target.value }))}
+                        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submitReply(post.id)}
+                        placeholder="Write a reply…"
+                        className="flex-1 text-xs text-stone-700 placeholder-stone-400 bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-stone-300" />
+                      <button onClick={() => submitReply(post.id)} disabled={!replyInputs[post.id]?.trim()}
+                        className="text-xs bg-stone-900 text-white px-2.5 py-1.5 rounded-lg disabled:opacity-30 hover:bg-stone-800 transition-colors flex-shrink-0">
+                        <Send size={10} strokeWidth={2} />
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1076,46 +684,40 @@ export default function TherapistCommunityPage() {
       {/* ══ List ══════════════════════════════════════════════════════════════════ */}
       {mode === "list" && (
         <>
-          {communities.length === 0 && (
+          {loadingCommunities && (
+            <div className="space-y-3 animate-pulse">
+              {[1, 2].map((i) => <div key={i} className="h-32 bg-white border border-stone-100 rounded-xl" />)}
+            </div>
+          )}
+
+          {!loadingCommunities && fetchError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-700">
+              <p className="font-medium mb-1">Could not load communities</p>
+              <p className="text-xs text-red-500 font-mono">{fetchError}</p>
+              <button onClick={loadCommunities} className="mt-3 text-xs font-medium text-red-700 underline">Retry</button>
+            </div>
+          )}
+
+          {!loadingCommunities && !fetchError && communities.length === 0 && (
             <div className="bg-white border border-stone-100 rounded-xl py-16 text-center">
               <div className="w-12 h-12 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Users size={22} strokeWidth={1.5} className="text-stone-400" />
               </div>
               <p className="text-sm font-medium text-stone-700 mb-1">No communities yet</p>
-              <p className="text-xs text-stone-400 mb-5">Create a community so clients can connect, share progress, and support each other.</p>
-              <button
-                onClick={openCreate}
-                className="inline-flex items-center gap-1.5 bg-stone-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-stone-800 transition-colors"
-              >
+              <p className="text-xs text-stone-400 mb-5">Create a community so clients can connect and support each other.</p>
+              <button onClick={openCreate} className="inline-flex items-center gap-1.5 bg-stone-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-stone-800 transition-colors">
                 <Plus size={14} strokeWidth={2} /> Create your first community
               </button>
             </div>
           )}
 
-          {/* My Communities */}
-          {communities.some((c) => c.isOwner) && (
+          {communities.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-xs font-semibold text-stone-400 uppercase tracking-widest">My Communities</h2>
-              {communities.filter((c) => c.isOwner).map((community) => (
-                <CommunityCard
-                  key={community.id}
-                  community={community}
+              {communities.map((community) => (
+                <CommunityCard key={community.id} community={community}
                   onEdit={() => openEdit(community)}
                   onDelete={() => setDeleteId(community.id)}
-                  onView={() => openView(community.id)}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Other Communities */}
-          {communities.some((c) => !c.isOwner) && (
-            <div className="space-y-3">
-              <h2 className="text-xs font-semibold text-stone-400 uppercase tracking-widest">Other Communities</h2>
-              {communities.filter((c) => !c.isOwner).map((community) => (
-                <CommunityCard
-                  key={community.id}
-                  community={community}
                   onView={() => openView(community.id)}
                 />
               ))}
@@ -1124,7 +726,7 @@ export default function TherapistCommunityPage() {
         </>
       )}
 
-      {/* ══ Delete confirmation modal ══════════════════════════════════════════ */}
+      {/* ══ Delete confirmation ══════════════════════════════════════════════════ */}
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setDeleteId(null)} />
@@ -1134,29 +736,26 @@ export default function TherapistCommunityPage() {
             </div>
             <h3 className="text-sm font-semibold text-stone-900 mb-1">Delete this community?</h3>
             <p className="text-xs text-stone-500 leading-relaxed mb-5">
-              <span className="font-medium text-stone-700">
-                &ldquo;{communities.find((c) => c.id === deleteId)?.name}&rdquo;
-              </span>{" "}
-              and all its posts will be permanently removed. Members will lose access. This cannot be undone.
+              <span className="font-medium text-stone-700">&ldquo;{communities.find((c) => c.id === deleteId)?.name}&rdquo;</span>{" "}
+              and all its posts will be permanently removed. This cannot be undone.
             </p>
             <div className="flex gap-2">
-              <button
-                onClick={() => setDeleteId(null)}
-                className="flex-1 border border-stone-200 text-sm py-2.5 rounded-lg text-stone-600 hover:bg-stone-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="flex-1 bg-red-500 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-red-600 transition-colors"
-              >
-                Delete
-              </button>
+              <button onClick={() => setDeleteId(null)} className="flex-1 border border-stone-200 text-sm py-2.5 rounded-lg text-stone-600 hover:bg-stone-50 transition-colors">Cancel</button>
+              <button onClick={confirmDelete} className="flex-1 bg-red-500 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-red-600 transition-colors">Delete</button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
+}
+
+function timeAgo(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 2) return "Just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }

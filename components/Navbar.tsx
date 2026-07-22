@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import Logo from "./Logo";
 
 const links = [
   { href: "/", label: "Home" },
@@ -24,9 +25,8 @@ export default function Navbar() {
       <nav className="sticky top-0 z-50 bg-cream/95 backdrop-blur border-b border-stone-200">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 font-semibold text-sage-800 text-lg">
-            <span className="w-8 h-8 bg-sage-700 rounded-lg flex items-center justify-center text-white text-sm">🌿</span>
-            MindEase
+          <Link href="/" className="flex items-center">
+            <Logo height={26} />
           </Link>
 
           {/* Desktop nav */}
@@ -74,9 +74,8 @@ export default function Navbar() {
       >
         {/* Drawer header */}
         <div className="flex items-center justify-between px-6 h-16 border-b border-stone-100">
-          <Link href="/" onClick={() => setOpen(false)} className="flex items-center gap-2 font-semibold text-sage-800">
-            <span className="w-7 h-7 bg-sage-700 rounded-md flex items-center justify-center text-white text-xs">🌿</span>
-            MindEase
+          <Link href="/" onClick={() => setOpen(false)} className="flex items-center">
+            <Logo height={24} />
           </Link>
           <button
             onClick={() => setOpen(false)}

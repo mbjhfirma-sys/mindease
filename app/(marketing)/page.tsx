@@ -11,7 +11,7 @@ const services = [
     description:
       "Develop a sustainable practice with guided sessions for every level. Reduce stress and find calm in your daily life.",
     color: "bg-sage-100",
-    link: "/dashboard/courses",
+    link: "/mindfulness-meditation",
   },
   {
     icon: "💬",
@@ -19,7 +19,7 @@ const services = [
     description:
       "Connect with a certified therapist or wellness coach for personalized guidance tailored to your needs.",
     color: "bg-peach-100",
-    link: "/pricing",
+    link: "/therapy",
   },
   {
     icon: "🌱",
@@ -27,7 +27,7 @@ const services = [
     description:
       "Build lasting habits with structured programs designed by mental health professionals to help you thrive.",
     color: "bg-amber-100",
-    link: "/dashboard/courses",
+    link: "/coaching",
   },
 ];
 
@@ -80,7 +80,7 @@ export default function HomePage() {
                   <div className="text-6xl mb-4">🧠</div>
                   <h3 className="text-xl font-semibold mb-2">Your Path to Well-being</h3>
                   <p className="text-sage-200 text-sm mb-6">
-                    Join 50,000+ people who have transformed their mental health with MindEase.
+                    Join 50,000+ people who have transformed their mental health with YouMindo.
                   </p>
                   <div className="grid grid-cols-3 gap-3">
                     {[["50K+", "Members"], ["120+", "Courses"], ["98%", "Feel Better"]].map(([num, label]) => (
@@ -128,7 +128,7 @@ export default function HomePage() {
               We Help You Prioritize Your Mental Health
             </h2>
             <p className="text-stone-500 leading-relaxed mb-5">
-              Mental health isn't a destination — it's a daily practice. MindEase brings together expert-led courses, live coaching, and a supportive community to meet you wherever you are.
+              Mental health isn't a destination — it's a daily practice. YouMindo brings together expert-led courses, live coaching, and a supportive community to meet you wherever you are.
             </p>
             <p className="text-stone-500 leading-relaxed mb-8">
               Whether you're managing anxiety, rebuilding after burnout, or simply learning to be kinder to yourself, we have a path for you.
@@ -179,7 +179,7 @@ export default function HomePage() {
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { name: "Emma R.", quote: "MindEase changed how I approach my mental health. I feel calmer and more in control than I have in years.", avatar: "👩", course: "Understanding Anxiety" },
+              { name: "Emma R.", quote: "YouMindo changed how I approach my mental health. I feel calmer and more in control than I have in years.", avatar: "👩", course: "Understanding Anxiety" },
               { name: "James K.", quote: "The mindfulness course transformed my mornings. Six months in and I haven't looked back.", avatar: "👨", course: "Foundations of Mindfulness" },
               { name: "Aisha N.", quote: "Self-compassion used to feel foreign to me. After this course I genuinely feel kinder to myself.", avatar: "👩🏾", course: "Building Self-Compassion" },
             ].map((t) => (
@@ -267,7 +267,7 @@ export default function HomePage() {
           <div className="text-5xl mb-6">🤝</div>
           <h2 className="text-3xl md:text-4xl font-bold mb-4">You're Not Alone on This Journey</h2>
           <p className="text-sage-200 text-lg mb-8 leading-relaxed">
-            Thousands of people just like you have found relief, clarity, and joy through MindEase. Your next step is just a click away.
+            Thousands of people just like you have found relief, clarity, and joy through YouMindo. Your next step is just a click away.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link

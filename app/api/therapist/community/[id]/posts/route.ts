@@ -3,6 +3,8 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 const postSchema = z.object({
   content: z.string().min(1).max(1000),
 });

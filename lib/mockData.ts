@@ -16,7 +16,9 @@ export type Lesson = {
   module: string;
   questions?: QuizQuestion[];
   prompt?: string;
-  exerciseType?: "breathing" | "bodyscan" | "gratitude" | "grounding";
+  exerciseType?: "breathing" | "bodyscan" | "gratitude" | "grounding"
+    | "pmr" | "boxbreathing" | "reframe" | "values" | "feelingswheel"
+    | "worryjar" | "lovingkindness" | "cbttriangle" | "urgesurf" | "selfcompassion";
 };
 
 export const courses = [
@@ -549,31 +551,31 @@ export const messages = [
   },
   {
     id: "m3",
-    sender: "MindEase Support",
+    sender: "YouMindo Support",
     avatar: "💚",
     role: "Support Team",
-    preview: "Welcome to MindEase! We're here if you need anything.",
+    preview: "Welcome to YouMindo! We're here if you need anything.",
     time: "Mon",
     unread: 0,
-    messages: [{ from: "them", text: "Welcome to MindEase! We're here if you need anything.", time: "Mon" }],
+    messages: [{ from: "them", text: "Welcome to YouMindo! We're here if you need anything.", time: "Mon" }],
   },
 ];
 
 export const testimonials = [
-  { id: "t1", name: "Emma R.", age: 28, location: "New York", quote: "MindEase changed how I approach my mental health. The courses helped me understand my anxiety in a way no book ever could. I feel calmer and more in control than I have in years.", rating: 5, course: "Understanding Anxiety", avatar: "👩", featured: true },
+  { id: "t1", name: "Emma R.", age: 28, location: "New York", quote: "YouMindo changed how I approach my mental health. The courses helped me understand my anxiety in a way no book ever could. I feel calmer and more in control than I have in years.", rating: 5, course: "Understanding Anxiety", avatar: "👩", featured: true },
   { id: "t2", name: "James K.", age: 34, location: "London", quote: "The mindfulness course transformed my mornings. I used to wake up dreading the day, and now I actually look forward to my practice. It's been six months and I haven't looked back.", rating: 5, course: "Foundations of Mindfulness", avatar: "👨", featured: true },
-  { id: "t3", name: "Sofia M.", age: 22, location: "Barcelona", quote: "As a university student dealing with burnout, MindEase was a lifeline. The sleep course alone gave me back hours of quality rest. My grades and mood both improved.", rating: 5, course: "Sleep & Rest Mastery", avatar: "👩‍🎓", featured: false },
+  { id: "t3", name: "Sofia M.", age: 22, location: "Barcelona", quote: "As a university student dealing with burnout, YouMindo was a lifeline. The sleep course alone gave me back hours of quality rest. My grades and mood both improved.", rating: 5, course: "Sleep & Rest Mastery", avatar: "👩‍🎓", featured: false },
   { id: "t4", name: "David T.", age: 41, location: "Chicago", quote: "I was skeptical about online mental health resources, but the quality here is remarkable. The instructors are compassionate and the content is evidence-based.", rating: 5, course: "Emotional Resilience", avatar: "👨‍💼", featured: false },
   { id: "t5", name: "Aisha N.", age: 31, location: "Toronto", quote: "Self-compassion used to feel like a foreign concept to me. After this course, I genuinely feel kinder to myself. It's simple but profound work.", rating: 5, course: "Building Self-Compassion", avatar: "👩🏾", featured: true },
   { id: "t6", name: "Leo P.", age: 26, location: "Sydney", quote: "The group support circles combined with the courses create a beautiful community feeling. I don't feel alone in my struggles anymore.", rating: 5, course: "Stress-Free Living", avatar: "👨", featured: false },
 ];
 
 export const faqs = [
-  { q: "Who is MindEase for?", a: "MindEase is for anyone who wants to prioritize their mental health — whether you're dealing with stress, anxiety, poor sleep, or simply want to build healthier emotional habits. Our content is designed for all levels." },
+  { q: "Who is YouMindo for?", a: "YouMindo is for anyone who wants to prioritize their mental health — whether you're dealing with stress, anxiety, poor sleep, or simply want to build healthier emotional habits. Our content is designed for all levels." },
   { q: "Are the courses taught by licensed professionals?", a: "Yes. All of our instructors are licensed therapists, clinical psychologists, or certified wellness practitioners with years of experience in their fields." },
-  { q: "Can I access content on my phone?", a: "Absolutely. MindEase is fully responsive and works on any device — desktop, tablet, or smartphone. Your progress syncs across all your devices." },
+  { q: "Can I access content on my phone?", a: "Absolutely. YouMindo is fully responsive and works on any device — desktop, tablet, or smartphone. Your progress syncs across all your devices." },
   { q: "Is there a free trial?", a: "Yes! Our Basic plan is free forever with access to introductory lessons from every course. You can upgrade anytime to unlock the full library." },
-  { q: "How is MindEase different from therapy?", a: "MindEase is an educational platform and wellness resource — it's not a replacement for professional therapy. Many of our users combine MindEase with therapy for the best results. Our one-on-one sessions are with certified coaches, not licensed therapists." },
+  { q: "How is YouMindo different from therapy?", a: "YouMindo is an educational platform and wellness resource — it's not a replacement for professional therapy. Many of our users combine YouMindo with therapy for the best results. Our one-on-one sessions are with certified coaches, not licensed therapists." },
   { q: "Can I cancel my subscription anytime?", a: "Yes, you can cancel at any time. If you cancel, you keep access until the end of your billing period with no questions asked." },
 ];
 

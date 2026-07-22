@@ -1,13 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { use, useState, useMemo, useCallback } from "react";
-import { courses, courseLessons } from "@/lib/mockData";
-import { notFound } from "next/navigation";
+import { use, useState, useEffect, useMemo, useCallback } from "react";
 import QuizLesson from "@/components/dashboard/QuizLesson";
 import ReflectionLesson from "@/components/dashboard/ReflectionLesson";
 import ExerciseLesson from "@/components/dashboard/ExerciseLesson";
 import AudioLesson from "@/components/dashboard/AudioLesson";
+import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
+
+type LessonType = "video" | "quiz" | "reflection" | "exercise" | "audio";
+type QuizQuestion = { q: string; options: string[]; correct: number; explanation: string };
+type Lesson = {
+  id: string; module: string; title: string; duration: string; type: LessonType;
+  videoUrl?: string | null; audioUrl?: string | null;
+  questions?: QuizQuestion[]; prompt?: string; exerciseType?:
+    | "breathing" | "bodyscan" | "gratitude" | "grounding"
+    | "pmr" | "boxbreathing" | "reframe" | "values" | "feelingswheel"
+    | "worryjar" | "lovingkindness" | "cbttriangle" | "urgesurf" | "selfcompassion";
+};
+type Course = {
+  id: string; title: string; instructor: string; category: string; level: string;
+  duration: string; enrolled: number; rating: number; thumbnail: string; color: string; description: string;
+};
 
 const TYPE_ICON: Record<string, string> = { video: "▶", quiz: "❓", reflection: "📝", exercise: "🌬️", audio: "🎧" };
 const TYPE_LABEL: Record<string, string> = { video: "Video Lesson", quiz: "Knowledge Check", reflection: "Reflection", exercise: "Exercise", audio: "Guided Audio" };
@@ -27,25 +41,39 @@ const HEADER_COLOR: Record<string, string> = {
 };
 
 export default function CoursePage({ params }: { params: Promise<{ id: string }> }) {
+  const checkAchievements = useAchievementCheck();
   const { id } = use(params);
-  const course = courses.find((c) => c.id === id);
-  if (!course) notFound();
 
-  const lessons = courseLessons[id] ?? [];
-
-  const [activeLessonId, setActiveLessonId] = useState(
-    lessons.find((l) => !l.completed)?.id ?? lessons[0]?.id
-  );
-  const [completedIds, setCompletedIds] = useState<Set<string>>(
-    () => new Set(lessons.filter((l) => l.completed).map((l) => l.id))
-  );
+  const [course, setCourse] = useState<Course | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [activeLessonId, setActiveLessonId] = useState<string | undefined>(undefined);
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [sidebarTab, setSidebarTab] = useState<"lessons" | "overview">("lessons");
-  const [drawerOpen, setDrawerOpen] = useState(false); // mobile lesson drawer
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/courses/${id}`).then((r) => (r.ok ? r.json() : Promise.reject())),
+      fetch(`/api/progress?courseId=${id}`).then((r) => (r.ok ? r.json() : { completedLessonIds: [] })),
+    ])
+      .then(([courseData, progressData]) => {
+        setCourse(courseData.course);
+        setLessons(courseData.lessons ?? []);
+        const completed: Set<string> = new Set(progressData.completedLessonIds ?? []);
+        setCompletedIds(completed);
+        const firstIncomplete = (courseData.lessons ?? []).find((l: Lesson) => !completed.has(l.id));
+        setActiveLessonId(firstIncomplete?.id ?? courseData.lessons?.[0]?.id);
+      })
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false));
+  }, [id]);
 
   const activeLesson = lessons.find((l) => l.id === activeLessonId);
 
   const modules = useMemo(() => {
-    const map = new Map<string, typeof lessons>();
+    const map = new Map<string, Lesson[]>();
     for (const l of lessons) {
       if (!map.has(l.module)) map.set(l.module, []);
       map.get(l.module)!.push(l);
@@ -56,20 +84,35 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
   const markComplete = useCallback(async () => {
     if (!activeLessonId || !activeLesson) return;
     setCompletedIds((prev) => new Set([...prev, activeLessonId]));
-    // POST to API
     fetch("/api/progress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lessonId: activeLessonId, courseId: id, completed: true }),
-    }).catch(() => {});
-    // Auto-advance
+    }).then(() => checkAchievements()).catch(() => {});
     const idx = lessons.findIndex((l) => l.id === activeLessonId);
     const next = lessons.slice(idx + 1).find((l) => !completedIds.has(l.id) && l.id !== activeLessonId);
     if (next) setActiveLessonId(next.id);
-  }, [activeLessonId, activeLesson, completedIds, id, lessons]);
+  }, [activeLessonId, activeLesson, completedIds, id, lessons, checkAchievements]);
 
   const completedCount = completedIds.size;
   const progress = Math.round((completedCount / Math.max(lessons.length, 1)) * 100);
+
+  if (loading) {
+    return <div className="max-w-7xl mx-auto animate-pulse h-96 bg-white rounded-3xl border border-stone-100" />;
+  }
+
+  if (notFound || !course) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <Link href="/dashboard/courses" className="inline-flex items-center gap-1.5 text-stone-500 text-sm mb-4 hover:text-sage-700 transition-colors">
+          ← Back to Courses
+        </Link>
+        <div className="bg-white rounded-3xl border border-stone-100 p-12 text-center text-stone-400 text-sm">
+          Course not found.
+        </div>
+      </div>
+    );
+  }
 
   // Lesson list content (shared between sidebar + mobile drawer)
   const LessonList = (
@@ -169,32 +212,19 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
 
               {activeLesson?.type === "video" && (
                 <div>
-                  <div className="bg-sage-800 rounded-2xl overflow-hidden mb-4">
-                    <div className="aspect-video flex items-center justify-center">
-                      <div className="text-center text-white px-4">
-                        <div className="text-6xl md:text-7xl mb-4">{course.thumbnail}</div>
-                        <h2 className="text-base md:text-lg font-semibold mb-1 line-clamp-2">{activeLesson.title}</h2>
-                        <p className="text-sage-300 text-sm">{activeLesson.duration}</p>
-                        <button className="mt-5 w-14 h-14 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors mx-auto">
-                          <span className="text-2xl ml-1">▶</span>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="px-5 pb-4 pt-2">
-                      <div className="w-full bg-sage-600 rounded-full h-1 mb-2 cursor-pointer">
-                        <div className="bg-amber-400 h-1 rounded-full w-1/3" />
-                      </div>
-                      <div className="flex items-center justify-between text-sage-300 text-xs">
-                        <div className="flex items-center gap-3">
-                          <button>⏮</button>
-                          <button className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center">▶</button>
-                          <button>⏭</button>
-                          <span>3:24 / {activeLesson.duration}</span>
+                  {activeLesson.videoUrl ? (
+                    <video controls src={activeLesson.videoUrl} className="w-full rounded-2xl mb-4 bg-black" />
+                  ) : (
+                    <div className="bg-sage-800 rounded-2xl overflow-hidden mb-4">
+                      <div className="aspect-video flex items-center justify-center">
+                        <div className="text-center text-white px-4">
+                          <div className="text-6xl md:text-7xl mb-4">{course.thumbnail}</div>
+                          <h2 className="text-base md:text-lg font-semibold mb-1 line-clamp-2">{activeLesson.title}</h2>
+                          <p className="text-sage-300 text-sm">Video coming soon</p>
                         </div>
-                        <div className="flex gap-3"><button>1x</button><button>⛶</button></div>
                       </div>
                     </div>
-                  </div>
+                  )}
                   {!completedIds.has(activeLesson.id) ? (
                     <button onClick={markComplete} className="w-full bg-sage-700 text-white font-semibold py-3 rounded-xl hover:bg-sage-800 transition-colors text-sm">
                       Mark as Complete & Continue →
@@ -215,7 +245,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                 <ExerciseLesson title={activeLesson.title} exerciseType={activeLesson.exerciseType} onComplete={markComplete} />
               )}
               {activeLesson?.type === "audio" && (
-                <AudioLesson title={activeLesson.title} duration={activeLesson.duration} onComplete={markComplete} />
+                <AudioLesson title={activeLesson.title} duration={activeLesson.duration} audioUrl={activeLesson.audioUrl} onComplete={markComplete} />
               )}
             </div>
           </div>

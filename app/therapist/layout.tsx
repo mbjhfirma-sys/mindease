@@ -1,9 +1,10 @@
 import TherapistHeader from "@/components/therapist/TherapistHeader";
 import TherapistSidebar from "@/components/therapist/TherapistSidebar";
+import OnboardingTour from "@/components/OnboardingTour";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Therapist Portal — MindEase Pro",
+  title: "Therapist Portal — YouMindo Pro",
 };
 
 export default function TherapistLayout({ children }: { children: React.ReactNode }) {
@@ -16,6 +17,8 @@ export default function TherapistLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+
+      <OnboardingTour />
     </div>
   );
 }

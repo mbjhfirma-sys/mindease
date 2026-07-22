@@ -38,3 +38,50 @@ body {
 html {
   scroll-behavior: smooth;
 }
+
+/* ── Onboarding tour ─────────────────────────────────────────────────────── */
+
+@keyframes tour-panel-in {
+  0%   { opacity: 0; transform: translateY(20px) scale(0.94); }
+  60%  { opacity: 1; transform: translateY(-3px) scale(1.015); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-tour-panel-in {
+  animation: tour-panel-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes tour-icon-pop {
+  0%   { opacity: 0; transform: scale(0.5) rotate(-10deg); }
+  70%  { opacity: 1; transform: scale(1.1) rotate(4deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.animate-tour-icon-pop {
+  animation: tour-icon-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tour-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(82, 183, 136, 0.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(82, 183, 136, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(82, 183, 136, 0); }
+}
+.animate-tour-pulse {
+  animation: tour-pulse-ring 1.8s ease-out infinite;
+}
+
+@keyframes confetti-fall {
+  0%   { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(720deg); opacity: 0.9; }
+}
+.animate-confetti-fall {
+  animation-name: confetti-fall;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  animation-fill-mode: forwards;
+}
+
+@keyframes tour-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-tour-fade-in {
+  animation: tour-fade-in 0.3s ease-out;
+}

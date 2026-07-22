@@ -3,21 +3,60 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PROFESSION_TYPES } from "@/lib/professionTypes";
+import Logo from "@/components/Logo";
+
+type Role = "CLIENT" | "THERAPIST";
+
+const ROLE_OPTIONS: { role: Role; emoji: string; label: string; sub: string }[] = [
+  { role: "CLIENT",    emoji: "🌱", label: "I'm here for support",          sub: "Access therapy, courses & tools" },
+  { role: "THERAPIST", emoji: "🩺", label: "I'm a mental health professional", sub: "Manage clients & sessions" },
+];
+
+const LEFT_PANEL: Record<Role, { emoji: string; heading: string; body: string; bullets: string[] }> = {
+  CLIENT: {
+    emoji: "🌱",
+    heading: "Your mental health journey starts here",
+    body: "Join 50,000+ members building healthier habits with expert-led courses and compassionate support.",
+    bullets: [
+      "Access 3 courses free — no card needed",
+      "Evidence-based content from licensed professionals",
+      "Cancel or upgrade at any time",
+    ],
+  },
+  THERAPIST: {
+    emoji: "🩺",
+    heading: "Grow your practice with YouMindo",
+    body: "Join hundreds of licensed professionals delivering evidence-based care through our secure platform.",
+    bullets: [
+      "Manage clients, sessions & progress in one place",
+      "Assign personalised daily missions & journaling",
+      "HIPAA-aligned, secure & fully encrypted",
+    ],
+  },
+};
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [role,      setRole]      = useState<Role>("CLIENT");
   const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [agreed, setAgreed] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [lastName,  setLastName]  = useState("");
+  const [email,     setEmail]     = useState("");
+  const [password,  setPassword]  = useState("");
+  const [title,         setTitle]         = useState("");
+  const [professionType, setProfessionType] = useState("");
+  const [therapistCode, setTherapistCode] = useState("");
+  const [agreed,        setAgreed]        = useState(false);
+  const [error,     setError]     = useState("");
+  const [loading,   setLoading]   = useState(false);
+
+  const panel = LEFT_PANEL[role];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!agreed) { setError("Please accept the Terms of Service to continue."); return; }
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (role === "THERAPIST" && !professionType) { setError("Please select your profession."); return; }
 
     setError("");
     setLoading(true);
@@ -29,7 +68,9 @@ export default function RegisterPage() {
         name: `${firstName.trim()} ${lastName.trim()}`.trim(),
         email,
         password,
-        role: "CLIENT",
+        role,
+        ...(role === "THERAPIST" && title.trim() ? { title: title.trim() } : {}),
+        ...(role === "THERAPIST" ? { therapistCode, professionType } : {}),
       }),
     });
 
@@ -41,31 +82,22 @@ export default function RegisterPage() {
       return;
     }
 
-    router.push("/login?registered=1");
+    router.push(data.pendingReview ? "/login?registered=1&pending=1" : "/login?registered=1");
   }
 
   return (
     <div className="min-h-screen bg-cream flex">
       {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-sage-700 flex-col justify-between p-12 text-white">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-lg">
-          <span className="w-8 h-8 bg-sage-500 rounded-lg flex items-center justify-center text-sm">🌿</span>
-          MindEase
+      <div className="hidden lg:flex lg:w-1/2 bg-sage-700 flex-col justify-between p-12 text-white transition-all duration-300">
+        <Link href="/" className="flex items-center">
+          <Logo variant="white" height={26} />
         </Link>
         <div>
-          <div className="text-5xl mb-6">🌱</div>
-          <h2 className="text-3xl font-bold mb-4 leading-snug">
-            Your mental health journey starts here
-          </h2>
-          <p className="text-sage-200 leading-relaxed mb-8">
-            Join 50,000+ members building healthier habits with expert-led courses and compassionate support.
-          </p>
+          <div className="text-5xl mb-6">{panel.emoji}</div>
+          <h2 className="text-3xl font-bold mb-4 leading-snug">{panel.heading}</h2>
+          <p className="text-sage-200 leading-relaxed mb-8">{panel.body}</p>
           <div className="space-y-3">
-            {[
-              "Access 3 courses free — no card needed",
-              "Evidence-based content from licensed professionals",
-              "Cancel or upgrade at any time",
-            ].map((b) => (
+            {panel.bullets.map((b) => (
               <div key={b} className="flex items-center gap-3 text-sm text-sage-100">
                 <div className="w-5 h-5 bg-sage-500 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</div>
                 {b}
@@ -73,19 +105,40 @@ export default function RegisterPage() {
             ))}
           </div>
         </div>
-        <p className="text-sage-400 text-sm">© 2025 MindEase</p>
+        <p className="text-sage-400 text-sm">© 2025 YouMindo</p>
       </div>
 
       {/* Right panel */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
-          <Link href="/" className="lg:hidden flex items-center gap-2 font-semibold text-sage-800 mb-8">
-            <span className="w-7 h-7 bg-sage-700 rounded-md flex items-center justify-center text-white text-xs">🌿</span>
-            MindEase
+          <Link href="/" className="lg:hidden flex items-center mb-8">
+            <Logo height={24} />
           </Link>
 
           <h1 className="text-2xl font-bold text-stone-900 mb-1">Create your account</h1>
-          <p className="text-stone-500 text-sm mb-8">Free forever — no credit card required</p>
+          <p className="text-stone-500 text-sm mb-6">Free to join — no credit card required</p>
+
+          {/* Role selector */}
+          <div className="grid grid-cols-2 gap-2 mb-6">
+            {ROLE_OPTIONS.map(({ role: r, emoji, label, sub }) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRole(r)}
+                className={`flex flex-col items-start gap-1 p-3.5 rounded-xl border-2 text-left transition-all ${
+                  role === r
+                    ? "border-sage-600 bg-sage-50"
+                    : "border-stone-200 hover:border-stone-300 bg-white"
+                }`}
+              >
+                <span className="text-xl">{emoji}</span>
+                <span className={`text-xs font-semibold leading-tight ${role === r ? "text-sage-800" : "text-stone-700"}`}>
+                  {label}
+                </span>
+                <span className="text-[10px] text-stone-400 leading-tight">{sub}</span>
+              </button>
+            ))}
+          </div>
 
           {error && (
             <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -118,6 +171,7 @@ export default function RegisterPage() {
                 />
               </div>
             </div>
+
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1.5">Email</label>
               <input
@@ -129,6 +183,7 @@ export default function RegisterPage() {
                 className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-sage-500 bg-white"
               />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1.5">Password</label>
               <input
@@ -141,6 +196,65 @@ export default function RegisterPage() {
                 className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-sage-500 bg-white"
               />
             </div>
+
+            {/* Therapist-only fields */}
+            {role === "THERAPIST" && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1.5">Profession</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PROFESSION_TYPES.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setProfessionType(p.id)}
+                        className={`flex flex-col items-start gap-0.5 p-2.5 rounded-xl border-2 text-left transition-all ${
+                          professionType === p.id
+                            ? "border-sage-600 bg-sage-50"
+                            : "border-stone-200 hover:border-stone-300 bg-white"
+                        }`}
+                      >
+                        <span className={`text-xs font-semibold leading-tight ${professionType === p.id ? "text-sage-800" : "text-stone-700"}`}>
+                          {p.label}
+                        </span>
+                        <span className="text-[10px] text-stone-400 leading-tight">{p.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                    Professional title
+                    <span className="ml-1 text-stone-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Licensed Clinical Psychologist"
+                    className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-sage-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                    Registration code
+                    <span className="ml-1 text-stone-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={therapistCode}
+                    onChange={(e) => setTherapistCode(e.target.value)}
+                    placeholder="Have a code from YouMindo? Enter it here"
+                    className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-sage-500 bg-white"
+                  />
+                  <p className="mt-1.5 text-xs text-stone-400 leading-relaxed">
+                    A code gives you instant access. No code? You can still sign up —
+                    our team will review your profile before you get full access.
+                  </p>
+                </div>
+              </>
+            )}
+
             <div className="flex items-start gap-2">
               <input
                 type="checkbox"
@@ -156,34 +270,21 @@ export default function RegisterPage() {
                 <a href="#" className="text-sage-700 underline">Privacy Policy</a>
               </label>
             </div>
+
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-sage-700 text-white font-semibold text-sm py-3 rounded-xl hover:bg-sage-800 transition-colors disabled:opacity-50"
             >
-              {loading ? "Creating account…" : "Create Free Account"}
+              {loading
+                ? "Creating account…"
+                : role === "THERAPIST"
+                ? "Create Professional Account"
+                : "Create Free Account"}
             </button>
           </form>
 
-          <div className="flex items-center gap-3 my-6">
-            <hr className="flex-1 border-stone-200" />
-            <span className="text-stone-400 text-xs">or sign up with</span>
-            <hr className="flex-1 border-stone-200" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {["Google", "Apple"].map((provider) => (
-              <button
-                key={provider}
-                type="button"
-                className="flex items-center justify-center gap-2 border border-stone-200 rounded-xl py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors"
-              >
-                {provider === "Google" ? "🔵" : "🍎"} {provider}
-              </button>
-            ))}
-          </div>
-
-          <p className="text-center text-stone-500 text-sm mt-8">
+          <p className="text-center text-stone-500 text-sm mt-6">
             Already have an account?{" "}
             <Link href="/login" className="text-sage-700 font-semibold hover:underline">
               Sign in

@@ -2,8 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "About Us — MindEase",
-  description: "We started MindEase because we believe mental health support should be accessible, personal, and human.",
+  title: "About Us — YouMindo",
+  description: "We started YouMindo because we believe mental health support should be accessible, personal, and human.",
 };
 
 const team = [
@@ -94,7 +94,7 @@ export default function AboutPage() {
             Mental health care that actually fits your life
           </h1>
           <p className="text-sage-200 text-lg leading-relaxed max-w-2xl mx-auto">
-            We started MindEase in 2021 because we kept hearing the same thing from therapists and clients alike: the system was broken. Waitlists were months long. Sessions were expensive. Progress happened once a week and was forgotten by the next.
+            We started YouMindo in 2021 because we kept hearing the same thing from therapists and clients alike: the system was broken. Waitlists were months long. Sessions were expensive. Progress happened once a week and was forgotten by the next.
           </p>
           <p className="text-sage-300 text-lg leading-relaxed max-w-2xl mx-auto mt-4">
             We believed you deserved support between sessions, not just during them.
@@ -116,7 +116,7 @@ export default function AboutPage() {
                   She teamed up with Marcus Webb, who'd spent years building wellness tech, to answer one question: <em className="text-stone-800 not-italic font-medium">"What if the support didn't stop when the session ended?"</em>
                 </p>
                 <p>
-                  MindEase launched in private beta in 2021. Within six months, 50 therapists had joined the network. Within a year, 50,000 people were using it every day. Today we support over 280,000 people across 34 countries.
+                  YouMindo launched in private beta in 2021. Within six months, 50 therapists had joined the network. Within a year, 50,000 people were using it every day. Today we support over 280,000 people across 34 countries.
                 </p>
               </div>
             </div>
@@ -209,7 +209,7 @@ export default function AboutPage() {
         <div className="max-w-4xl mx-auto px-6 py-20 text-center">
           <h2 className="text-2xl font-bold mb-4">Backed by a clinical advisory board</h2>
           <p className="text-sage-200 text-[15px] leading-relaxed max-w-2xl mx-auto mb-8">
-            Everything on MindEase is reviewed by our Clinical Advisory Board — senior practitioners and researchers from Oxford, Johns Hopkins, and the University of Melbourne — before it reaches users.
+            Everything on YouMindo is reviewed by our Clinical Advisory Board — senior practitioners and researchers from Oxford, Johns Hopkins, and the University of Melbourne — before it reaches users.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             {["Oxford University", "Johns Hopkins", "Univ. of Melbourne", "NHS Digital", "APA Member"].map((org) => (

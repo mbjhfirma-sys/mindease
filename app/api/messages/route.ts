@@ -17,6 +17,7 @@ export async function GET() {
       client: { select: { id: true, name: true, avatar: true, role: true } },
       therapist: { include: { user: { select: { id: true, name: true, avatar: true } } } },
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      _count: { select: { messages: { where: { read: false, fromUserId: { not: userId } } } } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -24,9 +25,10 @@ export async function GET() {
   const formatted = conversations.map((c) => {
     const other = userRole === "THERAPIST" ? c.client : c.therapist.user;
     const lastMsg = c.messages[0];
-    const unread = 0;
+    const unread = c._count.messages;
     return {
       id: c.id,
+      otherId: other.id,
       sender: other.name,
       avatar: other.avatar ?? other.name.slice(0, 2).toUpperCase(),
       role: userRole === "THERAPIST" ? "Client" : "Therapist",

@@ -83,6 +83,16 @@ export async function POST(
   const parsed = inviteSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
+  const ownedClients = await db.user.findMany({
+    where: { id: { in: parsed.data.clientIds }, therapistId: therapistId },
+    select: { id: true },
+  });
+  const ownedClientIds = new Set(ownedClients.map((c) => c.id));
+  const invalidIds = parsed.data.clientIds.filter((cid) => !ownedClientIds.has(cid));
+  if (invalidIds.length > 0) {
+    return NextResponse.json({ error: "Some users are not your clients" }, { status: 403 });
+  }
+
   await db.$transaction(
     parsed.data.clientIds.map((clientId) =>
       db.therapistGroupInvite.upsert({

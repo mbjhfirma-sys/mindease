@@ -26,7 +26,7 @@ const AI_RESPONSES: Record<string, string> = {
   "Help me set a mental wellness goal":
     "Setting a clear goal is a meaningful step. The most effective goals are specific and measurable.\n\nA few questions:\n\n1. Which area do you most want to improve? (sleep, anxiety, mood, stress, relationships)\n2. What's one small thing you could do daily in that area?\n3. How will you know when you've made progress?\n\nFor example, rather than 'I want to be less anxious', a strong goal might be: 'I will practise one 5-minute breathing exercise every morning for two weeks.'\n\nWhat area shall we focus on?",
   "Recommend resources for anxiety":
-    "Here are some evidence-based resources for anxiety:\n\n**On MindEase:**\n- Understanding Anxiety course (Dr. Michael Torres)\n- Daily breathing exercises in your missions\n- CBT worksheets in Resources\n\n**Recommended reading:**\n- Dare by Barry McDonagh\n- The Anxiety & Worry Workbook by Clark & Beck\n\n**Audio on MindEase:**\n- Safe Place Visualisation (14 min)\n- Progressive Muscle Relaxation (18 min)\n\nWould you like me to open any of these, or would you like a personalised recommendation based on what you're experiencing?",
+    "Here are some evidence-based resources for anxiety:\n\n**On YouMindo:**\n- Understanding Anxiety course (Dr. Michael Torres)\n- Daily breathing exercises in your missions\n- CBT worksheets in Resources\n\n**Recommended reading:**\n- Dare by Barry McDonagh\n- The Anxiety & Worry Workbook by Clark & Beck\n\n**Audio on YouMindo:**\n- Safe Place Visualisation (14 min)\n- Progressive Muscle Relaxation (18 min)\n\nWould you like me to open any of these, or would you like a personalised recommendation based on what you're experiencing?",
 };
 
 function getTime() {
