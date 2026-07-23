@@ -40,6 +40,21 @@ function pickDailyMissions<T extends { id: string }>(pool: T[], userId: string):
   return shuffled.slice(0, DAILY_COUNT);
 }
 
+type DefaultMission = typeof DEFAULT_MISSIONS[number];
+
+// Clients must always see exactly `count` tasks. Therapist-assigned/pool
+// missions take priority and are shown first; if there are fewer than
+// `count` of them, fill the remainder with the deterministic daily default
+// rotation (never duplicating an ID already present).
+function padWithDefaults<T extends { id: string }>(existing: T[], userId: string, count: number): (T | DefaultMission)[] {
+  if (existing.length >= count) return existing.slice(0, count);
+  const existingIds = new Set(existing.map((m) => m.id));
+  const seed = hashSeed(`${userId}-${todayDayNumber()}`);
+  const shuffledDefaults = seededShuffle(DEFAULT_MISSIONS, seed);
+  const fillers = shuffledDefaults.filter((m) => !existingIds.has(m.id)).slice(0, count - existing.length);
+  return [...existing, ...fillers];
+}
+
 const completeSchema = z.object({
   missionId: z.string(),
   responseData: z.record(z.string(), z.any()).optional(),
@@ -83,6 +98,7 @@ export async function GET() {
     const personalAssignments = await db.missionAssignment.findMany({
       where: { clientId: userId },
       include: { mission: true },
+      orderBy: { assignedAt: "asc" },
     });
 
     let poolRaw: typeof personalAssignments[number]["mission"][];
@@ -115,10 +131,16 @@ export async function GET() {
       }
     }
 
-    // Pick today's daily set
-    const dailyPool = (personalAssignments.length > 0 || !usingDefaults)
-      ? poolRaw.slice(0, DAILY_COUNT)
-      : pickDailyMissions(DEFAULT_MISSIONS, userId);
+    // Pick today's daily set — always exactly DAILY_COUNT. Assigned/pool
+    // missions are shown first; if there are fewer than DAILY_COUNT of them,
+    // top up with the default rotation so the count never drops below 5.
+    let dailyPool: (typeof poolRaw[number] | DefaultMission)[];
+    if (personalAssignments.length > 0 || !usingDefaults) {
+      if (poolRaw.length < DAILY_COUNT) await ensureDefaultMissionsExist();
+      dailyPool = padWithDefaults(poolRaw, userId, DAILY_COUNT);
+    } else {
+      dailyPool = pickDailyMissions(DEFAULT_MISSIONS, userId);
+    }
 
     const dailyIds = new Set(dailyPool.map((m) => m.id));
 

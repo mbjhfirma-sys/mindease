@@ -2,17 +2,26 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { ChevronDown } from "lucide-react";
 import Logo from "./Logo";
 
+const services = [
+  { href: "/mindfulness-meditation", label: "Mindfulness & Meditation" },
+  { href: "/therapy", label: "One-on-One Therapy" },
+  { href: "/coaching", label: "Wellness Coaching" },
+  { href: "/courses", label: "Courses" },
+];
+
 const links = [
-  { href: "/", label: "Home" },
   { href: "/pricing", label: "Pricing" },
   { href: "/stories", label: "Stories" },
+  { href: "/blog", label: "Blog" },
   { href: "/resources", label: "Resources" },
 ];
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const [servicesOpen, setServicesOpen] = useState(false);
 
   // Lock body scroll while drawer is open
   useEffect(() => {
@@ -31,6 +40,25 @@ export default function Navbar() {
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-8">
+            <div className="relative group">
+              <button className="flex items-center gap-1 text-stone-600 hover:text-sage-700 text-sm font-medium transition-colors py-2 -my-2">
+                Services
+                <ChevronDown size={14} className="transition-transform duration-150 group-hover:rotate-180" />
+              </button>
+              <div className="absolute left-0 top-full pt-3 opacity-0 invisible translate-y-1 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-150">
+                <div className="bg-white rounded-xl shadow-lg border border-stone-100 py-2 w-60">
+                  {services.map((s) => (
+                    <Link
+                      key={s.href}
+                      href={s.href}
+                      className="block px-4 py-2.5 text-sm text-stone-600 hover:bg-sage-50 hover:text-sage-700 transition-colors"
+                    >
+                      {s.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
             {links.map((l) => (
               <Link key={l.href} href={l.href} className="text-stone-600 hover:text-sage-700 text-sm font-medium transition-colors">
                 {l.label}
@@ -88,6 +116,27 @@ export default function Navbar() {
 
         {/* Drawer links */}
         <div className="flex flex-col px-4 py-6 gap-1 flex-1">
+          <button
+            onClick={() => setServicesOpen((v) => !v)}
+            className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl text-stone-700 font-medium hover:bg-stone-50 hover:text-sage-700 transition-colors"
+          >
+            Services
+            <ChevronDown size={16} className={`transition-transform duration-200 ${servicesOpen ? "rotate-180" : ""}`} />
+          </button>
+          {servicesOpen && (
+            <div className="flex flex-col gap-1 pb-2">
+              {services.map((s) => (
+                <Link
+                  key={s.href}
+                  href={s.href}
+                  onClick={() => setOpen(false)}
+                  className="px-3 py-2.5 pl-7 rounded-xl text-stone-500 text-sm hover:bg-stone-50 hover:text-sage-700 transition-colors"
+                >
+                  {s.label}
+                </Link>
+              ))}
+            </div>
+          )}
           {links.map((l) => (
             <Link
               key={l.href}

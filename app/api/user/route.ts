@@ -37,6 +37,7 @@ const patchSchema = z.object({
   notificationPrefs: notificationPrefsSchema.optional(),
   privacyPrefs:      privacyPrefsSchema.optional(),
   hasOnboarded:      z.boolean().optional(),
+  hasSeenClientTour: z.boolean().optional(),
   peerMatchingOptIn: z.boolean().optional(),
 });
 
@@ -67,8 +68,8 @@ export async function GET() {
       where: { id: session.user.id },
       select: {
         id: true, name: true, email: true, role: true, avatar: true,
-        plan: true, phone: true, dob: true, timezone: true, language: true,
-        createdAt: true, clientCode: true, hasOnboarded: true,
+        plan: true, phone: true, dob: true, timezone: true, language: true, xp: true, level: true,
+        createdAt: true, clientCode: true, hasOnboarded: true, hasSeenClientTour: true,
         notificationPrefs: true, privacyPrefs: true, twoFactorEnabled: true, peerMatchingOptIn: true,
         assignedTherapist: {
           include: { user: { select: { name: true, avatar: true } } },
@@ -155,7 +156,7 @@ export async function PATCH(req: NextRequest) {
     select: {
       id: true, name: true, email: true, role: true, avatar: true,
       plan: true, phone: true, dob: true, timezone: true, language: true,
-      notificationPrefs: true, privacyPrefs: true, hasOnboarded: true, peerMatchingOptIn: true,
+      notificationPrefs: true, privacyPrefs: true, hasOnboarded: true, hasSeenClientTour: true, peerMatchingOptIn: true,
     },
   });
 

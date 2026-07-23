@@ -30,6 +30,14 @@
   box-sizing: border-box;
 }
 
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 body {
   background-color: var(--color-cream);
   color: var(--color-stone-800);

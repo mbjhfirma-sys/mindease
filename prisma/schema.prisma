@@ -33,6 +33,7 @@ model User {
   twoFactorFailedAttempts      Int                           @default(0)
   twoFactorLockedUntil         DateTime?
   hasOnboarded                 Boolean                       @default(false)
+  hasSeenClientTour            Boolean                       @default(true)
   peerMatchingOptIn            Boolean                       @default(false)
   lastDailyReminderSentAt      DateTime?
   lastMissionReminderSentAt    DateTime?

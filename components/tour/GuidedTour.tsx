@@ -2,93 +2,28 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Users, ClipboardList,
-  CalendarDays, BarChart3, MessageCircle, Wrench, ChevronLeft, ChevronRight, PartyPopper,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, PartyPopper } from "lucide-react";
+import { THERAPIST_TOUR } from "./therapistTourSteps";
+import { CLIENT_TOUR } from "./clientTourSteps";
 
 type Phase = "welcome" | "tour" | "finish";
-
-type TourStep = {
-  Icon: React.ElementType;
-  title: string;
-  body: string;
-  accent: string;
-  route: string;
-  targetTour: string;
-};
-
-const THERAPIST_TOUR: TourStep[] = [
-  {
-    Icon: Users,
-    title: "Client Management",
-    body: "Every client's mood history, journal (if shared), and task progress lives here — everything you need before a session, at a glance.",
-    accent: "bg-sage-50 text-sage-700",
-    route: "/therapist/clients",
-    targetTour: "/therapist/clients",
-  },
-  {
-    Icon: Wrench,
-    title: "Task Builder",
-    body: "Assign real, interactive CBT, DBT, and ACT exercises from a library of 100 templates — clients complete them as guided in-app activities, not checkboxes.",
-    accent: "bg-amber-50 text-amber-700",
-    route: "/therapist/missions",
-    targetTour: "/therapist/missions",
-  },
-  {
-    Icon: CalendarDays,
-    title: "Scheduling",
-    body: "Confirm session requests, reschedule, and set your weekly availability — all from one calendar.",
-    accent: "bg-blue-50 text-blue-700",
-    route: "/therapist/appointments",
-    targetTour: "/therapist/appointments",
-  },
-  {
-    Icon: MessageCircle,
-    title: "Secure Messaging",
-    body: "Message any client directly — click Message on their profile and you'll land straight in that conversation.",
-    accent: "bg-pink-50 text-pink-700",
-    route: "/therapist/messages",
-    targetTour: "/therapist/messages",
-  },
-  {
-    Icon: ClipboardList,
-    title: "Community Groups",
-    body: "Create and moderate peer support spaces for your clients — pin what matters, moderate discussion.",
-    accent: "bg-teal-50 text-teal-700",
-    route: "/therapist/community",
-    targetTour: "/therapist/community",
-  },
-  {
-    Icon: BarChart3,
-    title: "Analytics",
-    body: "Engagement trends and treatment outcomes across your whole caseload, in one dashboard.",
-    accent: "bg-violet-50 text-violet-700",
-    route: "/therapist/analytics",
-    targetTour: "/therapist/analytics",
-  },
-];
 
 const CONFETTI_COLORS = ["#52B788", "#FBBF24", "#F4A261", "#7AACBE", "#D4A5A5", "#2D6A4F"];
 
 type ConfettiPiece = { id: number; left: number; delay: number; duration: number; color: string; rotate: number; size: number };
 
 function Confetti() {
-  const [pieces, setPieces] = useState<ConfettiPiece[]>([]);
-
-  useEffect(() => {
-    setPieces(
-      Array.from({ length: 42 }, (_, i) => ({
-        id: i,
-        left: Math.random() * 100,
-        delay: Math.random() * 0.5,
-        duration: 2 + Math.random() * 1.4,
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-        rotate: Math.round(Math.random() * 360),
-        size: 6 + Math.random() * 6,
-      }))
-    );
-  }, []);
+  const [pieces] = useState<ConfettiPiece[]>(() =>
+    Array.from({ length: 42 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 0.5,
+      duration: 2 + Math.random() * 1.4,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      rotate: Math.round(Math.random() * 360),
+      size: 6 + Math.random() * 6,
+    }))
+  );
 
   return (
     <div className="fixed inset-0 z-[210] pointer-events-none overflow-hidden">
@@ -111,8 +46,26 @@ function Confetti() {
   );
 }
 
-export default function OnboardingTour() {
+export type GuidedTourProps = {
+  /**
+   * Which tour content to show. Kept as a plain string (rather than accepting the
+   * step array as a prop) because these layouts are Server Components exporting
+   * `metadata`, and the step arrays hold live lucide-react icon component
+   * references — those aren't serializable across the server→client prop boundary.
+   */
+  variant: "therapist" | "client";
+  welcomeEmoji?: string;
+  welcomeBody: string;
+  finishBody: string;
+  finishCta?: string;
+};
+
+const STORAGE_FIELD = { therapist: "hasOnboarded", client: "hasSeenClientTour" } as const;
+
+export default function GuidedTour({ variant, welcomeEmoji = "🌿", welcomeBody, finishBody, finishCta = "Let's go" }: GuidedTourProps) {
   const router = useRouter();
+  const steps = variant === "therapist" ? THERAPIST_TOUR : CLIENT_TOUR;
+  const storageField = STORAGE_FIELD[variant];
   const [visible, setVisible] = useState(false);
   const [name, setName] = useState("");
   const [phase, setPhase] = useState<Phase>("welcome");
@@ -120,7 +73,6 @@ export default function OnboardingTour() {
   const [saving, setSaving] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
 
-  const steps = THERAPIST_TOUR;
   const totalSteps = steps.length + 2; // welcome + tour steps + finish
   const currentStepNumber = phase === "welcome" ? 1 : phase === "finish" ? totalSteps : tourIndex + 2;
 
@@ -129,10 +81,10 @@ export default function OnboardingTour() {
       .then((r) => r.json())
       .then((d) => {
         if (d.user?.name) setName(d.user.name.split(" ")[0]);
-        if (d.user && d.user.hasOnboarded === false) setVisible(true);
+        if (d.user && d.user[storageField] === false) setVisible(true);
       })
       .catch(() => {});
-  }, []);
+  }, [storageField]);
 
   // Navigate the real app to match the active tour step
   useEffect(() => {
@@ -149,12 +101,12 @@ export default function OnboardingTour() {
       await fetch("/api/user", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hasOnboarded: true }),
+        body: JSON.stringify({ [storageField]: true }),
       });
     } finally {
       setSaving(false);
     }
-  }, [saving]);
+  }, [saving, storageField]);
 
   const goFinish = useCallback(() => setPhase("finish"), []);
 
@@ -234,7 +186,7 @@ export default function OnboardingTour() {
             <div className="px-6 pt-10 pb-4 text-center">
               <div className="w-16 h-16 rounded-2xl bg-sage-50 flex items-center justify-center mx-auto mb-5 animate-tour-icon-pop">
                 {phase === "welcome" ? (
-                  <span className="text-3xl">🌿</span>
+                  <span className="text-3xl">{welcomeEmoji}</span>
                 ) : (
                   <PartyPopper size={28} className="text-sage-700" strokeWidth={1.5} />
                 )}
@@ -243,9 +195,7 @@ export default function OnboardingTour() {
                 {phase === "welcome" ? (name ? `Welcome, ${name}!` : "Welcome!") : "You're all set!"}
               </h2>
               <p className="text-sm text-stone-500 mt-2 leading-relaxed">
-                {phase === "welcome"
-                  ? "Let's take a quick, hands-on tour of your therapist portal — we'll walk through the real pages together."
-                  : "You know your way around now. Your clients are waiting — let's get to work."}
+                {phase === "welcome" ? welcomeBody : finishBody}
               </p>
             </div>
 
@@ -257,7 +207,7 @@ export default function OnboardingTour() {
               >
                 {phase === "welcome" ? (
                   <>Take the tour <ChevronRight size={15} /></>
-                ) : "Enter my portal"}
+                ) : finishCta}
               </button>
               {phase === "finish" && (
                 <button onClick={back} className="w-full text-xs text-stone-400 hover:text-stone-600 mt-3 transition-colors">
@@ -293,15 +243,16 @@ export default function OnboardingTour() {
 
           <div
             key={tourIndex}
-            className="fixed z-[203] bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm bg-white rounded-2xl shadow-2xl border border-stone-100 overflow-hidden animate-tour-panel-in"
+            data-testid="tour-panel"
+            className="fixed z-[203] bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm bg-white rounded-2xl shadow-2xl border border-stone-100 overflow-hidden animate-tour-panel-in max-h-[calc(100vh-2rem)] flex flex-col"
           >
-            <div className="h-1 bg-stone-100">
+            <div className="h-1 bg-stone-100 flex-shrink-0">
               <div
                 className="h-full bg-sage-600 transition-all duration-500 ease-out"
                 style={{ width: `${(currentStepNumber / totalSteps) * 100}%` }}
               />
             </div>
-            <div className="p-5">
+            <div className="p-5 overflow-y-auto">
               <div className="flex items-start gap-3.5">
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 animate-tour-icon-pop ${current.accent}`}>
                   <current.Icon size={20} strokeWidth={1.5} />
@@ -314,6 +265,12 @@ export default function OnboardingTour() {
                 </div>
               </div>
               <p className="text-sm text-stone-500 mt-3 leading-relaxed">{current.body}</p>
+
+              {current.Extra && (
+                <div className="mt-3.5">
+                  <current.Extra />
+                </div>
+              )}
 
               <div className="flex items-center gap-2 mt-4">
                 <button

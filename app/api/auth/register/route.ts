@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const user = await db.user.create({
-      data: { name, email, password: hashed, role },
+      data: { name, email, password: hashed, role, hasSeenClientTour: role === "CLIENT" ? false : undefined },
       select: { id: true, name: true, email: true, role: true },
     });
 

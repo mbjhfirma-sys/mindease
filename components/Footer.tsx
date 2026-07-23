@@ -27,7 +27,7 @@ export default function Footer() {
           <div>
             <h4 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Services</h4>
             <ul className="space-y-2.5">
-              {[["Mindfulness & Meditation", "/mindfulness-meditation"], ["One-on-One Therapy", "/therapy"], ["Wellness Coaching", "/coaching"], ["Pricing", "/pricing"], ["Stories", "/stories"], ["Resources", "/resources"], ["Dashboard", "/dashboard"]].map(([label, href]) => (
+              {[["Mindfulness & Meditation", "/mindfulness-meditation"], ["One-on-One Therapy", "/therapy"], ["Wellness Coaching", "/coaching"], ["Courses", "/courses"], ["Pricing", "/pricing"], ["Stories", "/stories"], ["Resources", "/resources"], ["Dashboard", "/dashboard"]].map(([label, href]) => (
                 <li key={label}>
                   <Link href={href} className="text-sage-300 hover:text-white text-sm transition-colors">{label}</Link>
                 </li>

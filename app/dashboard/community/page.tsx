@@ -414,12 +414,12 @@ export default function CommunityPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex border-b border-stone-100">
+      <div className="flex overflow-x-auto scrollbar-none border-b border-stone-100">
         {(["feed", "groups", "challenges", "peers"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px flex-shrink-0 whitespace-nowrap ${
               tab === t
                 ? "border-stone-900 text-stone-900"
                 : "border-transparent text-stone-500 hover:text-stone-700"
@@ -515,7 +515,7 @@ export default function CommunityPage() {
           {filteredPosts.length === 0 && (
             joinedGroups.length === 0 ? (
               <div className="bg-white border border-stone-100 rounded-xl p-8 text-center">
-                <p className="text-sm font-medium text-stone-700 mb-1">You haven't joined any groups yet</p>
+                <p className="text-sm font-medium text-stone-700 mb-1">You haven&apos;t joined any groups yet</p>
                 <p className="text-xs text-stone-400 mb-4">Join a group to see posts and connect with others.</p>
                 <button
                   onClick={() => setTab("groups")}
