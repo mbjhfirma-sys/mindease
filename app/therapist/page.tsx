@@ -20,6 +20,8 @@ type RiskFlag = {
   severity: "high" | "moderate"; detail: string; createdAt: string;
 };
 
+type MindoDigest = { id: string; clientId: string; clientName: string; digestText: string; createdAt: string };
+
 export default function TherapistOverview() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -32,6 +34,7 @@ export default function TherapistOverview() {
   const [userName,     setUserName]     = useState("Doctor");
   const [riskFlags,    setRiskFlags]    = useState<RiskFlag[]>([]);
   const [ackBusyId,    setAckBusyId]    = useState<string | null>(null);
+  const [mindoDigests, setMindoDigests] = useState<MindoDigest[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -39,11 +42,13 @@ export default function TherapistOverview() {
       fetch("/api/appointments").then((r) => r.json()),
       fetch("/api/user").then((r) => r.json()),
       fetch("/api/therapist/risk-flags").then((r) => r.json()),
-    ]).then(([cData, aData, uData, rData]) => {
+      fetch("/api/mindo/digests/recent").then((r) => r.json()).catch(() => ({})),
+    ]).then(([cData, aData, uData, rData, mData]) => {
       setClients(cData.clients ?? []);
       setAppointments(aData.appointments ?? []);
       if (uData.user?.name) setUserName(uData.user.name);
       setRiskFlags(rData.flags ?? []);
+      setMindoDigests(mData.digests ?? []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -145,6 +150,31 @@ export default function TherapistOverview() {
           </div>
         )}
       </div>
+
+      {/* Mindo Digests */}
+      {mindoDigests.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-stone-900 mb-3">Mindo Digests</h2>
+          <div className="space-y-2">
+            {mindoDigests.map((d) => (
+              <Link
+                key={d.id}
+                href={`/therapist/clients/${d.clientId}?tab=insights`}
+                className="flex items-center gap-3 bg-white border border-stone-100 rounded-xl px-4 py-3 hover:border-stone-200 transition-colors"
+              >
+                <span className="text-lg flex-shrink-0">✨</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-stone-800">{d.clientName}</div>
+                  <div className="text-xs text-stone-500 mt-0.5 truncate">{d.digestText}</div>
+                </div>
+                <span className="text-xs text-stone-400 flex-shrink-0">
+                  {new Date(d.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Today's sessions */}

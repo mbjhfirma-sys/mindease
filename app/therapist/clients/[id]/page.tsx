@@ -5,8 +5,18 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { AGE_GROUPS } from "@/lib/ageGroups";
+import { AFFIRMING_CARE_TAGS } from "@/lib/affirmingCare";
 
-type Tab = "overview" | "journal" | "missions" | "notes" | "plan";
+type Tab = "overview" | "journal" | "missions" | "notes" | "plan" | "insights";
+
+type DigestFacts = {
+  completion: { assigned: number; completed: number; rate: number | null };
+  moodSummary: { avg: number | null; trend: string };
+  sleepMoodImpact: { moodDeltaOnPoorSleepDays: number | null; direction: string } | null;
+  lowestCompletionCategory: { activityType: string; rate: number } | null;
+  riskFlagsThisWeek: { severity: string; createdAt: string }[];
+};
+type DigestData = { enabled: boolean; digestText?: string; facts?: DigestFacts; weekStart?: string; journalIncluded?: boolean };
 
 type ApiJournalEntry = { id: string; title: string; content: string; mood: number; emotions: string[]; createdAt: string };
 type ApiMission = {
@@ -18,6 +28,8 @@ type ApiAssessmentResult = { id: string; assessmentId: string; score: number; la
 type ApiIntake = {
   concerns: string[]; languagePreference: string | null; genderPreference: string | null;
   ageRange: string | null; priorTherapyExperience: string | null; goals: string | null; modalityPreference: string | null;
+  affirmingCarePreferences: string[]; genderIdentity: string | null; preferredCommunication: string | null;
+  takingMedication: string | null; relationshipStatus: string | null;
 } | null;
 
 type ClientData = {
@@ -29,6 +41,14 @@ type ClientData = {
 
 const AGE_GROUP_LABELS: Record<string, string> = Object.fromEntries(AGE_GROUPS.map((g) => [g.id, g.label]));
 const PRIOR_EXPERIENCE_LABELS: Record<string, string> = { yes: "Yes", no: "No", unsure: "Not sure" };
+const AFFIRMING_CARE_LABELS: Record<string, string> = Object.fromEntries(AFFIRMING_CARE_TAGS.map((t) => [t.id, t.label]));
+const GENDER_IDENTITY_LABELS: Record<string, string> = { woman: "Woman", man: "Man", non_binary: "Non-binary", prefer_not_to_say: "Prefer not to say" };
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  single: "Single", relationship: "In a relationship", married: "Married",
+  divorced: "Divorced/Separated", widowed: "Widowed", prefer_not_to_say: "Prefer not to say",
+};
+const COMMUNICATION_LABELS: Record<string, string> = { video: "Video calls", messaging: "Messaging", both: "Both" };
+const MEDICATION_LABELS: Record<string, string> = { yes: "Yes", no: "No", prefer_not_to_say: "Prefer not to say" };
 
 const ASSESSMENT_TOOL_NAMES: Record<string, string> = {
   a1: "GAD-7", a2: "PHQ-9", a3: "CBI", a4: "PSS-10", a5: "ISI", a6: "WEMWBS",
@@ -133,6 +153,15 @@ function formatNoteDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric", year: "numeric",
   });
+}
+
+// `weekStart` is a plain "YYYY-MM-DD" calendar-day label, not an instant —
+// parsing it as an ISO string treats it as UTC midnight, which can render as
+// the wrong day once formatted in the browser's own local timezone. Construct
+// via the local-time constructor instead so display always matches the label.
+function formatDateKey(dateKey: string): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 const RESPONSE_FIELD_LABELS: Record<string, string> = {
@@ -335,6 +364,26 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       .then((d: { notes?: ApiClinicalNote[] }) => setNotes((d.notes ?? []).map(fromApiNote)));
   }, [id]);
 
+  const [digest, setDigest] = useState<DigestData | null>(null);
+  const [digestLoading, setDigestLoading] = useState(true);
+  useEffect(() => {
+    fetch(`/api/therapist/clients/${id}/digest`)
+      .then((r) => r.json())
+      .then((d: DigestData) => setDigest(d))
+      .catch(() => setDigest({ enabled: false }))
+      .finally(() => setDigestLoading(false));
+  }, [id]);
+
+  const [digestHistory, setDigestHistory] = useState<{ id: string; weekStart: string; digestText: string }[] | null>(null);
+  const [digestHistoryLoading, setDigestHistoryLoading] = useState(false);
+  function loadDigestHistory() {
+    setDigestHistoryLoading(true);
+    fetch(`/api/therapist/clients/${id}/digest/history`)
+      .then((r) => r.json())
+      .then((d: { digests?: { id: string; weekStart: string; digestText: string }[] }) => setDigestHistory(d.digests ?? []))
+      .finally(() => setDigestHistoryLoading(false));
+  }
+
   // Form state
   const [formDate, setFormDate] = useState(todayIso());
   const [formType, setFormType] = useState<SessionType>("individual");
@@ -520,7 +569,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
       {/* Tabs */}
       <div className="flex border-b border-stone-100 overflow-x-auto">
-        {(["overview", "journal", "missions", "notes", "plan"] as Tab[]).map((t) => (
+        {(["overview", "journal", "missions", "notes", "plan", "insights"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -528,7 +577,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               tab === t ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-700"
             }`}
           >
-            {t === "notes" ? `Clinical notes${notes.length > 0 ? ` (${notes.length})` : ""}` : t === "plan" ? "Treatment plan" : t}
+            {t === "notes" ? `Clinical notes${notes.length > 0 ? ` (${notes.length})` : ""}` : t === "plan" ? "Treatment plan" : t === "insights" ? "Mindo insights" : t}
           </button>
         ))}
       </div>
@@ -558,6 +607,22 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Modality pref.</div>
                   <div className="text-sm text-stone-700">{client.intake.modalityPreference && client.intake.modalityPreference !== "no_preference" ? client.intake.modalityPreference : "—"}</div>
                 </div>
+                <div>
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Gender identity</div>
+                  <div className="text-sm text-stone-700">{client.intake.genderIdentity ? GENDER_IDENTITY_LABELS[client.intake.genderIdentity] ?? client.intake.genderIdentity : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Relationship status</div>
+                  <div className="text-sm text-stone-700">{client.intake.relationshipStatus ? RELATIONSHIP_LABELS[client.intake.relationshipStatus] ?? client.intake.relationshipStatus : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Prefers to connect via</div>
+                  <div className="text-sm text-stone-700">{client.intake.preferredCommunication ? COMMUNICATION_LABELS[client.intake.preferredCommunication] ?? client.intake.preferredCommunication : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">On medication</div>
+                  <div className="text-sm text-stone-700">{client.intake.takingMedication ? MEDICATION_LABELS[client.intake.takingMedication] ?? client.intake.takingMedication : "—"}</div>
+                </div>
               </div>
               {client.intake.concerns.length > 0 && (
                 <div className="mb-4">
@@ -565,6 +630,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   <div className="flex flex-wrap gap-1.5">
                     {client.intake.concerns.map((c) => (
                       <span key={c} className="text-xs font-medium bg-stone-100 text-stone-700 px-2.5 py-1 rounded-full">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {client.intake.affirmingCarePreferences.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1.5">Looking for affirming care around</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {client.intake.affirmingCarePreferences.map((tag) => (
+                      <span key={tag} className="text-xs font-medium bg-sage-50 text-sage-800 px-2.5 py-1 rounded-full">{AFFIRMING_CARE_LABELS[tag] ?? tag}</span>
                     ))}
                   </div>
                 </div>
@@ -1582,6 +1657,95 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 {planSaving ? "Saving…" : "Save changes"}
               </button>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Mindo insights ── */}
+      {tab === "insights" && (
+        <div className="space-y-4">
+          {digestLoading ? (
+            <div className="animate-pulse space-y-3">
+              <div className="h-24 bg-stone-100 rounded-xl" />
+              <div className="h-32 bg-stone-100 rounded-xl" />
+            </div>
+          ) : !digest?.enabled ? (
+            <div className="bg-white border border-stone-100 rounded-xl px-5 py-10 text-center text-sm text-stone-400">
+              No Mindo digest available yet — either this client hasn&apos;t opted in to Mindo, or you&apos;ve turned off Mindo digests in your own settings.
+            </div>
+          ) : (
+            <>
+              <div className="bg-gradient-to-r from-sage-700 to-emerald-700 rounded-xl p-5 text-white">
+                <p className="text-xs font-medium text-sage-200 uppercase tracking-widest mb-1.5">
+                  Mindo weekly digest{digest.weekStart ? ` — week of ${formatDateKey(digest.weekStart)}` : ""}
+                </p>
+                <p className="text-sm leading-relaxed">{digest.digestText}</p>
+              </div>
+
+              {digest.facts && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="bg-white border border-stone-100 rounded-xl p-4">
+                    <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Assignment completion</div>
+                    <div className="text-lg font-semibold text-stone-900">
+                      {digest.facts.completion.rate !== null ? `${Math.round(digest.facts.completion.rate * 100)}%` : "—"}
+                    </div>
+                  </div>
+                  <div className="bg-white border border-stone-100 rounded-xl p-4">
+                    <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Mood this week</div>
+                    <div className="text-lg font-semibold text-stone-900">
+                      {digest.facts.moodSummary.avg !== null ? `${digest.facts.moodSummary.avg} avg` : "—"}
+                    </div>
+                    <div className="text-xs text-stone-400 capitalize">{digest.facts.moodSummary.trend.replace(/_/g, " ")}</div>
+                  </div>
+                  {digest.facts.sleepMoodImpact && digest.facts.sleepMoodImpact.moodDeltaOnPoorSleepDays !== null && (
+                    <div className="bg-white border border-stone-100 rounded-xl p-4">
+                      <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Sleep-mood link</div>
+                      <div className="text-lg font-semibold text-stone-900">{digest.facts.sleepMoodImpact.moodDeltaOnPoorSleepDays} pts</div>
+                      <div className="text-xs text-stone-400 capitalize">{digest.facts.sleepMoodImpact.direction.replace(/_/g, " ")}</div>
+                    </div>
+                  )}
+                  {digest.facts.lowestCompletionCategory && (
+                    <div className="bg-white border border-stone-100 rounded-xl p-4">
+                      <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Lowest completion</div>
+                      <div className="text-sm font-semibold text-stone-900 capitalize">{digest.facts.lowestCompletionCategory.activityType}</div>
+                      <div className="text-xs text-stone-400">{Math.round(digest.facts.lowestCompletionCategory.rate * 100)}% this week</div>
+                    </div>
+                  )}
+                  <div className="bg-white border border-stone-100 rounded-xl p-4">
+                    <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Risk flags this week</div>
+                    <div className={`text-lg font-semibold ${digest.facts.riskFlagsThisWeek.length > 0 ? "text-red-600" : "text-stone-900"}`}>
+                      {digest.facts.riskFlagsThisWeek.length}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-stone-400">
+                {digest.journalIncluded
+                  ? "This digest includes journal-derived signals (sleep quality) because the client has shared their journal with you."
+                  : "This client hasn't shared their journal with you, so sleep and journal-derived signals aren't included in this digest."}
+              </p>
+
+              <div className="pt-2 border-t border-stone-100">
+                {digestHistory === null ? (
+                  <button onClick={loadDigestHistory} disabled={digestHistoryLoading} className="text-xs font-medium text-stone-500 hover:text-stone-800 transition-colors disabled:opacity-50">
+                    {digestHistoryLoading ? "Loading…" : "View past digests"}
+                  </button>
+                ) : digestHistory.length <= 1 ? (
+                  <p className="text-xs text-stone-400">No earlier digests yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest">Past digests</div>
+                    {digestHistory.slice(1).map((d) => (
+                      <div key={d.id} className="bg-white border border-stone-100 rounded-lg px-3 py-2.5">
+                        <div className="text-[10px] font-medium text-stone-400 mb-0.5">Week of {formatDateKey(d.weekStart)}</div>
+                        <p className="text-xs text-stone-600">{d.digestText}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}

@@ -74,6 +74,9 @@ model User {
   waitlistEntries              WaitlistEntry[]
   backupCodes                  BackupCode[]
   clientIntake                 ClientIntake?
+  dailyBriefings               DailyBriefing[]
+  weeklyDigestsAsClient        WeeklyDigest[]                @relation("ClientWeeklyDigests")
+  mindoChatMessages            MindoChatMessage[]
 }
 
 model Therapist {
@@ -100,6 +103,8 @@ model Therapist {
   profileCompleted    Boolean                     @default(true)
   ageGroupsServed     String[]                    @default([])
   modalities          String[]                    @default([])
+  affirmingCareTags   String[]                    @default([])
+  mindoDigestsEnabled Boolean                     @default(true)
   createdAt           DateTime                    @default(now())
   appointments        Appointment[]               @relation("TherapistAppointments")
   conversations       Conversation[]              @relation("TherapistConversations")
@@ -112,6 +117,7 @@ model Therapist {
   courseEnrollments   CourseEnrollment[]
   availabilitySlots   AvailabilitySlot[]
   waitlistEntries     WaitlistEntry[]
+  weeklyDigests       WeeklyDigest[]
 }
 
 model MoodEntry {
@@ -215,21 +221,21 @@ model CourseProgress {
 }
 
 model Article {
-  id          String            @id @default(cuid())
-  slug        String            @unique
-  title       String
-  category    String
-  summary     String
-  readTime    String            @default("5 min")
-  icon        String            @default("📄")
-  color       String            @default("bg-sage-100")
-  tags        String[]          @default([])
-  published   Boolean           @default(true)
-  order       Int               @default(0)
-  blocks      Json
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  progress    ArticleProgress[]
+  id        String            @id @default(cuid())
+  slug      String            @unique
+  title     String
+  category  String
+  summary   String
+  readTime  String            @default("5 min")
+  icon      String            @default("📄")
+  color     String            @default("bg-sage-100")
+  tags      String[]          @default([])
+  published Boolean           @default(true)
+  order     Int               @default(0)
+  blocks    Json
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  progress  ArticleProgress[]
 
   @@index([category])
 }
@@ -356,6 +362,52 @@ model Achievement {
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, badgeId])
+}
+
+model DailyBriefing {
+  id            String   @id @default(cuid())
+  userId        String
+  date          String
+  briefingText  String
+  facts         Json
+  model         String
+  promptVersion Int      @default(1)
+  softened      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, createdAt])
+}
+
+model WeeklyDigest {
+  id              String    @id @default(cuid())
+  clientId        String
+  therapistId     String
+  weekStart       String
+  digestText      String
+  facts           Json
+  model           String
+  promptVersion   Int       @default(1)
+  journalIncluded Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  client          User      @relation("ClientWeeklyDigests", fields: [clientId], references: [id], onDelete: Cascade)
+  therapist       Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, therapistId, weekStart])
+  @@index([therapistId, createdAt])
+  @@index([clientId, createdAt])
+}
+
+model MindoChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model SupportGroup {
@@ -704,18 +756,23 @@ model BackupCode {
 }
 
 model ClientIntake {
-  id                     String   @id @default(cuid())
-  userId                 String   @unique
-  concerns               String[] @default([])
-  languagePreference     String?
-  genderPreference       String?
-  ageRange               String?
-  priorTherapyExperience String?
-  goals                  String?
-  modalityPreference     String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                       String   @id @default(cuid())
+  userId                   String   @unique
+  concerns                 String[] @default([])
+  languagePreference       String?
+  genderPreference         String?
+  ageRange                 String?
+  priorTherapyExperience   String?
+  goals                    String?
+  modalityPreference       String?
+  affirmingCarePreferences String[] @default([])
+  genderIdentity           String?
+  preferredCommunication   String?
+  takingMedication         String?
+  relationshipStatus       String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model CommunityReport {

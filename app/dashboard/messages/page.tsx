@@ -65,7 +65,7 @@ const YOUMINDO_WELCOME: Conversation = {
     },
     {
       from: "YouMindo",
-      text: "Here's what's waiting for you in your dashboard:\n\n🌿 Daily Tasks — guided wellness missions every day\n📊 Mood Tracking — understand your emotional patterns over time\n📝 Private Journal — a safe space to reflect and write freely\n🤖 Sage AI — mental health support available 24/7\n👥 Community — connect with others on similar journeys\n📚 Courses — evidence-based mental health content",
+      text: "Here's what's waiting for you in your dashboard:\n\n🌿 Daily Tasks — guided wellness missions every day\n📊 Mood Tracking — understand your emotional patterns over time\n📝 Private Journal — a safe space to reflect and write freely\n🤖 Mindo — mental health support available 24/7\n👥 Community — connect with others on similar journeys\n📚 Courses — evidence-based mental health content",
       time: "9:01 AM",
     },
     {

@@ -21,10 +21,13 @@ const notificationPrefsSchema = z.object({
 });
 
 const privacyPrefsSchema = z.object({
-  shareJournalWithTherapist: z.boolean().optional(),
-  showInLeaderboard:         z.boolean().optional(),
-  anonymousCommunity:        z.boolean().optional(),
-  dataForResearch:           z.boolean().optional(),
+  shareJournalWithTherapist:    z.boolean().optional(),
+  showInLeaderboard:            z.boolean().optional(),
+  anonymousCommunity:           z.boolean().optional(),
+  dataForResearch:              z.boolean().optional(),
+  mindoClientBriefingEnabled:   z.boolean().optional(),
+  mindoTherapistDigestEnabled:  z.boolean().optional(),
+  mindoIntroSeen:               z.boolean().optional(),
 });
 
 const patchSchema = z.object({
@@ -50,6 +53,7 @@ const DEFAULT_NOTIFICATION_PREFS = {
 const DEFAULT_PRIVACY_PREFS = {
   shareJournalWithTherapist: false, showInLeaderboard: false,
   anonymousCommunity: true, dataForResearch: false,
+  mindoClientBriefingEnabled: true, mindoTherapistDigestEnabled: true, mindoIntroSeen: false,
 };
 
 function generateClientCode(): string {

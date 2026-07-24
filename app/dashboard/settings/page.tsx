@@ -41,6 +41,7 @@ type NotifPrefs = {
 type PrivacyPrefs = {
   shareJournalWithTherapist: boolean; showInLeaderboard: boolean;
   anonymousCommunity: boolean; dataForResearch: boolean;
+  mindoClientBriefingEnabled: boolean; mindoTherapistDigestEnabled: boolean; mindoIntroSeen: boolean;
 };
 
 const DEFAULT_NOTIF: NotifPrefs = {
@@ -52,6 +53,7 @@ const DEFAULT_NOTIF: NotifPrefs = {
 const DEFAULT_PRIVACY: PrivacyPrefs = {
   shareJournalWithTherapist: true, showInLeaderboard: false,
   anonymousCommunity: true, dataForResearch: false,
+  mindoClientBriefingEnabled: true, mindoTherapistDigestEnabled: true, mindoIntroSeen: false,
 };
 
 type SessionLogItem = {
@@ -650,6 +652,16 @@ export default function SettingsPage() {
                 key: "dataForResearch",
                 label: "Contribute to research",
                 desc: "Share anonymised usage data to help improve mental health research",
+              },
+              {
+                key: "mindoClientBriefingEnabled",
+                label: "Morning AI briefing (Mindo)",
+                desc: "Get a short daily briefing from Mindo based on your recent mood, journal, and missions",
+              },
+              {
+                key: "mindoTherapistDigestEnabled",
+                label: "Share Mindo insights with therapist",
+                desc: "Let Mindo send your therapist a weekly AI-generated summary of your progress",
               },
             ] as const).map(({ key, label, desc }) => (
               <div key={key} className="flex items-start justify-between gap-4 py-4 first:pt-0">

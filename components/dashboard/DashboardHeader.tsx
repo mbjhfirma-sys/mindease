@@ -35,7 +35,7 @@ const navSections = [
   {
     label: "Tools",
     items: [
-      { href: "/dashboard/ai-chat", Icon: Bot, label: "AI Support" },
+      { href: "/dashboard/ai-chat", Icon: Bot, label: "Ask Mindo" },
       { href: "/dashboard/achievements", Icon: BarChart2, label: "Progress" },
       { href: "/dashboard/community", Icon: Users, label: "Community" },
       { href: "/dashboard/assessment", Icon: ClipboardList, label: "Assessments" },

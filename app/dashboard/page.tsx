@@ -10,6 +10,7 @@ import {
   TrendingUp, BookOpen, Clock, Flame,
   PenLine, Bot, ClipboardList, Users,
   Video, CalendarDays, ArrowRight, CheckCircle2, Check, Lock,
+  Sparkles, X,
 } from "lucide-react";
 
 type Category = "mindfulness" | "movement" | "journaling" | "breathing" | "social" | "habit";
@@ -45,7 +46,7 @@ const MOOD_OPTIONS = [
 
 const QUICK_LINKS = [
   { href: "/dashboard/journal",    Icon: PenLine,      label: "Write in journal",          meta: "Private & secure",   iconCls: "bg-amber-50 text-amber-600" },
-  { href: "/dashboard/ai-chat",    Icon: Bot,          label: "AI Support — Sage",         meta: "Available 24/7",     iconCls: "bg-violet-50 text-violet-600" },
+  { href: "/dashboard/ai-chat",    Icon: Bot,          label: "Ask Mindo",                 meta: "Available 24/7",     iconCls: "bg-violet-50 text-violet-600" },
   { href: "/dashboard/assessment", Icon: ClipboardList,label: "Mental health check-in",    meta: "6 assessments",      iconCls: "bg-blue-50 text-blue-600" },
   { href: "/dashboard/community",  Icon: Users,        label: "Community groups",          meta: "Join a group",       iconCls: "bg-teal-50 text-teal-600" },
 ];
@@ -137,6 +138,8 @@ export default function DashboardPage() {
   const [streak,      setStreak]     = useState(0);
   const [userName,    setUserName]   = useState("there");
   const [loading,     setLoading]    = useState(true);
+  const [mindoBriefing, setMindoBriefing] = useState<string | null>(null);
+  const [mindoIntroSeen, setMindoIntroSeen] = useState(true);
 
   const [activeTask,  setActiveTask]  = useState<Mission | null>(null);
   const [moodScore,   setMoodScore]   = useState<number | null>(null);
@@ -170,7 +173,8 @@ export default function DashboardPage() {
       safe(fetch("/api/appointments")),
       safe(fetch("/api/achievements")),
       safe(fetch("/api/user")),
-    ]).then(([mData, cData, aData, achData, uData]) => {
+      safe(fetch("/api/mindo/briefing")),
+    ]).then(([mData, cData, aData, achData, uData, briefingData]) => {
       const apiMissions: Mission[] = mData.missions ?? [];
       const limit: number = mData.dailyLimit ?? 5;
       if (apiMissions.length > 0) {
@@ -189,8 +193,21 @@ export default function DashboardPage() {
         const first = uData.user.name.split(" ")[0];
         setUserName(first);
       }
+      setMindoIntroSeen(uData.user?.privacyPrefs?.mindoIntroSeen ?? false);
+      if (briefingData.enabled && briefingData.briefingText) {
+        setMindoBriefing(briefingData.briefingText);
+      }
     }).finally(() => setLoading(false));
   }, []);
+
+  function dismissMindoIntro() {
+    setMindoIntroSeen(true);
+    fetch("/api/user", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ privacyPrefs: { mindoIntroSeen: true } }),
+    }).catch(() => {});
+  }
 
   async function completeMission(id: string, responseData?: Record<string, unknown>) {
     try {
@@ -328,6 +345,32 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Mindo intro disclosure — shown once */}
+      {!loading && !mindoIntroSeen && (
+        <div className="flex items-start justify-between gap-3 bg-sage-50 border border-sage-100 rounded-xl px-4 py-3 text-sm text-sage-800">
+          <span>Mindo is now personalizing your experience using your recent mood, journal, and mission activity. You can turn this off anytime in Settings → Privacy.</span>
+          <button onClick={dismissMindoIntro} className="text-sage-500 hover:text-sage-700 flex-shrink-0" aria-label="Dismiss">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Mindo daily briefing */}
+      {!loading && mindoBriefing && (
+        <div className="bg-gradient-to-r from-sage-700 to-emerald-700 rounded-xl p-4 flex items-start gap-4 text-white shadow-sm">
+          <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+            <Sparkles size={18} className="text-white" strokeWidth={1.5} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-sage-200 uppercase tracking-widest mb-0.5">Mindo</p>
+              <Link href="/dashboard/mindo/history" className="text-[11px] text-sage-200 hover:text-white transition-colors flex-shrink-0">Past briefings →</Link>
+            </div>
+            <p className="text-sm text-white leading-relaxed">{mindoBriefing}</p>
+          </div>
+        </div>
+      )}
 
       {/* Next therapy session */}
       {!loading && nextCall && (
