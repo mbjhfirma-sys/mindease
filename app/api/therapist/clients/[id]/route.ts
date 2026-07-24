@@ -38,6 +38,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         select: {
           concerns: true, languagePreference: true, genderPreference: true,
           ageRange: true, priorTherapyExperience: true, goals: true, modalityPreference: true,
+          affirmingCarePreferences: true, genderIdentity: true, preferredCommunication: true,
+          takingMedication: true, relationshipStatus: true,
         },
       },
     },
