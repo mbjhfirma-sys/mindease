@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Bell } from "lucide-react";
 
 type NotificationItem = {
   id: string;
   title: string;
   body: string;
   icon?: string | null;
+  href?: string | null;
   read: boolean;
   createdAt: string;
 };
@@ -16,6 +19,7 @@ type Props = {
 };
 
 export default function NotificationPanel({ role: _role }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const ref = useRef<HTMLDivElement>(null);
@@ -48,40 +52,30 @@ export default function NotificationPanel({ role: _role }: Props) {
     await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
   }
 
+  function handleSelect(n: NotificationItem) {
+    markRead(n.id);
+    setOpen(false);
+    if (n.href) router.push(n.href);
+  }
+
   const isTherapist = _role === "therapist" || _role === "admin";
 
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`relative p-2 rounded-xl transition-colors ${
-          isTherapist
-            ? "text-stone-400 hover:text-stone-600 rounded-lg hover:bg-stone-100"
-            : "text-stone-400 hover:text-stone-600 hover:bg-stone-100"
-        }`}
+        className="relative p-2 rounded-xl text-sage-600 hover:text-sage-700 hover:bg-sage-50 transition-colors"
         aria-label="Notifications"
       >
-        {isTherapist ? (
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path
-              d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.5-2 4.5-2 4.5h13s-2-1-2-4.5c0-2.5-2-4.5-4.5-4.5zM6.5 13a1.5 1.5 0 003 0"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        ) : (
-          <span className="text-xl leading-none">🔔</span>
-        )}
+        <Bell size={17} strokeWidth={1.5} />
         {unread > 0 && (
           <span
-            className={`absolute top-1.5 right-1.5 flex items-center justify-center rounded-full text-white font-bold ${
+            className={`absolute flex items-center justify-center rounded-full text-white font-bold ${
               isTherapist
-                ? "w-1.5 h-1.5 bg-stone-900"
+                ? "top-1.5 right-1.5 w-1.5 h-1.5 bg-stone-900"
                 : unread > 9
-                ? "min-w-[14px] h-[14px] px-0.5 text-[9px] bg-red-500 -top-0.5 -right-0.5"
-                : "w-4 h-4 text-[9px] bg-red-500 -top-0.5 -right-0.5"
+                ? "-top-1 -right-1 min-w-[14px] h-[14px] px-0.5 text-[9px] bg-red-500"
+                : "-top-1 -right-1 w-4 h-4 text-[9px] bg-red-500"
             }`}
           >
             {isTherapist ? null : unread}
@@ -110,7 +104,7 @@ export default function NotificationPanel({ role: _role }: Props) {
               items.map((n) => (
                 <li
                   key={n.id}
-                  onClick={() => markRead(n.id)}
+                  onClick={() => handleSelect(n)}
                   className={`flex gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-stone-50 ${
                     !n.read ? "bg-sage-50" : ""
                   }`}

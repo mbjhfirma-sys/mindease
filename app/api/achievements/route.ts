@@ -3,29 +3,21 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { BADGE_DEFINITIONS, BADGE_ELIGIBILITY, type UserStats } from "@/lib/achievements";
 import { createNotification } from "@/lib/notify";
+import { computeConsecutiveDayStreak, resolveTimeZone, STREAK_LOOKBACK } from "@/lib/dateKey";
 
 async function computeStats(userId: string): Promise<UserStats> {
-  const [moodCount, journalCount, missionCompletions, courseProgress, communityGroups, recentMoods] = await Promise.all([
+  const [moodCount, journalCount, missionCompletions, courseProgress, communityGroups, recentMoods, user] = await Promise.all([
     db.moodEntry.count({ where: { userId } }),
     db.journalEntry.count({ where: { userId } }),
     db.missionCompletion.count({ where: { userId } }),
     db.courseProgress.count({ where: { userId, completed: true } }),
     db.groupMembership.count({ where: { userId } }),
-    db.moodEntry.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 30, select: { createdAt: true } }),
+    db.moodEntry.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: STREAK_LOOKBACK, select: { createdAt: true } }),
+    db.user.findUnique({ where: { id: userId }, select: { timezone: true } }),
   ]);
 
-  let streak = 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  for (let i = 0; i < 30; i++) {
-    const day = new Date(today);
-    day.setDate(day.getDate() - i);
-    const nextDay = new Date(day);
-    nextDay.setDate(nextDay.getDate() + 1);
-    const hasEntry = recentMoods.some((m) => m.createdAt >= day && m.createdAt < nextDay);
-    if (!hasEntry && i > 0) break;
-    if (hasEntry) streak++;
-  }
+  const timeZone = resolveTimeZone(user?.timezone);
+  const streak = computeConsecutiveDayStreak(recentMoods.map((m) => m.createdAt), timeZone);
 
   return {
     streak,

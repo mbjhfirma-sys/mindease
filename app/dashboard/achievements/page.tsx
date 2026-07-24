@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Flame, CheckSquare, Clock, BookOpen, PenLine, Activity, X, CheckCircle2, Circle, ChevronRight } from "lucide-react";
 import { BADGE_DEFINITIONS } from "@/lib/achievements";
 
@@ -17,7 +17,7 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
   special:   { label: "Special",     color: "bg-stone-100 text-stone-600" },
 };
 
-type Achievement = { id: string; badgeId: string; createdAt: string };
+type Achievement = { id: string; badgeId: string; earnedAt: string };
 type MoodEntry   = { score: number; createdAt: string };
 type Stats       = { streak: number; moodEntries: number; journalEntries: number; missionsCompleted: number; lessonsCompleted: number };
 
@@ -55,23 +55,35 @@ export default function ProgressPage() {
   const [moodHistory,     setMoodHistory]     = useState<MoodEntry[]>([]);
   const [stats,           setStats]           = useState<Stats>({ streak: 0, moodEntries: 0, journalEntries: 0, missionsCompleted: 0, lessonsCompleted: 0 });
   const [loading,         setLoading]         = useState(true);
+  const [error,           setError]           = useState(false);
   const [selectedBadge,   setSelectedBadge]   = useState<{ badgeId: string; earnedDate: string | null } | null>(null);
   const [selectedMoodIdx, setSelectedMoodIdx] = useState<number | null>(null);
   const [animated,        setAnimated]        = useState(false);
 
-  useEffect(() => {
-    const t = setTimeout(() => setAnimated(true), 80);
+  const loadData = useCallback(() => {
     Promise.all([
-      fetch("/api/achievements").then((r) => r.json()),
-      fetch("/api/mood").then((r) => r.json()),
+      fetch("/api/achievements").then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
+      fetch("/api/mood").then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
     ]).then(([achData, moodData]) => {
       setAchievements(achData.achievements ?? []);
       setStats(achData.stats ?? { streak: 0, moodEntries: 0, journalEntries: 0, missionsCompleted: 0, lessonsCompleted: 0 });
       const entries: MoodEntry[] = (moodData.entries ?? []).slice(0, 7).reverse();
       setMoodHistory(entries);
-    }).finally(() => setLoading(false));
-    return () => clearTimeout(t);
+    }).catch(() => setError(true))
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), 80);
+    loadData();
+    return () => clearTimeout(t);
+  }, [loadData]);
+
+  function retry() {
+    setLoading(true);
+    setError(false);
+    loadData();
+  }
 
   const earnedBadgeIds = new Set(achievements.map((a) => a.badgeId));
 
@@ -101,6 +113,17 @@ export default function ProgressPage() {
         <div className="h-8 bg-stone-100 rounded w-1/3" />
         <div className="grid grid-cols-3 gap-3">
           {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-stone-100 rounded-xl" />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-red-50 border border-red-100 rounded-2xl p-6 text-center">
+          <p className="text-sm text-red-600 mb-3">Could not load your progress. Please try again.</p>
+          <button onClick={retry} className="text-xs font-medium text-red-700 underline">Retry</button>
         </div>
       </div>
     );
@@ -195,7 +218,7 @@ export default function ProgressPage() {
                   const cat = CATEGORY_CONFIG[badge.category];
                   const ach = achievements.find((a) => a.badgeId === badge.badgeId);
                   return (
-                    <button key={badge.badgeId} onClick={() => setSelectedBadge({ badgeId: badge.badgeId, earnedDate: ach?.createdAt ?? null })} className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-stone-50 transition-colors group">
+                    <button key={badge.badgeId} onClick={() => setSelectedBadge({ badgeId: badge.badgeId, earnedDate: ach?.earnedAt ?? null })} className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-stone-50 transition-colors group">
                       <CheckCircle2 size={20} className="text-sage-500 flex-shrink-0" strokeWidth={1.5} />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-stone-800">{badge.label}</div>

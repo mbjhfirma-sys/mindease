@@ -6,30 +6,38 @@ export default function Logo({
   variant = "color",
   height = 28,
   className = "",
+  iconOnly = false,
 }: {
   variant?: "color" | "white";
   height?: number;
   className?: string;
+  iconOnly?: boolean;
 }) {
   const isWhite = variant === "white";
   const circleBack = isWhite ? "#D8F3DC" : "#1B4332";
   const circleFront = "#74C69D";
   const textColor = isWhite ? "#FFFFFF" : "#1B4332";
 
+  const mark = (
+    <svg
+      viewBox="0 0 64 64"
+      aria-hidden="true"
+      className="flex-shrink-0"
+      style={{ height, width: height }}
+    >
+      <circle cx="24" cy="32" r="19" fill={circleBack} />
+      <circle cx="41" cy="32" r="19" fill={circleFront} />
+    </svg>
+  );
+
+  if (iconOnly) return mark;
+
   return (
     <span
       className={`inline-flex items-center ${className}`}
       style={{ gap: Math.round(height * 0.26) }}
     >
-      <svg
-        viewBox="0 0 64 64"
-        aria-hidden="true"
-        className="flex-shrink-0"
-        style={{ height, width: height }}
-      >
-        <circle cx="24" cy="32" r="19" fill={circleBack} />
-        <circle cx="41" cy="32" r="19" fill={circleFront} />
-      </svg>
+      {mark}
       <span
         className={wordmarkFont.className}
         style={{

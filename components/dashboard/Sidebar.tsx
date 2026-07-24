@@ -39,7 +39,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
   {
     label: "Tools",
     items: [
-      { href: "/dashboard/ai-chat", Icon: Bot, label: "AI Support" },
+      { href: "/dashboard/ai-chat", Icon: Bot, label: "Ask Mindo" },
       { href: "/dashboard/achievements", Icon: BarChart2, label: "Progress" },
       { href: "/dashboard/community", Icon: Users, label: "Community" },
       { href: "/dashboard/assessment", Icon: ClipboardList, label: "Assessments" },
@@ -95,11 +95,11 @@ export default function Sidebar() {
           // icon navigated home instead of expanding, which looked like the sidebar was stuck).
           <button
             onClick={() => setCollapsed(false)}
-            className="w-7 h-7 bg-sage-700 rounded-lg flex items-center justify-center text-white text-xs flex-shrink-0 font-bold hover:bg-sage-800 transition-colors"
+            className="flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity"
             aria-label="Expand sidebar"
             title="Expand sidebar"
           >
-            🌿
+            <Logo iconOnly height={20} />
           </button>
         ) : (
           <>
