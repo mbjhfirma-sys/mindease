@@ -5,14 +5,19 @@ import { useState } from "react";
 import { SPECIALIZATIONS, MODALITY_SUGGESTIONS } from "@/lib/specializations";
 import { LANGUAGE_SUGGESTIONS } from "@/lib/languages";
 import { AGE_GROUPS } from "@/lib/ageGroups";
+import { AFFIRMING_CARE_TAGS } from "@/lib/affirmingCare";
 import Logo from "@/components/Logo";
 
-type Step = "concerns" | "about" | "preferences" | "finding" | "result";
+type Step = "concerns" | "about" | "identity" | "preferences" | "finding" | "result";
+
+const QUESTION_STEPS: Step[] = ["concerns", "about", "identity", "preferences"];
+
+type MatchedTherapistInfo = { name: string; title: string; specializations: string[]; yearsOfExperience: number | null };
 
 type Result =
-  | { matched: true; therapist: { name: string; title: string } }
+  | { matched: true; therapist: MatchedTherapistInfo }
   | { matched: false }
-  | { alreadyAssigned: true; therapist: { name: string; title: string } | null };
+  | { alreadyAssigned: true; therapist: MatchedTherapistInfo | null };
 
 const GENDER_OPTIONS: { id: string; label: string }[] = [
   { id: "no_preference", label: "No preference" },
@@ -26,20 +31,73 @@ const PRIOR_EXPERIENCE_OPTIONS: { id: string; label: string }[] = [
   { id: "unsure", label: "Not sure" },
 ];
 
+const GENDER_IDENTITY_OPTIONS: { id: string; label: string }[] = [
+  { id: "woman", label: "Woman" },
+  { id: "man", label: "Man" },
+  { id: "non_binary", label: "Non-binary" },
+  { id: "prefer_not_to_say", label: "Prefer not to say" },
+];
+
+const RELATIONSHIP_OPTIONS: { id: string; label: string }[] = [
+  { id: "single", label: "Single" },
+  { id: "relationship", label: "In a relationship" },
+  { id: "married", label: "Married" },
+  { id: "divorced", label: "Divorced/Separated" },
+  { id: "widowed", label: "Widowed" },
+  { id: "prefer_not_to_say", label: "Prefer not to say" },
+];
+
+const COMMUNICATION_OPTIONS: { id: string; label: string }[] = [
+  { id: "video", label: "Video calls" },
+  { id: "messaging", label: "Messaging" },
+  { id: "both", label: "Both" },
+];
+
+const MEDICATION_OPTIONS: { id: string; label: string }[] = [
+  { id: "yes", label: "Yes" },
+  { id: "no", label: "No" },
+  { id: "prefer_not_to_say", label: "Prefer not to say" },
+];
+
+function ProgressBar({ step }: { step: Step }) {
+  const index = QUESTION_STEPS.indexOf(step);
+  if (index === -1) return null;
+  const pct = ((index + 1) / QUESTION_STEPS.length) * 100;
+  return (
+    <div className="mb-6">
+      <div className="h-1 bg-stone-100 rounded-full overflow-hidden">
+        <div className="h-full bg-sage-600 transition-all duration-500 ease-out rounded-full" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mt-2">
+        Question {index + 1} of {QUESTION_STEPS.length}
+      </p>
+    </div>
+  );
+}
+
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("concerns");
   const [concerns, setConcerns] = useState<string[]>([]);
   const [ageRange, setAgeRange] = useState("");
   const [priorTherapyExperience, setPriorTherapyExperience] = useState("");
   const [goals, setGoals] = useState("");
+  const [genderIdentity, setGenderIdentity] = useState("");
+  const [relationshipStatus, setRelationshipStatus] = useState("");
+  const [affirmingCare, setAffirmingCare] = useState<string[]>([]);
   const [language, setLanguage] = useState("");
   const [gender, setGender] = useState("no_preference");
   const [modalityPreference, setModalityPreference] = useState("no_preference");
+  const [preferredCommunication, setPreferredCommunication] = useState("");
+  const [takingMedication, setTakingMedication] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [skipping, setSkipping] = useState(false);
 
   function toggleConcern(id: string) {
     setConcerns((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  }
+
+  function toggleAffirmingCare(id: string) {
+    setAffirmingCare((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   }
 
   async function skip() {
@@ -65,15 +123,29 @@ export default function OnboardingPage() {
         ageRange: ageRange || undefined,
         priorTherapyExperience: priorTherapyExperience || undefined,
         goals: goals.trim() || undefined,
+        genderIdentity: genderIdentity || undefined,
+        relationshipStatus: relationshipStatus || undefined,
+        affirmingCarePreferences: affirmingCare,
         languagePreference: language || undefined,
         genderPreference: gender,
         modalityPreference,
+        preferredCommunication: preferredCommunication || undefined,
+        takingMedication: takingMedication || undefined,
       }),
     });
     const data = await res.json();
     setResult(res.ok ? data : { matched: false });
     setStep("result");
   }
+
+  const matchedTherapist: MatchedTherapistInfo | null =
+    result && "matched" in result && result.matched ? result.therapist
+    : result && "alreadyAssigned" in result ? result.therapist
+    : null;
+
+  const sharedSpecializations = matchedTherapist
+    ? matchedTherapist.specializations.filter((s) => concerns.includes(s)).slice(0, 3)
+    : [];
 
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center px-6 py-12">
@@ -84,9 +156,13 @@ export default function OnboardingPage() {
 
         {step === "concerns" && (
           <div className="bg-white rounded-2xl border border-stone-200 p-8">
+            <ProgressBar step={step} />
             <h1 className="text-2xl font-bold text-stone-900 mb-2">What brings you here?</h1>
-            <p className="text-stone-500 text-sm mb-6">
+            <p className="text-stone-500 text-sm mb-4">
               Select what applies — we&apos;ll use this to match you with the right professional.
+            </p>
+            <p className="text-xs text-sage-700 bg-sage-50 border border-sage-100 rounded-lg px-3 py-2 mb-6">
+              Every therapist on YouMindo is licensed and reviewed before they join — you&apos;re never guessing who you&apos;re talking to.
             </p>
 
             <div className="grid grid-cols-2 gap-2 mb-8">
@@ -135,6 +211,7 @@ export default function OnboardingPage() {
 
         {step === "about" && (
           <div className="bg-white rounded-2xl border border-stone-200 p-8">
+            <ProgressBar step={step} />
             <h1 className="text-2xl font-bold text-stone-900 mb-2">A little about you</h1>
             <p className="text-stone-500 text-sm mb-6">All optional — this helps us match you more precisely.</p>
 
@@ -182,6 +259,50 @@ export default function OnboardingPage() {
               </div>
             </div>
 
+            <div className="mb-6">
+              <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
+                Your gender identity
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {GENDER_IDENTITY_OPTIONS.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => setGenderIdentity(genderIdentity === o.id ? "" : o.id)}
+                    className={`p-2.5 rounded-xl border-2 text-xs font-semibold transition-all ${
+                      genderIdentity === o.id
+                        ? "border-sage-600 bg-sage-50 text-sage-800"
+                        : "border-stone-200 hover:border-stone-300 bg-white text-stone-700"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
+                Relationship status
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {RELATIONSHIP_OPTIONS.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => setRelationshipStatus(relationshipStatus === o.id ? "" : o.id)}
+                    className={`p-2.5 rounded-xl border-2 text-xs font-semibold transition-all ${
+                      relationshipStatus === o.id
+                        ? "border-sage-600 bg-sage-50 text-sage-800"
+                        : "border-stone-200 hover:border-stone-300 bg-white text-stone-700"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="mb-8">
               <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
                 What would you like to work on?
@@ -214,6 +335,65 @@ export default function OnboardingPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setStep("identity")}
+                  className="bg-sage-700 text-white font-semibold text-sm py-2.5 px-6 rounded-xl hover:bg-sage-800 transition-colors"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === "identity" && (
+          <div className="bg-white rounded-2xl border border-stone-200 p-8">
+            <ProgressBar step={step} />
+            <h1 className="text-2xl font-bold text-stone-900 mb-2">Who matters to you in a therapist</h1>
+            <p className="text-stone-500 text-sm mb-6">
+              Optional — helps us match you with someone who really gets it. You&apos;re not sharing anything about yourself here, just what you&apos;d value in the person you work with.
+            </p>
+
+            <div className="grid grid-cols-1 gap-2 mb-8">
+              {AFFIRMING_CARE_TAGS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => toggleAffirmingCare(t.id)}
+                  className={`flex items-start gap-2 p-3 rounded-xl border-2 text-left transition-all ${
+                    affirmingCare.includes(t.id)
+                      ? "border-sage-600 bg-sage-50"
+                      : "border-stone-200 hover:border-stone-300 bg-white"
+                  }`}
+                >
+                  <span>
+                    <span className={`block text-xs font-semibold leading-tight ${affirmingCare.includes(t.id) ? "text-sage-800" : "text-stone-700"}`}>
+                      {t.label}
+                    </span>
+                    <span className="block text-[10px] text-stone-400 leading-tight mt-0.5">{t.description}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={skip}
+                disabled={skipping}
+                className="text-stone-400 text-sm font-medium hover:text-stone-600 transition-colors disabled:opacity-50"
+              >
+                Skip for now
+              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep("about")}
+                  className="text-stone-500 text-sm font-medium hover:text-stone-700 transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
                   onClick={() => setStep("preferences")}
                   className="bg-sage-700 text-white font-semibold text-sm py-2.5 px-6 rounded-xl hover:bg-sage-800 transition-colors"
                 >
@@ -226,6 +406,7 @@ export default function OnboardingPage() {
 
         {step === "preferences" && (
           <div className="bg-white rounded-2xl border border-stone-200 p-8">
+            <ProgressBar step={step} />
             <h1 className="text-2xl font-bold text-stone-900 mb-2">A couple more preferences</h1>
             <p className="text-stone-500 text-sm mb-6">Optional, but helps us find the best fit.</p>
 
@@ -267,6 +448,50 @@ export default function OnboardingPage() {
               </div>
             </div>
 
+            <div className="mb-6">
+              <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
+                How would you prefer to connect?
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {COMMUNICATION_OPTIONS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setPreferredCommunication(preferredCommunication === c.id ? "" : c.id)}
+                    className={`p-2.5 rounded-xl border-2 text-xs font-semibold transition-all ${
+                      preferredCommunication === c.id
+                        ? "border-sage-600 bg-sage-50 text-sage-800"
+                        : "border-stone-200 hover:border-stone-300 bg-white text-stone-700"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
+                Are you currently taking medication for your mental or emotional health?
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {MEDICATION_OPTIONS.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setTakingMedication(takingMedication === m.id ? "" : m.id)}
+                    className={`p-2.5 rounded-xl border-2 text-xs font-semibold transition-all ${
+                      takingMedication === m.id
+                        ? "border-sage-600 bg-sage-50 text-sage-800"
+                        : "border-stone-200 hover:border-stone-300 bg-white text-stone-700"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="mb-8">
               <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
                 Therapy approach preference
@@ -295,7 +520,7 @@ export default function OnboardingPage() {
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep("about")}
+                  onClick={() => setStep("identity")}
                   className="text-stone-500 text-sm font-medium hover:text-stone-700 transition-colors"
                 >
                   Back
@@ -326,25 +551,49 @@ export default function OnboardingPage() {
           <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center">
             {"matched" in result && result.matched && (
               <>
-                <div className="w-16 h-16 mx-auto rounded-2xl bg-sage-100 flex items-center justify-center text-3xl mb-6">🤝</div>
                 <h1 className="text-2xl font-bold text-stone-900 mb-2">You&apos;ve been matched!</h1>
-                <p className="text-stone-500 text-sm leading-relaxed mb-8">
-                  We&apos;ve connected you with <strong className="text-stone-700">{result.therapist.name}</strong>
-                  {result.therapist.title ? `, ${result.therapist.title}` : ""}. They&apos;ll be reaching out soon.
-                </p>
+                <p className="text-stone-500 text-sm leading-relaxed mb-6">We think you&apos;ll click with:</p>
               </>
             )}
 
             {"alreadyAssigned" in result && (
               <>
-                <div className="w-16 h-16 mx-auto rounded-2xl bg-sage-100 flex items-center justify-center text-3xl mb-6">✅</div>
                 <h1 className="text-2xl font-bold text-stone-900 mb-2">You&apos;re already connected</h1>
-                <p className="text-stone-500 text-sm leading-relaxed mb-8">
-                  {result.therapist
-                    ? <>You&apos;re already working with <strong className="text-stone-700">{result.therapist.name}</strong>.</>
-                    : "You already have a professional assigned to your account."}
-                </p>
+                {result.therapist ? (
+                  <p className="text-stone-500 text-sm leading-relaxed mb-6">You&apos;re already working with:</p>
+                ) : (
+                  <p className="text-stone-500 text-sm leading-relaxed mb-8">You already have a professional assigned to your account.</p>
+                )}
               </>
+            )}
+
+            {matchedTherapist && (
+              <div className="text-left bg-cream border border-stone-100 rounded-2xl p-5 mb-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-full bg-sage-700 text-white flex items-center justify-center text-xl font-bold flex-shrink-0">
+                    {matchedTherapist.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-stone-900">{matchedTherapist.name}</p>
+                    <p className="text-sm text-stone-500">
+                      {matchedTherapist.title}
+                      {matchedTherapist.yearsOfExperience != null && ` · ${matchedTherapist.yearsOfExperience} yrs experience`}
+                    </p>
+                    {sharedSpecializations.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {sharedSpecializations.map((s) => (
+                          <span key={s} className="text-[10px] font-semibold uppercase tracking-wide bg-sage-100 text-sage-800 px-2 py-1 rounded-full">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-stone-400 mt-4 leading-relaxed">
+                  Not the right fit? You can request a different therapist any time from your dashboard — no awkward conversation needed.
+                </p>
+              </div>
             )}
 
             {"matched" in result && !result.matched && !("alreadyAssigned" in result) && (

@@ -155,7 +155,7 @@ function StepHeader({
 // ── Platform therapist card ───────────────────────────────────────────────────
 
 function PlatformTherapistCard({
-  t, onMessage, onBook, onRequest, messageLoading, myTherapistId, requestState,
+  t, onMessage, onBook, onRequest, messageLoading, myTherapistId, requestState, wasSwitch,
 }: {
   t: PlatformTherapist;
   onMessage: () => void;
@@ -164,6 +164,7 @@ function PlatformTherapistCard({
   messageLoading: boolean;
   myTherapistId: string | null;
   requestState?: "loading" | "assigned" | "waitlisted" | "error";
+  wasSwitch?: boolean;
 }) {
   const pal = avatarPalette(t.name);
   const ini = initials(t.name);
@@ -242,23 +243,39 @@ function PlatformTherapistCard({
               Book session
             </button>
           </>
-        ) : myTherapistId === null ? (
-          requestState === "assigned" ? (
-            <span className="flex-1 text-xs font-semibold py-2.5 px-2 text-center text-sage-700">Matched! Refresh to message.</span>
-          ) : requestState === "waitlisted" ? (
-            <span className="flex-1 text-xs font-semibold py-2.5 px-2 text-center text-amber-600">You're on the waitlist.</span>
-          ) : (
-            <button
-              onClick={onRequest}
-              disabled={requestState === "loading"}
-              className="flex items-center justify-center gap-1.5 flex-1 text-xs font-semibold py-2.5 px-2 bg-sage-700 hover:bg-sage-800 disabled:opacity-60 text-white rounded-xl transition-colors shadow-sm"
-            >
-              {requestState === "loading" ? <Loader2 size={12} className="animate-spin" /> : null}
-              {requestState === "loading" ? "Requesting…" : t.isFull ? "Join waitlist" : "Request this therapist"}
-            </button>
-          )
+        ) : requestState === "assigned" ? (
+          <span className="flex-1 text-xs font-semibold py-2.5 px-2 text-center text-sage-700">
+            {wasSwitch ? "Switched! Refresh to message." : "Matched! Refresh to message."}
+          </span>
+        ) : requestState === "waitlisted" ? (
+          <span className="flex-1 text-xs font-semibold py-2.5 px-2 text-center text-amber-600">You&apos;re on the waitlist.</span>
         ) : (
-          <span className="flex-1 text-xs text-stone-400 py-2.5 px-2 text-center">You already have an assigned therapist</span>
+          <button
+            onClick={() => {
+              if (myTherapistId !== null) {
+                const ok = window.confirm(
+                  `Switch to ${t.name}? Your current therapist will be notified, and you'll stop working with them.`
+                );
+                if (!ok) return;
+              }
+              onRequest();
+            }}
+            disabled={requestState === "loading"}
+            className={`flex items-center justify-center gap-1.5 flex-1 text-xs font-semibold py-2.5 px-2 disabled:opacity-60 rounded-xl transition-colors ${
+              myTherapistId === null
+                ? "bg-sage-700 hover:bg-sage-800 text-white shadow-sm"
+                : "bg-white hover:bg-stone-50 text-stone-600 border border-stone-200"
+            }`}
+          >
+            {requestState === "loading" ? <Loader2 size={12} className="animate-spin" /> : null}
+            {requestState === "loading"
+              ? "Requesting…"
+              : t.isFull
+              ? "Join waitlist"
+              : myTherapistId === null
+              ? "Request this therapist"
+              : "Switch to this therapist"}
+          </button>
         )}
       </div>
     </div>
@@ -275,6 +292,11 @@ export default function FindPage() {
   const [bookingTherapist, setBookingTherapist] = useState<{ id: string; name: string; title: string } | null>(null);
   const [myTherapistId, setMyTherapistId] = useState<string | null>(null);
   const [requestStates, setRequestStates] = useState<Record<string, "loading" | "assigned" | "waitlisted" | "error">>({});
+  // Captured at click-time, before myTherapistId itself changes — otherwise a
+  // "was this a first match or a switch" check reading myTherapistId after a
+  // successful switch would always see the *new* therapist and never know a
+  // prior one existed.
+  const [wasSwitch, setWasSwitch] = useState<Record<string, boolean>>({});
 
   const [country, setCountry] = useState("us");
   const [selectedNeed, setSelectedNeed] = useState<string | null>(null);
@@ -303,6 +325,7 @@ export default function FindPage() {
   }, []);
 
   async function handleRequest(t: PlatformTherapist) {
+    setWasSwitch((prev) => ({ ...prev, [t.id]: myTherapistId !== null }));
     setRequestStates((prev) => ({ ...prev, [t.id]: "loading" }));
     try {
       const res = await fetch(`/api/therapists/${t.id}/request`, { method: "POST" });
@@ -512,6 +535,7 @@ export default function FindPage() {
                     messageLoading={messagingId === t.id}
                     myTherapistId={myTherapistId}
                     requestState={requestStates[t.id]}
+                    wasSwitch={wasSwitch[t.id]}
                   />
                 ))}
               </div>

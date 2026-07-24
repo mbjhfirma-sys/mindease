@@ -9,6 +9,7 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const therapists = await db.therapist.findMany({
+    where: { verificationStatus: "approved" },
     include: {
       user: {
         select: { id: true, name: true, avatar: true },

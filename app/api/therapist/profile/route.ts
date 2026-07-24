@@ -4,9 +4,11 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { PROFESSION_TYPES, type ProfessionTypeId } from "@/lib/professionTypes";
 import { AGE_GROUPS, type AgeGroupId } from "@/lib/ageGroups";
+import { AFFIRMING_CARE_TAGS, type AffirmingCareTagId } from "@/lib/affirmingCare";
 
 const PROFESSION_TYPE_IDS = PROFESSION_TYPES.map((p) => p.id) as [ProfessionTypeId, ...ProfessionTypeId[]];
 const AGE_GROUP_IDS = AGE_GROUPS.map((g) => g.id) as [AgeGroupId, ...AgeGroupId[]];
+const AFFIRMING_CARE_IDS = AFFIRMING_CARE_TAGS.map((t) => t.id) as [AffirmingCareTagId, ...AffirmingCareTagId[]];
 
 const patchSchema = z.object({
   title:             z.string().min(1).optional(),
@@ -22,6 +24,7 @@ const patchSchema = z.object({
   gender:            z.string().optional(),
   ageGroupsServed:   z.array(z.enum(AGE_GROUP_IDS)).optional(),
   modalities:        z.array(z.string()).optional(),
+  affirmingCareTags: z.array(z.enum(AFFIRMING_CARE_IDS)).optional(),
   completeOnboarding: z.boolean().optional(),
 });
 
@@ -35,7 +38,7 @@ export async function GET() {
       title: true, bio: true, approach: true, yearsOfExperience: true,
       specializations: true, education: true, languages: true, licenseNumber: true,
       rating: true, totalSessions: true, maxClients: true, professionType: true, gender: true,
-      ageGroupsServed: true, modalities: true,
+      ageGroupsServed: true, modalities: true, affirmingCareTags: true,
       _count: { select: { clients: true } },
     },
   });
@@ -73,6 +76,7 @@ export async function PATCH(req: NextRequest) {
         title: true, bio: true, approach: true, yearsOfExperience: true,
         specializations: true, education: true, languages: true, licenseNumber: true, maxClients: true,
         professionType: true, gender: true, profileCompleted: true, ageGroupsServed: true, modalities: true,
+        affirmingCareTags: true,
       },
     });
     return NextResponse.json({ ok: true, profile: updated });

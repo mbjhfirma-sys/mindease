@@ -6,6 +6,7 @@ export type IntakeAnswers = {
   genderPreference?: string | null; // "male" | "female" | "no_preference"
   ageRange?: string | null; // one of lib/ageGroups.ts AGE_GROUPS ids
   modalityPreference?: string | null; // one of lib/specializations.ts MODALITY_SUGGESTIONS, or "no_preference"
+  affirmingCarePreferences?: string[]; // ids from lib/affirmingCare.ts AFFIRMING_CARE_TAGS
 };
 
 export type MatchedTherapist = {
@@ -14,6 +15,7 @@ export type MatchedTherapist = {
   name: string;
   title: string;
   specializations: string[];
+  yearsOfExperience: number | null;
 };
 
 // Scores every approved, non-full therapist against a client's intake answers and
@@ -27,6 +29,7 @@ export async function findBestMatch(intake: IntakeAnswers): Promise<MatchedThera
     select: {
       id: true, userId: true, specializations: true, languages: true, gender: true,
       maxClients: true, title: true, ageGroupsServed: true, modalities: true,
+      affirmingCareTags: true, yearsOfExperience: true,
       user: { select: { name: true } },
       _count: { select: { clients: true } },
     },
@@ -72,6 +75,14 @@ export async function findBestMatch(intake: IntakeAnswers): Promise<MatchedThera
       if (modalityTags.includes(intake.modalityPreference.toLowerCase())) score += 5;
     }
 
+    // Affirming-care fit is a soft, stacking preference — like modality, never a
+    // penalty for a therapist who hasn't (yet) tagged themselves, since this field
+    // is new and most existing therapist rows start with none set.
+    if (intake.affirmingCarePreferences && intake.affirmingCarePreferences.length > 0) {
+      const sharedTags = intake.affirmingCarePreferences.filter((tag) => t.affirmingCareTags.includes(tag)).length;
+      score += sharedTags * 8;
+    }
+
     return { therapist: t, score };
   });
 
@@ -84,5 +95,6 @@ export async function findBestMatch(intake: IntakeAnswers): Promise<MatchedThera
     name: best.user.name,
     title: best.title,
     specializations: best.specializations,
+    yearsOfExperience: best.yearsOfExperience,
   };
 }

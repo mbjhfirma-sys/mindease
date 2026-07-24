@@ -5,8 +5,10 @@ import { db } from "@/lib/db";
 import { findBestMatch } from "@/lib/matching";
 import { assignClientToTherapist } from "@/lib/therapistAssignment";
 import { AGE_GROUPS, type AgeGroupId } from "@/lib/ageGroups";
+import { AFFIRMING_CARE_TAGS, type AffirmingCareTagId } from "@/lib/affirmingCare";
 
 const AGE_GROUP_IDS = AGE_GROUPS.map((g) => g.id) as [AgeGroupId, ...AgeGroupId[]];
+const AFFIRMING_CARE_IDS = AFFIRMING_CARE_TAGS.map((t) => t.id) as [AffirmingCareTagId, ...AffirmingCareTagId[]];
 
 const bodySchema = z.object({
   concerns: z.array(z.string()).min(1),
@@ -16,6 +18,11 @@ const bodySchema = z.object({
   priorTherapyExperience: z.enum(["yes", "no", "unsure"]).optional(),
   goals: z.string().max(2000).optional(),
   modalityPreference: z.string().optional(),
+  affirmingCarePreferences: z.array(z.enum(AFFIRMING_CARE_IDS)).optional(),
+  genderIdentity: z.enum(["woman", "man", "non_binary", "prefer_not_to_say"]).optional(),
+  preferredCommunication: z.enum(["video", "messaging", "both"]).optional(),
+  takingMedication: z.enum(["yes", "no", "prefer_not_to_say"]).optional(),
+  relationshipStatus: z.enum(["single", "relationship", "married", "divorced", "widowed", "prefer_not_to_say"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -27,12 +34,20 @@ export async function POST(req: NextRequest) {
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { concerns, languagePreference, genderPreference, ageRange, priorTherapyExperience, goals, modalityPreference } = parsed.data;
+  const {
+    concerns, languagePreference, genderPreference, ageRange, priorTherapyExperience, goals, modalityPreference,
+    affirmingCarePreferences, genderIdentity, preferredCommunication, takingMedication, relationshipStatus,
+  } = parsed.data;
+
+  const intakeData = {
+    concerns, languagePreference, genderPreference, ageRange, priorTherapyExperience, goals, modalityPreference,
+    affirmingCarePreferences, genderIdentity, preferredCommunication, takingMedication, relationshipStatus,
+  };
 
   await db.clientIntake.upsert({
     where: { userId: session.user.id },
-    create: { userId: session.user.id, concerns, languagePreference, genderPreference, ageRange, priorTherapyExperience, goals, modalityPreference },
-    update: { concerns, languagePreference, genderPreference, ageRange, priorTherapyExperience, goals, modalityPreference },
+    create: { userId: session.user.id, ...intakeData },
+    update: intakeData,
   });
 
   const client = await db.user.findUnique({
@@ -44,21 +59,26 @@ export async function POST(req: NextRequest) {
   if (client?.therapistId) {
     const therapist = await db.therapist.findUnique({
       where: { id: client.therapistId },
-      select: { title: true, user: { select: { name: true } } },
+      select: { title: true, specializations: true, yearsOfExperience: true, user: { select: { name: true } } },
     });
     await db.user.update({ where: { id: session.user.id }, data: { hasOnboarded: true } });
     return NextResponse.json({
       alreadyAssigned: true,
-      therapist: therapist ? { name: therapist.user.name, title: therapist.title } : null,
+      therapist: therapist
+        ? { name: therapist.user.name, title: therapist.title, specializations: therapist.specializations, yearsOfExperience: therapist.yearsOfExperience }
+        : null,
     });
   }
 
-  const match = await findBestMatch({ concerns, languagePreference, genderPreference, ageRange, modalityPreference });
+  const match = await findBestMatch({ concerns, languagePreference, genderPreference, ageRange, modalityPreference, affirmingCarePreferences });
 
   if (match) {
     await assignClientToTherapist(session.user.id, client?.name ?? "A client", match.id);
     await db.user.update({ where: { id: session.user.id }, data: { hasOnboarded: true } });
-    return NextResponse.json({ matched: true, therapist: { name: match.name, title: match.title } });
+    return NextResponse.json({
+      matched: true,
+      therapist: { name: match.name, title: match.title, specializations: match.specializations, yearsOfExperience: match.yearsOfExperience },
+    });
   }
 
   await db.user.update({ where: { id: session.user.id }, data: { hasOnboarded: true } });

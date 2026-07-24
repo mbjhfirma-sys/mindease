@@ -24,7 +24,7 @@ export const SPECIALIZATIONS = [
 export const SPECIALIZATION_LABELS = SPECIALIZATIONS.map((s) => s.id);
 
 // Treatment modalities (how a therapist works, not what a client is dealing with) —
-// shown only as extra suggestion chips in the therapist's own specialization picker,
-// never part of the client intake quiz or the matching score.
+// used both as a therapist's own specialization-picker chips and as an optional
+// preference in the client intake quiz (see lib/matching.ts's soft modality bonus).
 export const MODALITY_SUGGESTIONS = ["CBT", "DBT", "Mindfulness", "ACT", "Psychodynamic"];
 

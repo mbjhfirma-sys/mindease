@@ -6,6 +6,7 @@ import { SPECIALIZATION_LABELS, MODALITY_SUGGESTIONS } from "@/lib/specializatio
 import { PROFESSION_TYPES } from "@/lib/professionTypes";
 import { LANGUAGE_SUGGESTIONS } from "@/lib/languages";
 import { AGE_GROUPS } from "@/lib/ageGroups";
+import { AFFIRMING_CARE_TAGS } from "@/lib/affirmingCare";
 
 type Profile = {
   title: string;
@@ -21,6 +22,7 @@ type Profile = {
   professionType: string;
   gender: string;
   ageGroupsServed: string[];
+  affirmingCareTags: string[];
 };
 
 function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -154,7 +156,7 @@ export default function TherapistSettingsPage() {
   const [profile, setProfile] = useState<Profile>({
     title: "", bio: "", approach: "", yearsOfExperience: "",
     licenseNumber: "", specializations: [], modalities: [], education: [], languages: [], maxClients: "",
-    professionType: "", gender: "", ageGroupsServed: [],
+    professionType: "", gender: "", ageGroupsServed: [], affirmingCareTags: [],
   });
   const [activeClients, setActiveClients] = useState(0);
   const [loading, setSaving_] = useState(true);
@@ -181,6 +183,7 @@ export default function TherapistSettingsPage() {
             professionType:    d.profile.professionType ?? "",
             gender:            d.profile.gender ?? "",
             ageGroupsServed:   d.profile.ageGroupsServed ?? [],
+            affirmingCareTags: d.profile.affirmingCareTags ?? [],
           });
           setActiveClients(d.profile.activeClients ?? 0);
         }
@@ -213,6 +216,7 @@ export default function TherapistSettingsPage() {
           professionType:    profile.professionType || undefined,
           gender:            profile.gender || undefined,
           ageGroupsServed:   profile.ageGroupsServed,
+          affirmingCareTags: profile.affirmingCareTags,
         }),
       });
       if (!res.ok) {
@@ -316,7 +320,7 @@ export default function TherapistSettingsPage() {
               placeholder="Leave blank for unlimited"
               className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
             />
-            <p className="text-[11px] text-stone-400 mt-1">{activeClients} active {activeClients === 1 ? "client" : "clients"}. New clients join a waitlist once you're full.</p>
+            <p className="text-[11px] text-stone-400 mt-1">{activeClients} active {activeClients === 1 ? "client" : "clients"}. New clients join a waitlist once you&apos;re full.</p>
           </div>
         </div>
 
@@ -390,6 +394,28 @@ export default function TherapistSettingsPage() {
           suggestions={LANGUAGE_SUGGESTIONS}
           placeholder="e.g. English"
         />
+
+        <div>
+          <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
+            Affirming &amp; Culturally-Competent Care
+          </label>
+          <p className="text-xs text-stone-400 mb-2">Clients can request a therapist offering this kind of care — only pick what genuinely describes your practice.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {AFFIRMING_CARE_TAGS.map((t) => (
+              <Chip
+                key={t.id}
+                label={t.label}
+                active={profile.affirmingCareTags.includes(t.id)}
+                onClick={() => set(
+                  "affirmingCareTags",
+                  profile.affirmingCareTags.includes(t.id)
+                    ? profile.affirmingCareTags.filter((v) => v !== t.id)
+                    : [...profile.affirmingCareTags, t.id]
+                )}
+              />
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="bg-white border border-stone-100 rounded-2xl p-6 space-y-5">
