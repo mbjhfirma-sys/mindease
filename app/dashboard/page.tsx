@@ -367,7 +367,7 @@ export default function DashboardPage() {
               <p className="text-xs font-medium text-sage-200 uppercase tracking-widest mb-0.5">Mindo</p>
               <Link href="/dashboard/mindo/history" className="text-[11px] text-sage-200 hover:text-white transition-colors flex-shrink-0">Past briefings →</Link>
             </div>
-            <p className="text-sm text-white leading-relaxed">{mindoBriefing}</p>
+            <p className="text-sm text-white leading-relaxed">{greeting}, {userName}. {mindoBriefing}</p>
           </div>
         </div>
       )}

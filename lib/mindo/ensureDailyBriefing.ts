@@ -28,7 +28,7 @@ export async function ensureDailyBriefing(userId: string): Promise<EnsureDailyBr
   // system is the correct response channel, not Mindo. Skip the LLM entirely.
   if (facts.openRiskFlag?.severity === "high") {
     const softData = {
-      briefingText: "Good morning. However you're feeling today, your care team is here for you — check in with your support resources whenever you need to.",
+      briefingText: "However you're feeling today, your care team is here for you — check in with your support resources whenever you need to.",
       facts: facts as unknown as object,
       model: "template-fallback",
       softened: true,
