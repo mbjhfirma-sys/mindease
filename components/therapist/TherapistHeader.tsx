@@ -3,55 +3,63 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import Logo from "@/components/Logo";
 import NotificationPanel from "@/components/NotificationPanel";
-import {
-  LayoutDashboard, Users, Calendar, Wrench,
-  MessageCircle, BarChart2, UserCircle, LogOut,
-} from "lucide-react";
+import { UserCircle, LogOut, ChevronDown } from "lucide-react";
+import { CLIENT_NAV, BUSINESS_GROUP, BUSINESS_SUBNAV } from "@/lib/therapistNav";
+
+type ClinicInfo = { name: string; subtitle: string };
 
 export default function TherapistHeader() {
   const [open, setOpen] = useState(false);
+  const [businessExpanded, setBusinessExpanded] = useState(false);
   const [name, setName] = useState("Therapist");
   const [pendingAppts, setPendingAppts] = useState(0);
   const [unreadMsgs, setUnreadMsgs] = useState(0);
+  const [clinic, setClinic] = useState<ClinicInfo | null>(null);
+  const [prevPathname, setPrevPathname] = useState<string | null>(null);
   const pathname = usePathname();
+
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    setOpen(false);
+  }
 
   useEffect(() => {
     Promise.all([
       fetch("/api/user").then((r) => r.json()),
       fetch("/api/therapist/stats").then((r) => r.json()),
-    ]).then(([uData, sData]) => {
+      fetch("/api/therapist/clinic").then((r) => r.json()),
+    ]).then(([uData, sData, cData]) => {
       if (uData.user?.name) setName(uData.user.name);
       if (sData.stats) {
         setPendingAppts(sData.stats.pendingAppointments);
         setUnreadMsgs(sData.stats.unreadMessages);
       }
+      if (cData.role === "owner") setClinic({ name: cData.clinic.name, subtitle: "Clinic owner" });
+      else if (cData.role === "active") setClinic({ name: cData.membership.clinicName, subtitle: "Clinic member" });
+      else if (cData.role === "invited") setClinic({ name: cData.membership.clinicName, subtitle: "Invitation pending" });
     });
   }, []);
 
-  const NAV = [
-    { href: "/therapist",              label: "Overview",     Icon: LayoutDashboard, exact: true },
-    { href: "/therapist/clients",      label: "Clients",      Icon: Users },
-    { href: "/therapist/appointments", label: "Appointments", Icon: Calendar, badge: pendingAppts },
-    { href: "/therapist/missions",     label: "Task Builder", Icon: Wrench },
-    { href: "/therapist/messages",     label: "Messages",     Icon: MessageCircle,  badge: unreadMsgs },
-    { href: "/therapist/analytics",    label: "Analytics",    Icon: BarChart2 },
-  ];
+  const isBusinessMode = pathname.startsWith("/therapist/business");
+  const businessOpen = businessExpanded || isBusinessMode;
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  useEffect(() => { setOpen(false); }, [pathname]);
+  function isActive(href: string, exact?: boolean) {
+    return exact ? pathname === href : (pathname === href || pathname.startsWith(href + "/"));
+  }
 
   return (
     <>
       <header className="flex-shrink-0 bg-white border-b border-stone-100 h-14 flex items-center justify-between px-5 gap-3">
         {/* Mobile logo */}
-        <div className="flex items-center gap-2 md:hidden">
-          <span className="w-7 h-7 bg-stone-900 rounded-lg flex items-center justify-center text-white text-xs font-semibold">M</span>
-          <span className="font-semibold text-stone-800 text-sm">YouMindo Pro</span>
+        <div className="flex items-center md:hidden">
+          <Logo height={22} />
         </div>
 
         {/* Desktop status */}
@@ -94,7 +102,7 @@ export default function TherapistHeader() {
             </div>
             <div>
               <div className="text-sm font-medium text-stone-800 leading-tight">{name}</div>
-              <div className="text-[11px] text-stone-400">Clinician Portal</div>
+              <div className="text-[11px] text-stone-400">{clinic ? clinic.name : "Clinician Portal"}</div>
             </div>
           </div>
           <button
@@ -109,13 +117,16 @@ export default function TherapistHeader() {
         <div className="flex-1 overflow-y-auto px-3 py-4">
           <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-2 mb-2">Portal</p>
           <div className="space-y-0.5">
-            {NAV.map(({ href, label, Icon, badge, exact }) => {
-              const active = exact ? pathname === href : pathname.startsWith(href);
+            {CLIENT_NAV.map(({ href, label, Icon, exact }) => {
+              const badge = href === "/therapist/appointments" ? pendingAppts : href === "/therapist/messages" ? unreadMsgs : undefined;
+              const active = isActive(href, exact);
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${active ? "bg-stone-100 text-stone-900 font-medium" : "text-stone-500 hover:bg-stone-50 hover:text-stone-800"}`}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm border-l-[3px] transition-colors ${
+                    active ? "bg-sage-50 border-sage-600 text-sage-800 font-medium" : "border-transparent text-stone-500 hover:bg-stone-50 hover:text-stone-800"
+                  }`}
                 >
                   <Icon size={17} strokeWidth={active ? 2 : 1.5} className="flex-shrink-0" />
                   <span className="flex-1">{label}</span>
@@ -125,6 +136,40 @@ export default function TherapistHeader() {
                 </Link>
               );
             })}
+
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setBusinessExpanded((v) => !v)}
+                aria-expanded={businessOpen}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm border-l-[3px] w-full cursor-pointer transition-colors ${
+                  isBusinessMode ? "bg-sage-50 border-sage-600 text-sage-800 font-medium" : "border-transparent text-stone-500 hover:bg-stone-50 hover:text-stone-800"
+                }`}
+              >
+                <BUSINESS_GROUP.Icon size={17} strokeWidth={isBusinessMode ? 2 : 1.5} className="flex-shrink-0" />
+                <span className="flex-1 text-left">Business</span>
+                <ChevronDown size={15} className={`text-stone-300 flex-shrink-0 transition-transform ${businessOpen ? "rotate-180" : ""}`} />
+              </button>
+              {businessOpen && (
+                <div className="flex flex-col gap-0.5 mt-0.5 ml-[26px] pl-3 border-l border-stone-100">
+                  {BUSINESS_SUBNAV.map(({ href, label, Icon, exact }) => {
+                    const active = isActive(href, exact);
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors ${
+                          active ? "bg-sage-50 text-sage-800 font-medium" : "text-stone-500 hover:bg-stone-50 hover:text-stone-800"
+                        }`}
+                      >
+                        <Icon size={15} strokeWidth={active ? 2 : 1.5} className="flex-shrink-0" />
+                        <span className="flex-1">{label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
