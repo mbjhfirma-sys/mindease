@@ -16,6 +16,7 @@ const schema = z
     title: z.string().optional(),
     therapistCode: z.string().optional(),
     professionType: z.enum(PROFESSION_TYPE_IDS).optional(),
+    couponCode: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.role === "THERAPIST" && !data.professionType) {
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { name, email, password, role, title, therapistCode, professionType } = parsed.data;
+  const { name, email, password, role, title, therapistCode, professionType, couponCode } = parsed.data;
 
   // A matching code approves a therapist instantly; otherwise they still get
   // an account, but sit as "pending" until the YouMindo team reviews them.
@@ -50,6 +51,23 @@ export async function POST(req: NextRequest) {
       data: { name, email, password: hashed, role, hasSeenClientTour: role === "CLIENT" ? false : undefined },
       select: { id: true, name: true, email: true, role: true },
     });
+
+    if (couponCode) {
+      const coupon = await db.coupon.findUnique({ where: { code: couponCode }, include: { _count: { select: { redemptions: true } } } });
+      const isValid = coupon && coupon.active
+        && (!coupon.expiresAt || coupon.expiresAt > new Date())
+        && (coupon.maxRedemptions == null || coupon._count.redemptions < coupon.maxRedemptions);
+      if (isValid) {
+        await db.couponRedemption.create({
+          data: {
+            couponId: coupon.id,
+            redeemedByUserId: user.id,
+            redeemedRole: role,
+            discountValueSnapshot: coupon.discountValue,
+          },
+        }).catch(() => {}); // never block signup on a redemption-tracking failure
+      }
+    }
 
     if (role === "THERAPIST") {
       await db.therapist.create({

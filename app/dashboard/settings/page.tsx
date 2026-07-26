@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { signOut } from "next-auth/react";
 import { User, Bell, Shield, Lock, CreditCard, Copy, Check, Eye, EyeOff, Camera, Loader2 } from "lucide-react";
+import { formatCents } from "@/lib/money";
 
 function resizeToJpeg(file: File, maxPx = 200, quality = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -62,10 +63,23 @@ type SessionLogItem = {
 };
 
 const PLANS = [
-  { id: "free",    name: "Free",     price: "$0/mo",  features: ["3 courses", "Basic AI chat (10 msg/day)", "Community access"], current: false },
-  { id: "growth",  name: "Growth",   price: "$19/mo", features: ["Unlimited courses", "Unlimited AI chat", "Journal & missions", "Priority support"], current: true },
-  { id: "therapy", name: "Therapy",  price: "$79/mo", features: ["Everything in Growth", "1 therapist session/mo", "Video consultations", "Personalised treatment plan"], current: false },
+  { id: "free",    name: "Free",     price: "$0/mo",  priceCents: 0,    features: ["3 courses", "Basic AI chat (10 msg/day)", "Community access"], current: false },
+  { id: "growth",  name: "Growth",   price: "$19/mo", priceCents: 1900, features: ["Unlimited courses", "Unlimited AI chat", "Journal & missions", "Priority support"], current: true },
+  { id: "therapy", name: "Therapy",  price: "$79/mo", priceCents: 7900, features: ["Everything in Growth", "1 therapist session/mo", "Video consultations", "Personalised treatment plan"], current: false },
 ];
+
+type CouponRedemption = {
+  discountValueSnapshot: number;
+  coupon: { code: string; discountType: "percent" | "fixed"; owner: { user: { name: string } } };
+};
+
+function discountedPriceCents(priceCents: number, redemption: CouponRedemption): number {
+  if (priceCents === 0) return 0;
+  const discounted = redemption.coupon.discountType === "percent"
+    ? priceCents * (1 - redemption.discountValueSnapshot / 100)
+    : priceCents - redemption.discountValueSnapshot;
+  return Math.max(0, Math.round(discounted));
+}
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -165,6 +179,7 @@ export default function SettingsPage() {
   const [pwError,    setPwError]    = useState<Record<string, string>>({});
 
   const [sessionLog, setSessionLog] = useState<SessionLogItem[]>([]);
+  const [couponRedemption, setCouponRedemption] = useState<CouponRedemption | null>(null);
 
   const tabs: { id: Tab; label: string; Icon: React.ElementType }[] = [
     { id: "profile",      label: "Profile",      Icon: User },
@@ -194,6 +209,7 @@ export default function SettingsPage() {
           if (d.user.privacyPrefs)      setPrivacy({ ...DEFAULT_PRIVACY, ...d.user.privacyPrefs });
           setPeerMatchingOptIn(!!d.user.peerMatchingOptIn);
           setTwoFactorEnabled(!!d.user.twoFactorEnabled);
+          if (d.user.couponRedemption) setCouponRedemption(d.user.couponRedemption);
         }
       })
       .finally(() => setLoading(false));
@@ -965,14 +981,37 @@ export default function SettingsPage() {
       {/* ── Subscription ── */}
       {tab === "subscription" && (
         <div className="space-y-4">
+          {couponRedemption && (
+            <div className="flex items-center gap-2 bg-sage-50 border border-sage-200 rounded-xl px-4 py-3">
+              <span className="text-base">🎉</span>
+              <p className="text-sm text-sage-800">
+                You have{" "}
+                <span className="font-semibold">
+                  {couponRedemption.coupon.discountType === "percent"
+                    ? `${couponRedemption.discountValueSnapshot}% off`
+                    : `${formatCents(couponRedemption.discountValueSnapshot)} off`}
+                </span>{" "}
+                any paid plan — referred by {couponRedemption.coupon.owner.user.name} (code {couponRedemption.coupon.code}).
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {PLANS.map((plan) => (
+            {PLANS.map((plan) => {
+              const discountedCents = couponRedemption ? discountedPriceCents(plan.priceCents, couponRedemption) : null;
+              return (
               <div key={plan.id} className={`rounded-xl border p-5 ${plan.current ? "border-stone-900 bg-stone-50" : "border-stone-100 bg-white"}`}>
                 <div className="flex items-start justify-between mb-3">
                   <h3 className="text-sm font-semibold text-stone-900">{plan.name}</h3>
                   {plan.current && <span className="text-[10px] bg-stone-900 text-white px-1.5 py-0.5 rounded font-medium">Current</span>}
                 </div>
-                <div className="text-2xl font-semibold text-stone-900 mb-3">{plan.price}</div>
+                {discountedCents !== null && discountedCents !== plan.priceCents ? (
+                  <div className="mb-3">
+                    <span className="text-xs text-stone-400 line-through mr-2">{plan.price}</span>
+                    <span className="text-2xl font-semibold text-sage-700">{formatCents(discountedCents)}/mo</span>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-semibold text-stone-900 mb-3">{plan.price}</div>
+                )}
                 <ul className="space-y-1.5 mb-4">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-2 text-xs text-stone-500">
@@ -984,7 +1023,8 @@ export default function SettingsPage() {
                   {plan.current ? "Current plan" : plan.id === "free" ? "Downgrade" : "Upgrade"}
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
           <div className="bg-white border border-stone-100 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-stone-900 mb-1">Session history</h3>

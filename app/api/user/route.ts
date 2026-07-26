@@ -79,6 +79,12 @@ export async function GET() {
           include: { user: { select: { name: true, avatar: true } } },
         },
         therapistProfile: { select: { id: true, title: true, specializations: true, rating: true } },
+        couponRedemption: {
+          select: {
+            discountValueSnapshot: true,
+            coupon: { select: { code: true, discountType: true, owner: { select: { user: { select: { name: true } } } } } },
+          },
+        },
       },
     });
 

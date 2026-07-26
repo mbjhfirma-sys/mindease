@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { PROFESSION_TYPES } from "@/lib/professionTypes";
 import Logo from "@/components/Logo";
 
@@ -37,7 +37,16 @@ const LEFT_PANEL: Record<Role, { emoji: string; heading: string; body: string; b
 };
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [role,      setRole]      = useState<Role>("CLIENT");
   const [firstName, setFirstName] = useState("");
   const [lastName,  setLastName]  = useState("");
@@ -46,11 +55,34 @@ export default function RegisterPage() {
   const [title,         setTitle]         = useState("");
   const [professionType, setProfessionType] = useState("");
   const [therapistCode, setTherapistCode] = useState("");
+  const [couponCode, setCouponCode] = useState(searchParams.get("ref") ?? "");
+  const [couponResult, setCouponResult] = useState<
+    | { status: "valid"; discountType: "percent" | "fixed"; discountValue: number; therapistName: string }
+    | { status: "invalid" }
+    | null
+  >(null);
+  const [checkingCoupon, setCheckingCoupon] = useState(false);
   const [agreed,        setAgreed]        = useState(false);
   const [error,     setError]     = useState("");
   const [loading,   setLoading]   = useState(false);
 
   const panel = LEFT_PANEL[role];
+
+  useEffect(() => {
+    const code = couponCode.trim();
+    if (!code) return;
+    const id = setTimeout(() => {
+      setCheckingCoupon(true);
+      fetch(`/api/coupons/lookup?code=${encodeURIComponent(code)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          setCouponResult(d.valid ? { status: "valid", discountType: d.discountType, discountValue: d.discountValue, therapistName: d.therapistName } : { status: "invalid" });
+        })
+        .catch(() => setCouponResult({ status: "invalid" }))
+        .finally(() => setCheckingCoupon(false));
+    }, 400);
+    return () => clearTimeout(id);
+  }, [couponCode]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,6 +103,7 @@ export default function RegisterPage() {
         role,
         ...(role === "THERAPIST" && title.trim() ? { title: title.trim() } : {}),
         ...(role === "THERAPIST" ? { therapistCode, professionType } : {}),
+        ...(couponCode.trim() ? { couponCode: couponCode.trim() } : {}),
       }),
     });
 
@@ -254,6 +287,31 @@ export default function RegisterPage() {
                 </div>
               </>
             )}
+
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                Referral or promo code
+                <span className="ml-1 text-stone-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value)}
+                placeholder="Have a code? Enter it here"
+                className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-sage-500 bg-white"
+              />
+              {couponCode.trim() && checkingCoupon && (
+                <p className="mt-1.5 text-xs text-stone-400">Checking code…</p>
+              )}
+              {couponCode.trim() && !checkingCoupon && couponResult?.status === "valid" && (
+                <p className="mt-1.5 text-xs text-sage-700 font-medium">
+                  ✓ {couponResult.discountType === "percent" ? `${couponResult.discountValue}%` : `$${(couponResult.discountValue / 100).toFixed(2)}`} off your subscription — referred by {couponResult.therapistName}
+                </p>
+              )}
+              {couponCode.trim() && !checkingCoupon && couponResult?.status === "invalid" && (
+                <p className="mt-1.5 text-xs text-stone-400">Code not found or no longer active.</p>
+              )}
+            </div>
 
             <div className="flex items-start gap-2">
               <input
