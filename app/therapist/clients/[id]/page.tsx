@@ -173,11 +173,22 @@ const RESPONSE_FIELD_LABELS: Record<string, string> = {
   secondsSpent: "Time spent (s)", itemsNoticed: "Grounding items noticed",
   regionsCompleted: "Body regions scanned", who: "Reached out to", message: "Message",
   stepsCompleted: "Stretch steps completed", completed: "Marked done", skipped: "Skipped",
+  thought: "Distressing thought", beliefBefore: "Belief before (%)", evidenceFor: "Evidence for",
+  evidenceAgainst: "Evidence against", balancedThought: "Balanced thought", beliefAfter: "Belief after (%)",
+  activities: "Planned activities",
 };
 
 function formatResponseValue(v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
-  if (Array.isArray(v)) return v.length ? v.join(", ") : "—";
+  if (Array.isArray(v)) {
+    if (v.length === 0) return "—";
+    if (typeof v[0] === "object" && v[0] !== null) {
+      return v.map((item) => (item && typeof item === "object" && "activity" in item
+        ? `${item.activity}${"predictedPleasure" in item ? ` (${item.predictedPleasure}/10)` : ""}`
+        : JSON.stringify(item))).join("; ");
+    }
+    return v.join(", ");
+  }
   if (typeof v === "boolean") return v ? "Yes" : "No";
   return String(v);
 }

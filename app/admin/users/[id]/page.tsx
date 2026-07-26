@@ -22,7 +22,11 @@ function RESPONSE_PREVIEW(data: Record<string, unknown>) {
         <div key={key} className="text-xs">
           <span className="text-stone-400 font-medium">{key}: </span>
           <span className="text-stone-700 whitespace-pre-wrap">
-            {Array.isArray(value) ? value.join(", ") : typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}
+            {Array.isArray(value)
+              ? value.length === 0 ? "—" : value.map((item) => (item && typeof item === "object" && "activity" in item
+                  ? `${item.activity}${"predictedPleasure" in item ? ` (${item.predictedPleasure}/10)` : ""}`
+                  : typeof item === "object" && item !== null ? JSON.stringify(item) : String(item))).join(", ")
+              : typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}
           </span>
         </div>
       ))}

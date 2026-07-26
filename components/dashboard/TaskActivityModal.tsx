@@ -57,6 +57,8 @@ function ActivityContent({ mission, onDone }: { mission: Mission; onDone: OnDone
     case "self_compassion": return <SelfCompassionActivity onDone={onDone} />;
     case "strength":        return <StrengthActivity onDone={onDone} />;
     case "values":          return <ValuesActivity onDone={onDone} />;
+    case "thought_record":  return <ThoughtRecordActivity onDone={onDone} />;
+    case "behavioral_activation": return <BehavioralActivationActivity onDone={onDone} />;
     case "breathing":       return <BreathingActivity onDone={onDone} />;
     case "timer":           return <TimerActivity minutes={dur} instruction={mission.description} onDone={onDone} />;
     case "walk":            return <WalkActivity minutes={dur} onDone={onDone} />;
@@ -397,6 +399,144 @@ function WorryActivity({ onDone }: { onDone: OnDone }) {
   );
 }
 
+// ── CBT thought record ────────────────────────────────────────────────────────
+function BeliefSlider({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-medium text-stone-500">{label}</span>
+        <span className="text-sm font-bold text-stone-800 tabular-nums">{value}%</span>
+      </div>
+      <input type="range" min={0} max={100} step={5} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full h-2 accent-stone-900 cursor-pointer" />
+    </div>
+  );
+}
+
+function ThoughtRecordActivity({ onDone }: { onDone: OnDone }) {
+  const [step, setStep] = useState(0);
+  const [thought, setThought] = useState("");
+  const [beliefBefore, setBeliefBefore] = useState(70);
+  const [evidenceFor, setEvidenceFor] = useState("");
+  const [evidenceAgainst, setEvidenceAgainst] = useState("");
+  const [balancedThought, setBalancedThought] = useState("");
+  const [beliefAfter, setBeliefAfter] = useState(70);
+  const thoughtWords = thought.trim().split(/\s+/).filter(Boolean).length;
+  const balancedWords = balancedThought.trim().split(/\s+/).filter(Boolean).length;
+
+  const STEPS = ["The Thought", "Evidence For", "Evidence Against", "Balanced View"];
+
+  if (step === 4) {
+    const delta = beliefBefore - beliefAfter;
+    return (
+      <div className="text-center py-6 space-y-4">
+        <div className="w-20 h-20 bg-sage-50 border border-sage-100 rounded-full flex items-center justify-center mx-auto">
+          <Check size={30} className="text-sage-600" />
+        </div>
+        <div>
+          <h3 className="font-semibold text-stone-800 text-lg">Thought record complete</h3>
+          <p className="text-sm text-stone-500 mt-1 leading-relaxed max-w-xs mx-auto">
+            {delta > 0
+              ? `Your belief in the original thought dropped from ${beliefBefore}% to ${beliefAfter}%. That's the evidence doing its work.`
+              : "Even naming and examining the thought — without it budging — is a real skill. It gets easier with practice."}
+          </p>
+        </div>
+        <button onClick={() => onDone({ thought, beliefBefore, evidenceFor, evidenceAgainst, balancedThought, beliefAfter })}
+          className="w-full bg-stone-900 hover:bg-stone-800 text-white font-semibold py-3 rounded-2xl text-sm transition-colors">
+          Save & Complete ✓
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        {STEPS.map((label, i) => (
+          <div key={i} className={`flex-1 text-center text-[10px] font-semibold py-1 rounded-full transition-all ${i === step ? "bg-stone-900 text-white" : i < step ? "bg-stone-200 text-stone-600" : "bg-stone-100 text-stone-300"}`}>
+            {label}
+          </div>
+        ))}
+      </div>
+
+      {step === 0 && (
+        <div className="space-y-4">
+          <p className="text-sm text-stone-500 leading-relaxed">What&apos;s the distressing thought that&apos;s been on your mind?</p>
+          <textarea value={thought} onChange={(e) => setThought(e.target.value)}
+            placeholder="e.g. I completely messed up that presentation and everyone noticed…" rows={4}
+            className="w-full border border-stone-200 rounded-2xl px-4 py-3 text-sm bg-stone-50 focus:bg-white focus:outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-100 transition-all resize-none" />
+          <BeliefSlider value={beliefBefore} onChange={setBeliefBefore} label="How much do you believe this right now?" />
+          <button onClick={() => { setBeliefAfter(beliefBefore); setStep(1); }} disabled={thoughtWords < 3}
+            className="w-full bg-stone-900 hover:bg-stone-800 text-white font-semibold py-3 rounded-2xl text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            Next →
+          </button>
+        </div>
+      )}
+
+      {step === 1 && (
+        <div className="space-y-4">
+          <div className="bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3">
+            <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">The thought</p>
+            <p className="text-sm text-stone-700 italic">&ldquo;{thought.slice(0, 120)}{thought.length > 120 ? "…" : ""}&rdquo;</p>
+          </div>
+          <p className="text-sm font-semibold text-stone-800">What evidence supports this thought being true?</p>
+          <textarea value={evidenceFor} onChange={(e) => setEvidenceFor(e.target.value)}
+            placeholder="Facts — not feelings — that back this up…" rows={4}
+            className="w-full border border-stone-200 rounded-2xl px-4 py-3 text-sm bg-stone-50 focus:bg-white focus:outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-100 transition-all resize-none" />
+          <div className="flex gap-2">
+            <button onClick={() => setStep(0)} className="px-5 py-3 border border-stone-200 text-stone-600 hover:bg-stone-50 rounded-2xl text-sm font-medium transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+            <button onClick={() => setStep(2)} disabled={evidenceFor.trim().length < 3}
+              className="flex-1 bg-stone-900 hover:bg-stone-800 text-white font-semibold py-3 rounded-2xl text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          <p className="text-sm font-semibold text-stone-800">Now, what evidence doesn&apos;t fit — or contradicts it?</p>
+          <p className="text-xs text-stone-400 -mt-2">Look for facts you might be discounting or overlooking.</p>
+          <textarea value={evidenceAgainst} onChange={(e) => setEvidenceAgainst(e.target.value)}
+            placeholder="What would you tell a friend who believed this about themselves?" rows={4}
+            className="w-full border border-stone-200 rounded-2xl px-4 py-3 text-sm bg-stone-50 focus:bg-white focus:outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-100 transition-all resize-none" />
+          <div className="flex gap-2">
+            <button onClick={() => setStep(1)} className="px-5 py-3 border border-stone-200 text-stone-600 hover:bg-stone-50 rounded-2xl text-sm font-medium transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+            <button onClick={() => setStep(3)} disabled={evidenceAgainst.trim().length < 3}
+              className="flex-1 bg-stone-900 hover:bg-stone-800 text-white font-semibold py-3 rounded-2xl text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-4">
+          <p className="text-sm font-semibold text-stone-800">Weighing both sides, what&apos;s a more balanced way to see this?</p>
+          <textarea value={balancedThought} onChange={(e) => setBalancedThought(e.target.value)}
+            placeholder="A fairer, more complete way to think about this is…" rows={4}
+            className="w-full border border-stone-200 rounded-2xl px-4 py-3 text-sm bg-stone-50 focus:bg-white focus:outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-100 transition-all resize-none" />
+          <BeliefSlider value={beliefAfter} onChange={setBeliefAfter} label="How much do you believe the ORIGINAL thought now?" />
+          <div className="flex gap-2">
+            <button onClick={() => setStep(2)} className="px-5 py-3 border border-stone-200 text-stone-600 hover:bg-stone-50 rounded-2xl text-sm font-medium transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+            <button onClick={() => setStep(4)} disabled={balancedWords < 5}
+              className="flex-1 bg-stone-900 hover:bg-stone-800 text-white font-semibold py-3 rounded-2xl text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+              Finish ✓
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Self-compassion break ─────────────────────────────────────────────────────
 function SelfCompassionActivity({ onDone }: { onDone: OnDone }) {
   const [step, setStep]           = useState(0);
@@ -607,6 +747,72 @@ function ValuesActivity({ onDone }: { onDone: OnDone }) {
       <button onClick={() => onDone({ values: [...selected].map((id) => VALUES.find((v) => v.id === id)?.label), reflection })} disabled={!done}
         className="w-full bg-stone-900 hover:bg-stone-800 text-white font-semibold py-3 rounded-2xl text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
         {!done ? `Choose ${MAX_VALUES - selected.size} more…` : "Save My Values ✓"}
+      </button>
+    </div>
+  );
+}
+
+// ── Behavioral activation planner ────────────────────────────────────────────
+const PLEASURE_LABELS = ["Not much", "A little", "Somewhat", "Quite a bit", "A lot", "Deeply"];
+
+function BehavioralActivationActivity({ onDone }: { onDone: OnDone }) {
+  const [activities, setActivities] = useState([
+    { activity: "", pleasure: 5 },
+    { activity: "", pleasure: 5 },
+    { activity: "", pleasure: 5 },
+  ]);
+  const filled = activities.filter((a) => a.activity.trim().length > 0).length;
+
+  function updateActivity(i: number, text: string) {
+    setActivities((prev) => prev.map((a, j) => (j === i ? { ...a, activity: text } : a)));
+  }
+  function updatePleasure(i: number, pleasure: number) {
+    setActivities((prev) => prev.map((a, j) => (j === i ? { ...a, pleasure } : a)));
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-stone-500 leading-relaxed">
+        Plan three enjoyable or meaningful activities for the coming week — even small ones count. Rating how much pleasure you expect helps you notice, later, whether doing them actually lifted your mood more than you predicted.
+      </p>
+      {activities.map((a, i) => {
+        const isDone = a.activity.trim().length > 0;
+        return (
+          <div key={i} className={`rounded-2xl border-2 transition-all duration-300 p-4 space-y-3 ${isDone ? "border-sage-300 bg-sage-50" : "border-stone-200 bg-stone-50"}`}>
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Activity #{i + 1}</label>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all duration-300 ${isDone ? "bg-sage-400" : "bg-stone-200"}`}>
+                <Check size={10} strokeWidth={3} className={isDone ? "text-white" : "text-stone-400"} />
+              </div>
+            </div>
+            <input type="text" value={a.activity} onChange={(e) => updateActivity(i, e.target.value)}
+              placeholder="e.g. Call an old friend, go for a bike ride, bake something…"
+              className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-700 placeholder-stone-300 focus:outline-none focus:border-sage-400" />
+            {isDone && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-stone-500">Predicted pleasure</span>
+                  <span className="text-xs font-bold text-stone-700">{a.pleasure}/10 · {PLEASURE_LABELS[Math.min(Math.floor(a.pleasure / 2), 5)]}</span>
+                </div>
+                <input type="range" min={0} max={10} step={1} value={a.pleasure}
+                  onChange={(e) => updatePleasure(i, Number(e.target.value))}
+                  className="w-full h-2 accent-sage-500 cursor-pointer" />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-0.5">
+          {[0, 1, 2].map((i) => (
+            <span key={i} className={`text-xl transition-all duration-300 ${i < filled ? "text-sage-400" : "text-stone-200"}`}>★</span>
+          ))}
+        </div>
+        <span className="text-xs text-stone-400">{filled} of 3 planned</span>
+      </div>
+      <button onClick={() => onDone({ activities: activities.map((a) => ({ activity: a.activity, predictedPleasure: a.pleasure })) })} disabled={filled < 3}
+        className="w-full bg-stone-900 hover:bg-stone-800 text-white font-semibold py-3 rounded-2xl text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+        {filled < 3 ? `${3 - filled} more to plan…` : "Save My Plan ✓"}
       </button>
     </div>
   );

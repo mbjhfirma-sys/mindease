@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 const activityTypeEnum = z.enum([
   "gratitude", "reflection", "checkin", "worry", "self_compassion", "strength",
   "values", "breathing", "timer", "walk", "bodyscan", "social", "stretch", "generic",
+  "thought_record", "behavioral_activation",
 ]);
 
 const createSchema = z.object({
