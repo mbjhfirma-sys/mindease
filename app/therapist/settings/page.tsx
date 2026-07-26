@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus, X, User, Lock } from "lucide-react";
 import { SPECIALIZATION_LABELS, MODALITY_SUGGESTIONS } from "@/lib/specializations";
 import { PROFESSION_TYPES } from "@/lib/professionTypes";
 import { LANGUAGE_SUGGESTIONS } from "@/lib/languages";
 import { AGE_GROUPS } from "@/lib/ageGroups";
 import { AFFIRMING_CARE_TAGS } from "@/lib/affirmingCare";
+import TwoFactorAuth from "@/components/settings/TwoFactorAuth";
+
+type Tab = "profile" | "security";
 
 type Profile = {
   title: string;
@@ -153,21 +156,25 @@ function ListInput({ label, values, onChange, placeholder }: {
 }
 
 export default function TherapistSettingsPage() {
+  const [tab, setTab] = useState<Tab>("profile");
   const [profile, setProfile] = useState<Profile>({
     title: "", bio: "", approach: "", yearsOfExperience: "",
     licenseNumber: "", specializations: [], modalities: [], education: [], languages: [], maxClients: "",
     professionType: "", gender: "", ageGroupsServed: [], affirmingCareTags: [],
   });
   const [activeClients, setActiveClients] = useState(0);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [loading, setSaving_] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
   const [error,   setError]   = useState("");
 
   useEffect(() => {
-    fetch("/api/therapist/profile")
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((d) => {
+    Promise.all([
+      fetch("/api/therapist/profile").then((r) => r.ok ? r.json() : Promise.reject()),
+      fetch("/api/user").then((r) => r.ok ? r.json() : Promise.reject()),
+    ])
+      .then(([d, uData]) => {
         if (d.profile) {
           setProfile({
             title:             d.profile.title ?? "",
@@ -187,6 +194,7 @@ export default function TherapistSettingsPage() {
           });
           setActiveClients(d.profile.activeClients ?? 0);
         }
+        if (uData.user) setTwoFactorEnabled(!!uData.user.twoFactorEnabled);
       })
       .catch(() => {})
       .finally(() => setSaving_(false));
@@ -244,9 +252,32 @@ export default function TherapistSettingsPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">Profile</h1>
-        <p className="text-sm text-stone-500 mt-1">This information is shown to your clients on their &quot;My Therapist&quot; page.</p>
+        <h1 className="text-2xl font-semibold text-stone-900">Settings</h1>
       </div>
+
+      <div className="flex border-b border-stone-100 overflow-x-auto">
+        {([
+          { id: "profile" as Tab,  label: "Profile",  Icon: User },
+          { id: "security" as Tab, label: "Security",  Icon: Lock },
+        ]).map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
+              tab === id ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-700"
+            }`}
+          >
+            <Icon size={14} strokeWidth={tab === id ? 2 : 1.5} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "security" && <TwoFactorAuth initialEnabled={twoFactorEnabled} />}
+
+      {tab === "profile" && (
+      <>
+      <p className="text-sm text-stone-500 -mt-2">This information is shown to your clients on their &quot;My Therapist&quot; page.</p>
 
       <div className="bg-white border border-stone-100 rounded-2xl p-6 space-y-5">
         <h2 className="text-sm font-semibold text-stone-900">Basic Information</h2>
@@ -443,6 +474,8 @@ export default function TherapistSettingsPage() {
           {saving ? "Saving…" : saved ? <><Check size={14} /> Saved</> : "Save Profile"}
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 }

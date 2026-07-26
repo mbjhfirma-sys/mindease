@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { AppointmentStatus } from "@prisma/client";
 import { createNotification } from "@/lib/notify";
+import { recordSessionEarningForAppointment } from "@/lib/earnings";
 
 const patchSchema = z.object({
   status: z.enum(["pending", "confirmed", "completed", "cancelled", "no_show"]).optional(),
@@ -52,6 +53,10 @@ export async function PATCH(
   if (parsed.data.status) data.status = parsed.data.status as AppointmentStatus;
 
   const updated = await db.appointment.update({ where: { id }, data });
+
+  if (parsed.data.status === "completed") {
+    await recordSessionEarningForAppointment(id).catch(() => {});
+  }
 
   const isTherapist = userRole === "THERAPIST";
   const otherUserId = isTherapist ? appt.client.id : appt.therapist.userId;

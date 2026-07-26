@@ -77,6 +77,8 @@ model User {
   dailyBriefings               DailyBriefing[]
   weeklyDigestsAsClient        WeeklyDigest[]                @relation("ClientWeeklyDigests")
   mindoChatMessages            MindoChatMessage[]
+  clientSessionEarnings        SessionEarning[]
+  couponRedemption             CouponRedemption?
 }
 
 model Therapist {
@@ -118,6 +120,263 @@ model Therapist {
   availabilitySlots   AvailabilitySlot[]
   waitlistEntries     WaitlistEntry[]
   weeklyDigests       WeeklyDigest[]
+  billing             TherapistBilling?
+  sessionEarnings     SessionEarning[]
+  payouts             Payout[]
+  subscription        TherapistSubscription?
+  coupons             Coupon[]
+  affiliateCommissions AffiliateCommission[]
+  clinicOwned          Clinic?
+  clinicMemberships    ClinicMembership[]
+}
+
+// Rate configuration for a therapist's video-session earnings, plus the billing-identity/
+// notification settings surfaced on the Subscription tab. No SessionEarning rows are created
+// for a therapist until ratePerMinuteCents is set — never fabricate a rate.
+model TherapistBilling {
+  id                           String    @id @default(cuid())
+  therapistId                  String    @unique
+  ratePerMinuteCents           Int?
+  currency                     String    @default("USD")
+  // Basis points YouMindo keeps of each session; 0 = therapist keeps 100%. Business decision
+  // TBD — documented default, trivially adjustable later without a schema change.
+  platformFeeBps               Int       @default(0)
+  billingEmail                 String?
+  invoiceCompanyName           String?
+  vatNumber                    String?
+  paymentNotificationsEnabled  Boolean   @default(true)
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+  therapist                    Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+}
+
+// A therapist's own paid plan with YouMindo (platform SaaS subscription) — separate from,
+// and unrelated to, the still-mock client-side subscription elsewhere in this app.
+model TherapistSubscription {
+  id                 String             @id @default(cuid())
+  therapistId        String             @unique
+  planId             String
+  priceCents         Int
+  currency           String             @default("USD")
+  billingCycle       BillingCycle       @default(monthly)
+  autoRenew          Boolean            @default(true)
+  status             SubscriptionStatus @default(active)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  canceledAt         DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  therapist          Therapist          @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  invoices           Invoice[]
+}
+
+// One row per elapsed billing period, created by reconciliation (lib/subscriptionBilling.ts)
+// rather than up front, so numbers only ever reflect genuinely elapsed time.
+model Invoice {
+  id             String                @id @default(cuid())
+  subscriptionId String
+  therapistId    String
+  periodStart    DateTime
+  periodEnd      DateTime
+  amountCents    Int
+  currency       String
+  status         InvoiceStatus         @default(paid)
+  issuedAt       DateTime              @default(now())
+  subscription   TherapistSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  commission     AffiliateCommission?
+
+  @@unique([subscriptionId, periodStart])
+  @@index([therapistId, issuedAt])
+}
+
+enum BillingCycle {
+  monthly
+  annual
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+}
+
+enum InvoiceStatus {
+  paid
+  pending
+  failed
+}
+
+// Session earnings ledger — one row per completed appointment, created once, snapshotting the
+// rate/fee at that moment so later rate changes never retroactively rewrite history.
+model SessionEarning {
+  id                 String         @id @default(cuid())
+  appointmentId      String         @unique
+  therapistId        String
+  clientId           String
+  sessionDate        DateTime
+  durationMinutes    Float
+  durationSource     DurationSource
+  ratePerMinuteCents Int
+  grossAmountCents   Int
+  platformFeeBps     Int
+  platformFeeCents   Int
+  netAmountCents     Int
+  currency           String
+  payoutId           String?
+  createdAt          DateTime       @default(now())
+  therapist          Therapist      @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  client             User           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  payout             Payout?        @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@index([therapistId, sessionDate])
+  @@index([payoutId])
+}
+
+// A withdrawal batch. "paid" is manually-tracked bookkeeping (no real bank transfer yet) — a
+// therapist marks it paid once reconciled themselves, mirroring the existing "we don't process
+// payments directly" precedent already used elsewhere in this app.
+model Payout {
+  id               String                 @id @default(cuid())
+  therapistId      String
+  status           PayoutStatus           @default(pending)
+  totalAmountCents Int
+  currency         String
+  note             String?
+  createdAt        DateTime               @default(now())
+  paidAt           DateTime?
+  therapist        Therapist              @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  earnings         SessionEarning[]
+  commissions      AffiliateCommission[]
+}
+
+// A therapist's own referral/discount code. Doubles as both the affiliate-tracking mechanism
+// (who they referred) and a real discount for the referred signup — one unified system rather
+// than two separate features.
+model Coupon {
+  id               String             @id @default(cuid())
+  code             String             @unique
+  ownerTherapistId String
+  discountType     DiscountType
+  discountValue    Int
+  // Basis points of a referred therapist's own subscription invoice paid to the coupon owner
+  // as commission. Only ever applies to THERAPIST-role redemptions — see AffiliateCommission.
+  commissionBps    Int                @default(1000)
+  active           Boolean            @default(true)
+  maxRedemptions   Int?
+  expiresAt        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  owner            Therapist          @relation(fields: [ownerTherapistId], references: [id], onDelete: Cascade)
+  redemptions      CouponRedemption[]
+
+  @@index([ownerTherapistId])
+}
+
+// One redeemed coupon per account, captured at signup — @@unique enforces "at most one
+// coupon per user, ever" at the database level.
+model CouponRedemption {
+  id                    String    @id @default(cuid())
+  couponId              String
+  redeemedByUserId      String    @unique
+  redeemedRole          Role
+  discountValueSnapshot Int
+  redeemedAt            DateTime  @default(now())
+  coupon                Coupon    @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  redeemedBy            User      @relation(fields: [redeemedByUserId], references: [id], onDelete: Cascade)
+  commissions           AffiliateCommission[]
+
+  @@index([couponId])
+}
+
+// Accrues once per elapsed billing period on the REFERRED THERAPIST'S OWN subscription — a
+// single referral earns commission on every period they stay subscribed, not just once.
+// invoiceId is unique (one commission per invoice, preventing double-accrual on reconciliation
+// retries); redemptionId is deliberately NOT unique, since one redemption spans many invoices
+// over time. Never accrues off the still-mock client subscription, which has no real revenue
+// behind it to share — client-role redemptions record a discount fact only, no commission.
+model AffiliateCommission {
+  id               String           @id @default(cuid())
+  redemptionId     String
+  invoiceId        String           @unique
+  ownerTherapistId String
+  amountCents      Int
+  currency         String
+  status           CommissionStatus @default(accrued)
+  accruedAt        DateTime         @default(now())
+  payoutId         String?
+  redemption       CouponRedemption @relation(fields: [redemptionId], references: [id], onDelete: Cascade)
+  invoice          Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  owner            Therapist        @relation(fields: [ownerTherapistId], references: [id], onDelete: Cascade)
+  payout           Payout?          @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@index([ownerTherapistId, accruedAt])
+  @@index([payoutId])
+}
+
+enum DiscountType {
+  percent
+  fixed
+}
+
+enum CommissionStatus {
+  accrued
+  paid
+}
+
+enum DurationSource {
+  actual
+  scheduled_fallback
+}
+
+enum PayoutStatus {
+  pending
+  paid
+}
+
+// A clinic groups multiple therapists under one owner for seat-based billing. No existing
+// Clinic/Organization concept predates this — introduced fresh for Team Billing.
+model Clinic {
+  id                  String             @id @default(cuid())
+  name                String
+  ownerTherapistId    String             @unique
+  includedSeats       Int                @default(1)
+  // Cost per seat beyond includedSeats. Business decision TBD — documented default, trivially
+  // adjustable later without a schema change.
+  extraSeatPriceCents Int                @default(0)
+  currency            String             @default("USD")
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  owner               Therapist          @relation(fields: [ownerTherapistId], references: [id], onDelete: Cascade)
+  memberships         ClinicMembership[]
+}
+
+// One-active-membership-per-therapist isn't expressible as a clean Prisma constraint (would
+// need a partial unique index) — enforced at the API layer instead, by rejecting a new invite
+// if the invitee already has an invited/active row anywhere.
+model ClinicMembership {
+  id          String                 @id @default(cuid())
+  clinicId    String
+  therapistId String
+  role        ClinicRole             @default(member)
+  status      ClinicMembershipStatus @default(invited)
+  invitedAt   DateTime               @default(now())
+  joinedAt    DateTime?
+  removedAt   DateTime?
+  clinic      Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  therapist   Therapist              @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, therapistId])
+  @@index([therapistId, status])
+}
+
+enum ClinicRole {
+  owner
+  member
+}
+
+enum ClinicMembershipStatus {
+  invited
+  active
+  removed
 }
 
 model MoodEntry {

@@ -134,6 +134,11 @@ export default function AppointmentsPage() {
     await fetch(`/api/appointments/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "cancelled" }) });
   }
 
+  async function complete(id: string) {
+    setAppts((p) => p.map((a) => a.id === id ? { ...a, status: "completed" as const } : a));
+    await fetch(`/api/appointments/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "completed" }) });
+  }
+
   async function bookAppointment(clientId: string, clientName: string, date: string, time: string, type: Appt["type"], duration: number, notes: string) {
     const [h, mStr] = time.split(":");
     const isPm = time.includes("PM") && !time.startsWith("12");
@@ -251,6 +256,7 @@ export default function AppointmentsPage() {
                   onDecline={() => decline(appt.id)}
                   onJoin={() => setActiveCall(appt)}
                   onReschedule={() => setRescheduleAppt(appt)}
+                  onComplete={() => complete(appt.id)}
                 />
               ))
             )}
@@ -313,7 +319,7 @@ export default function AppointmentsPage() {
                 ) : (
                   <div className="divide-y divide-stone-50">
                     {selectedAppts.sort((a, b) => a.date.localeCompare(b.date)).map((appt) => (
-                      <AppointmentCard key={appt.id} appt={appt} flat onApprove={() => approve(appt.id)} onDecline={() => decline(appt.id)} onJoin={() => setActiveCall(appt)} onReschedule={() => setRescheduleAppt(appt)} />
+                      <AppointmentCard key={appt.id} appt={appt} flat onApprove={() => approve(appt.id)} onDecline={() => decline(appt.id)} onJoin={() => setActiveCall(appt)} onReschedule={() => setRescheduleAppt(appt)} onComplete={() => complete(appt.id)} />
                     ))}
                   </div>
                 )}
@@ -399,12 +405,14 @@ export default function AppointmentsPage() {
 }
 
 function AppointmentCard({
-  appt, flat = false, onApprove, onDecline, onJoin, onReschedule,
+  appt, flat = false, onApprove, onDecline, onJoin, onReschedule, onComplete,
 }: {
   appt: Appt; flat?: boolean;
-  onApprove: () => void; onDecline: () => void; onJoin: () => void; onReschedule: () => void;
+  onApprove: () => void; onDecline: () => void; onJoin: () => void; onReschedule: () => void; onComplete: () => void;
 }) {
   const joinWindow = getJoinWindow(new Date(appt.date), appt.duration);
+  const sessionEndsAt = new Date(new Date(appt.date).getTime() + appt.duration * 60_000);
+  const sessionHasEnded = new Date() >= sessionEndsAt;
   return (
     <div className={flat ? "px-4 py-4" : "bg-white border border-stone-100 rounded-xl p-4"}>
       <div className="flex items-start gap-4">
@@ -448,6 +456,9 @@ function AppointmentCard({
               )}
               {appt.type === "video" && !joinWindow.isOpen && new Date() < joinWindow.opensAt && (
                 <span className="text-[10px] text-stone-400 font-medium text-right">Available in {formatCountdown(joinWindow.opensInMs)}</span>
+              )}
+              {sessionHasEnded && (
+                <button onClick={onComplete} className="text-xs bg-sage-600 text-white px-2.5 py-1 rounded-md font-medium hover:bg-sage-700 transition-colors">Mark completed</button>
               )}
               <button onClick={onReschedule} className="text-xs border border-stone-200 text-stone-500 px-2.5 py-1 rounded-md hover:bg-stone-50 transition-colors">Reschedule</button>
             </>
