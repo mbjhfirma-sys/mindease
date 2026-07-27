@@ -55,16 +55,35 @@ export async function GET(
     orderBy: { createdAt: "asc" },
   });
 
+  const authorIds = [...new Set(replies.map((r) => r.author.id))];
+  const [riskFlags, escalations] = await Promise.all([
+    db.riskFlag.findMany({ where: { userId: { in: authorIds }, status: "open" }, select: { userId: true, severity: true } }),
+    db.riskFlag.findMany({ where: { source: "community", sourceId: { in: replies.map((r) => r.id) }, status: "open" }, select: { sourceId: true, severity: true, detail: true } }),
+  ]);
+  const riskByAuthor = new Map<string, "high" | "medium">();
+  for (const f of riskFlags) {
+    if (f.severity === "high") riskByAuthor.set(f.userId, "high");
+    else if (f.severity === "moderate" && riskByAuthor.get(f.userId) !== "high") riskByAuthor.set(f.userId, "medium");
+  }
+  const escalationByReply = new Map(escalations.map((e) => [e.sourceId, e]));
+
   return NextResponse.json({
-    replies: replies.map((r) => ({
-      id: r.id,
-      author: r.author.name,
-      authorId: r.author.id,
-      content: r.content,
-      createdAt: r.createdAt,
-      likes: r.likes.length,
-      liked: r.likes.some((l) => l.userId === userId),
-    })),
+    replies: replies.map((r) => {
+      const escalation = escalationByReply.get(r.id);
+      return {
+        id: r.id,
+        author: r.author.name,
+        authorId: r.author.id,
+        authorRiskLevel: riskByAuthor.get(r.author.id) ?? "low",
+        content: r.content,
+        createdAt: r.createdAt,
+        likes: r.likes.length,
+        liked: r.likes.some((l) => l.userId === userId),
+        escalated: !!escalation,
+        escalationSeverity: escalation?.severity ?? null,
+        escalationDetail: escalation?.detail ?? null,
+      };
+    }),
   });
 }
 
@@ -114,6 +133,15 @@ export async function PATCH(
 
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  // Dismissing a flagged post also acknowledges its linked risk flag (if any),
+  // so it stops showing as open on the client's individual risk profile too.
+  if (parsed.data.flagged === false) {
+    await db.riskFlag.updateMany({
+      where: { source: "community", sourceId: postId, status: "open" },
+      data: { status: "acknowledged", acknowledgedAt: new Date(), acknowledgedById: session.user.id },
+    });
+  }
 
   const updated = await db.therapistGroupPost.update({ where: { id: postId }, data: parsed.data });
   return NextResponse.json({ ok: true, post: updated });

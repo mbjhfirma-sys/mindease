@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { createNotification } from "@/lib/notify";
 
 const inviteSchema = z.object({
   clientIds: z.array(z.string()).min(1),
@@ -93,12 +94,26 @@ export async function POST(
     return NextResponse.json({ error: "Some users are not your clients" }, { status: 403 });
   }
 
+  const group = await db.therapistGroup.findUnique({ where: { id }, select: { name: true } });
+
   await db.$transaction(
     parsed.data.clientIds.map((clientId) =>
       db.therapistGroupInvite.upsert({
         where: { groupId_clientId: { groupId: id, clientId } },
-        update: { sentAt: new Date() },
+        update: { sentAt: new Date(), accepted: false },
         create: { groupId: id, clientId },
+      })
+    )
+  );
+
+  const inviterName = session.user.name ?? "Your therapist";
+  await Promise.all(
+    parsed.data.clientIds.map((clientId) =>
+      createNotification(clientId, {
+        title: "You've been invited to a community",
+        body: `${inviterName} invited you to join "${group?.name ?? "a community"}".`,
+        icon: "🤝",
+        href: "/dashboard/community?tab=groups",
       })
     )
   );

@@ -23,7 +23,6 @@ export const BUSINESS_SUBNAV: NavItem[] = [
   { href: "/therapist/business/subscription", label: "Subscription",  Icon: CreditCard },
   { href: "/therapist/business/payouts",      label: "Payouts",       Icon: Wallet },
   { href: "/therapist/business/invoices",     label: "Invoices",      Icon: Receipt },
-  { href: "/therapist/business/analytics",    label: "Analytics",     Icon: BarChart2 },
   { href: "/therapist/business/tax",          label: "Tax Documents", Icon: FileText },
   { href: "/therapist/business/affiliate",    label: "Affiliate",     Icon: Gift },
 ];

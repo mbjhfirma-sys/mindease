@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { computeConsecutiveDayStreak, resolveTimeZone, STREAK_LOOKBACK } from "@/lib/dateKey";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -16,6 +17,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     where: { id: clientId, therapistId: therapist.id },
     select: {
       id: true, name: true, email: true, avatar: true, plan: true, level: true, xp: true, createdAt: true,
+      timezone: true,
       privacyPrefs: true,
       moodEntries: { select: { score: true, note: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 14 },
       journalEntries: { select: { id: true, title: true, content: true, mood: true, emotions: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 20 },
@@ -55,6 +57,27 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     ? parseFloat((moodScores.reduce((s, v) => s + v, 0) / moodScores.length).toFixed(1))
     : 0;
 
+  const streakLookbackStart = new Date(Date.now() - STREAK_LOOKBACK * 24 * 60 * 60 * 1000);
+  const [openRiskFlags, streakMoods] = await Promise.all([
+    db.riskFlag.findMany({
+      where: { userId: clientId, status: "open" },
+      select: { id: true, source: true, severity: true, detail: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.moodEntry.findMany({
+      where: { userId: clientId, createdAt: { gte: streakLookbackStart } },
+      select: { createdAt: true },
+    }),
+  ]);
+
+  const riskLevel = openRiskFlags.some((f) => f.severity === "high")
+    ? "high"
+    : openRiskFlags.some((f) => f.severity === "moderate")
+    ? "medium"
+    : "low";
+  const timeZone = resolveTimeZone(client.timezone);
+  const streak = computeConsecutiveDayStreak(streakMoods.map((m) => m.createdAt), timeZone);
+
   return NextResponse.json({
     client: {
       id: client.id,
@@ -67,6 +90,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       memberSince: client.createdAt,
       moodHistory: client.moodEntries.map((m) => ({ score: m.score, note: m.note, date: m.createdAt })),
       moodAvg,
+      streak,
+      riskLevel,
+      riskFlags: openRiskFlags,
       journalEntries: shareJournal ? client.journalEntries : [],
       journalShared: shareJournal,
       missionCompletions: client.missionCompletions,

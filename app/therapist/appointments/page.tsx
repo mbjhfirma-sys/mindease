@@ -1,28 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { X } from "lucide-react";
 import VideoCallRoom from "@/components/video/VideoCallRoom";
 import { TIME_SLOTS, weekdayOf } from "@/lib/scheduling";
-import { getJoinWindow } from "@/lib/video";
+import AppointmentRow, { type Appt, isSameDay } from "./_components/AppointmentRow";
+import MiniCalendar from "./_components/MiniCalendar";
 
-type Appt = {
-  id: string; date: string; duration: number;
-  type: "video" | "in_person" | "phone";
-  status: "pending" | "confirmed" | "completed" | "cancelled" | "no_show";
-  client: { id: string; name: string };
-  notes?: string | null;
-};
 type ClientStub = { id: string; name: string };
-type TabView = "upcoming" | "pending" | "history" | "calendar" | "availability";
+type TabView = "today" | "history" | "availability";
 
 const SESSION_TYPES = [
-  { value: "video",      label: "Video" },
-  { value: "in_person",  label: "In person" },
-  { value: "phone",      label: "Phone" },
+  { value: "video", label: "Video" },
+  { value: "in_person", label: "In person" },
+  { value: "phone", label: "Phone" },
 ] as const;
-
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function todayIso() {
   const d = new Date();
@@ -33,14 +25,6 @@ function fmtDur(min: number) {
   return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${min % 60 ? ` ${min % 60}m` : ""}`;
 }
 
-function formatCountdown(ms: number): string {
-  const totalMin = Math.ceil(ms / 60_000);
-  if (totalMin < 60) return `${totalMin}m`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${h}h${m ? ` ${m}m` : ""}`;
-}
-
 function displayDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
@@ -49,35 +33,53 @@ function displayTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function typeLabel(t: string) {
-  return t === "in_person" ? "In person" : t.charAt(0).toUpperCase() + t.slice(1);
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Pending", confirmed: "Confirmed", completed: "Completed", cancelled: "Cancelled", no_show: "No-show",
-};
+function startOfWeek(d: Date): Date {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const r = addDays(d, diff);
+  r.setHours(0, 0, 0, 0);
+  return r;
+}
+
+function relTime(target: Date, now: Date): string {
+  const diffMin = Math.round((target.getTime() - now.getTime()) / 60_000);
+  if (diffMin <= 0) return "now";
+  if (diffMin < 60) return `in ${diffMin}m`;
+  const h = Math.floor(diffMin / 60), m = diffMin % 60;
+  return `in ${h}h${m ? ` ${m}m` : ""}`;
+}
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export default function AppointmentsPage() {
-  const [appts,      setAppts]      = useState<Appt[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [clients,    setClients]    = useState<ClientStub[]>([]);
-  const [view,       setView]       = useState<TabView>("upcoming");
+  const [appts, setAppts] = useState<Appt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [clients, setClients] = useState<ClientStub[]>([]);
+  const [view, setView] = useState<TabView>("today");
   const [activeCall, setActiveCall] = useState<Appt | null>(null);
   const [rescheduleAppt, setRescheduleAppt] = useState<Appt | null>(null);
-  const [showBookModal,  setShowBookModal]  = useState(false);
+  const [showBookModal, setShowBookModal] = useState(false);
 
   // Availability state
   const [availableSlots, setAvailableSlots] = useState<Set<string>>(new Set());
   const [savingAvailability, setSavingAvailability] = useState(false);
   const [availabilitySaved, setAvailabilitySaved] = useState(false);
 
-  // Calendar state
-  const now = new Date();
-  const [calYear,      setCalYear]     = useState(now.getFullYear());
-  const [calMonth,     setCalMonth]    = useState(now.getMonth());
-  const [selectedDay,  setSelectedDay] = useState<number | null>(now.getDate());
+  // Today / mini-calendar state
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const [calYear, setCalYear] = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(today.getMonth());
 
-  // Keeps join-window countdowns on AppointmentCard fresh without a network round trip.
+  // Keeps join-window countdowns fresh without a network round trip.
   const [, tick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => tick((n) => n + 1), 20_000);
@@ -139,6 +141,12 @@ export default function AppointmentsPage() {
     await fetch(`/api/appointments/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "completed" }) });
   }
 
+  async function cancelAppt(id: string) {
+    if (!window.confirm("Cancel this session? Your client will be notified.")) return;
+    setAppts((p) => p.map((a) => a.id === id ? { ...a, status: "cancelled" as const } : a));
+    await fetch(`/api/appointments/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "cancelled" }) });
+  }
+
   async function bookAppointment(clientId: string, clientName: string, date: string, time: string, type: Appt["type"], duration: number, notes: string) {
     const [h, mStr] = time.split(":");
     const isPm = time.includes("PM") && !time.startsWith("12");
@@ -167,38 +175,51 @@ export default function AppointmentsPage() {
     await fetch(`/api/appointments/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: isoDate }) });
   }
 
-  const upcoming = appts.filter((a) => a.status === "confirmed" || a.status === "pending");
-  const pending  = appts.filter((a) => a.status === "pending");
-  const history  = appts.filter((a) => ["completed", "cancelled", "no_show"].includes(a.status));
-  const displayList = view === "pending" ? pending : view === "history" ? history : upcoming;
+  const now = new Date();
+  const pending = appts.filter((a) => a.status === "pending");
+  const activeAppts = appts.filter((a) => a.status !== "cancelled" && a.status !== "no_show");
+  const history = appts
+    .filter((a) => a.status === "completed" || a.status === "cancelled" || a.status === "no_show")
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // Calendar helpers
-  const firstDayOfWeek = new Date(calYear, calMonth, 1).getDay();
-  const daysInMonth    = new Date(calYear, calMonth + 1, 0).getDate();
-  const monthName      = new Date(calYear, calMonth, 1).toLocaleString("default", { month: "long", year: "numeric" });
+  const todayCount = activeAppts.filter((a) => isSameDay(new Date(a.date), today)).length;
+  const weekStart = startOfWeek(today);
+  const weekAppts = activeAppts.filter((a) => { const d = new Date(a.date); return d >= weekStart && d < addDays(weekStart, 7); });
+  const nextAppt = appts
+    .filter((a) => (a.status === "confirmed" || a.status === "pending") && new Date(a.date) >= now)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
 
-  const apptsByDay: Record<number, Appt[]> = {};
-  for (const a of appts) {
-    const d = new Date(a.date);
-    if (d.getFullYear() === calYear && d.getMonth() === calMonth) {
-      const day = d.getDate();
-      if (!apptsByDay[day]) apptsByDay[day] = [];
-      apptsByDay[day].push(a);
+  const selectedDayAppts = appts
+    .filter((a) => isSameDay(new Date(a.date), selectedDate))
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const selectedDayLabel = isSameDay(selectedDate, today)
+    ? "Today"
+    : selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+  const monthDensity = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const a of appts) {
+      if (a.status === "cancelled" || a.status === "no_show") continue;
+      const d = new Date(a.date);
+      if (d.getFullYear() === calYear && d.getMonth() === calMonth) {
+        const k = dayKey(d);
+        map[k] = (map[k] ?? 0) + 1;
+      }
     }
-  }
-  const selectedAppts = selectedDay ? (apptsByDay[selectedDay] ?? []) : [];
+    return map;
+  }, [appts, calYear, calMonth]);
 
   function prevMonth() {
     if (calMonth === 0) { setCalYear((y) => y - 1); setCalMonth(11); } else setCalMonth((m) => m - 1);
-    setSelectedDay(null);
   }
   function nextMonth() {
     if (calMonth === 11) { setCalYear((y) => y + 1); setCalMonth(0); } else setCalMonth((m) => m + 1);
-    setSelectedDay(null);
   }
 
-  const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-  const isToday  = (day: number) => `${calYear}-${calMonth}-${day}` === todayKey;
+  const takenSlots = appts.filter((a) => a.status === "confirmed" || a.status === "pending").map((a) => ({
+    dateStr: a.date.split("T")[0],
+    time: displayTime(a.date),
+  }));
 
   return (
     <>
@@ -206,9 +227,7 @@ export default function AppointmentsPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-stone-900">Appointments</h1>
-            <p className="text-sm text-stone-500 mt-1">
-              {loading ? "Loading…" : `${pending.length} pending · ${upcoming.length - pending.length} confirmed`}
-            </p>
+            <p className="text-sm text-stone-500 mt-1">Your practice, at a glance.</p>
           </div>
           <button onClick={() => setShowBookModal(true)} className="bg-stone-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-stone-800 transition-colors">
             Book slot
@@ -216,12 +235,10 @@ export default function AppointmentsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-stone-100 overflow-x-auto">
+        <div className="flex border-b border-stone-100">
           {([
-            { id: "upcoming",     label: `Upcoming (${upcoming.length})` },
-            { id: "pending",      label: `Pending${pending.length > 0 ? ` (${pending.length})` : ""}` },
-            { id: "history",      label: "History" },
-            { id: "calendar",     label: "Calendar" },
+            { id: "today", label: "Today" },
+            { id: "history", label: "History" },
             { id: "availability", label: "Availability" },
           ] as { id: TabView; label: string }[]).map((t) => (
             <button
@@ -236,100 +253,86 @@ export default function AppointmentsPage() {
           ))}
         </div>
 
-        {/* List views */}
-        {view !== "availability" && view !== "calendar" && (
-          <div className="space-y-3">
-            {loading ? (
-              <div className="space-y-3 animate-pulse">
-                {[1,2].map((i) => <div key={i} className="h-24 bg-white border border-stone-100 rounded-xl" />)}
-              </div>
-            ) : displayList.length === 0 ? (
-              <div className="bg-white border border-stone-100 rounded-xl py-14 text-center text-sm text-stone-400">
-                No appointments in this category
-              </div>
-            ) : (
-              displayList.map((appt) => (
-                <AppointmentCard
-                  key={appt.id}
-                  appt={appt}
-                  onApprove={() => approve(appt.id)}
-                  onDecline={() => decline(appt.id)}
-                  onJoin={() => setActiveCall(appt)}
-                  onReschedule={() => setRescheduleAppt(appt)}
-                  onComplete={() => complete(appt.id)}
-                />
-              ))
-            )}
+        {loading ? (
+          <div className="space-y-3 animate-pulse">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[1, 2, 3, 4].map((i) => <div key={i} className="h-20 bg-white border border-stone-100 rounded-xl" />)}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3">
+              <div className="h-64 bg-white border border-stone-100 rounded-xl" />
+              <div className="h-64 bg-white border border-stone-100 rounded-xl" />
+            </div>
           </div>
-        )}
-
-        {/* Calendar view */}
-        {view === "calendar" && (
+        ) : view === "today" ? (
           <div className="space-y-4">
-            <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-                <button onClick={prevMonth} className="p-1.5 rounded-lg text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"><ChevronLeft size={16} /></button>
-                <span className="text-sm font-semibold text-stone-900">{monthName}</span>
-                <button onClick={nextMonth} className="p-1.5 rounded-lg text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"><ChevronRight size={16} /></button>
-              </div>
-              <div className="grid grid-cols-7 border-b border-stone-100">
-                {DAY_LABELS.map((d) => <div key={d} className="py-2 text-center text-[10px] font-semibold text-stone-400 uppercase tracking-wider">{d}</div>)}
-              </div>
-              <div className="grid grid-cols-7">
-                {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`e${i}`} className="h-16 border-b border-r border-stone-50 last:border-r-0" />)}
-                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
-                  const dayAppts = apptsByDay[day] ?? [];
-                  const confirmed = dayAppts.filter((a) => a.status === "confirmed").length;
-                  const pendingCount = dayAppts.filter((a) => a.status === "pending").length;
-                  const isSelected = selectedDay === day;
-                  const today = isToday(day);
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => setSelectedDay(day === selectedDay ? null : day)}
-                      className={`h-16 border-b border-r border-stone-50 last:border-r-0 flex flex-col items-start px-2 pt-1.5 pb-1 transition-colors text-left ${isSelected ? "bg-stone-900" : "hover:bg-stone-50"}`}
-                    >
-                      <span className={`text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full mb-1 ${isSelected ? "text-white" : today ? "bg-stone-900 text-white" : "text-stone-700"}`}>
-                        {day}
-                      </span>
-                      <div className="flex flex-col gap-0.5 w-full">
-                        {confirmed > 0 && <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium truncate ${isSelected ? "bg-stone-700 text-stone-200" : "bg-stone-100 text-stone-600"}`}>{confirmed} confirmed</span>}
-                        {pendingCount > 0 && <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium truncate ${isSelected ? "bg-amber-700 text-amber-100" : "bg-amber-50 text-amber-600"}`}>{pendingCount} pending</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatTile value={String(todayCount)} label="Today's sessions" sub={today.toLocaleDateString("en-US", { weekday: "long" })} />
+              <StatTile value={String(pending.length)} label="Pending requests" sub="awaiting your response" />
+              <StatTile value={String(weekAppts.length)} label="This week" sub={`${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${addDays(weekStart, 6).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`} />
+              <StatTile value={nextAppt ? relTime(new Date(nextAppt.date), now) : "—"} label="Next session" sub={nextAppt ? nextAppt.client.name : "Nothing scheduled"} />
             </div>
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5 text-xs text-stone-500"><span className="w-2.5 h-2.5 bg-stone-100 rounded-sm" />Confirmed</span>
-              <span className="flex items-center gap-1.5 text-xs text-stone-500"><span className="w-2.5 h-2.5 bg-amber-50 rounded-sm border border-amber-200" />Pending</span>
-              <span className="flex items-center gap-1.5 text-xs text-stone-500"><span className="w-2.5 h-2.5 bg-stone-900 rounded-full" />Today</span>
-            </div>
-            {selectedDay !== null && (
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3">
               <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-stone-100 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-stone-900">
-                    {new Date(calYear, calMonth, selectedDay).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-                  </h3>
-                  <span className="text-xs text-stone-400">{selectedAppts.length === 0 ? "No sessions" : `${selectedAppts.length} session${selectedAppts.length > 1 ? "s" : ""}`}</span>
+                <div className="px-4 py-3.5 border-b border-stone-50">
+                  <h3 className="text-sm font-semibold text-stone-900">{selectedDayLabel}</h3>
                 </div>
-                {selectedAppts.length === 0 ? (
-                  <div className="py-10 text-center text-sm text-stone-400">No appointments scheduled</div>
+                {selectedDayAppts.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-stone-400">Nothing on the books.</div>
                 ) : (
-                  <div className="divide-y divide-stone-50">
-                    {selectedAppts.sort((a, b) => a.date.localeCompare(b.date)).map((appt) => (
-                      <AppointmentCard key={appt.id} appt={appt} flat onApprove={() => approve(appt.id)} onDecline={() => decline(appt.id)} onJoin={() => setActiveCall(appt)} onReschedule={() => setRescheduleAppt(appt)} onComplete={() => complete(appt.id)} />
+                  <div>
+                    {selectedDayAppts.map((appt) => (
+                      <AppointmentRow
+                        key={appt.id}
+                        appt={appt}
+                        onApprove={() => approve(appt.id)}
+                        onDecline={() => decline(appt.id)}
+                        onJoin={() => setActiveCall(appt)}
+                        onComplete={() => complete(appt.id)}
+                        onReschedule={() => setRescheduleAppt(appt)}
+                        onCancel={() => cancelAppt(appt.id)}
+                      />
                     ))}
                   </div>
                 )}
               </div>
+              <div className="bg-white border border-stone-100 rounded-xl p-4">
+                <MiniCalendar
+                  year={calYear} month={calMonth} selectedDate={selectedDate}
+                  density={monthDensity} onSelectDate={setSelectedDate}
+                  onPrevMonth={prevMonth} onNextMonth={nextMonth}
+                />
+              </div>
+            </div>
+
+            <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+              <div className="px-4 py-3.5 border-b border-stone-50">
+                <h3 className="text-sm font-semibold text-stone-900">Needs your response</h3>
+              </div>
+              {pending.length === 0 ? (
+                <div className="py-10 text-center text-sm text-stone-400">You&rsquo;re all caught up.</div>
+              ) : (
+                <div>
+                  {pending.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((appt) => (
+                    <AppointmentRow key={appt.id} appt={appt} showDate onApprove={() => approve(appt.id)} onDecline={() => decline(appt.id)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : view === "history" ? (
+          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+            {history.length === 0 ? (
+              <div className="py-14 text-center text-sm text-stone-400">No past sessions yet.</div>
+            ) : (
+              <div>
+                {history.map((appt) => (
+                  <AppointmentRow key={appt.id} appt={appt} showDate />
+                ))}
+              </div>
             )}
           </div>
-        )}
-
-        {/* Availability */}
-        {view === "availability" && (
+        ) : (
           <div className="bg-white border border-stone-100 rounded-xl p-5 space-y-5">
             <h3 className="text-sm font-semibold text-stone-900">Weekly Availability</h3>
             <div className="space-y-3">
@@ -378,10 +381,7 @@ export default function AppointmentsPage() {
       {showBookModal && (
         <BookSlotModal
           clients={clients}
-          takenSlots={appts.filter((a) => a.status === "confirmed" || a.status === "pending").map((a) => ({
-            dateStr: a.date.split("T")[0],
-            time: displayTime(a.date),
-          }))}
+          takenSlots={takenSlots}
           weeklyAvailability={availableSlots}
           onConfirm={bookAppointment}
           onClose={() => setShowBookModal(false)}
@@ -404,70 +404,12 @@ export default function AppointmentsPage() {
   );
 }
 
-function AppointmentCard({
-  appt, flat = false, onApprove, onDecline, onJoin, onReschedule, onComplete,
-}: {
-  appt: Appt; flat?: boolean;
-  onApprove: () => void; onDecline: () => void; onJoin: () => void; onReschedule: () => void; onComplete: () => void;
-}) {
-  const joinWindow = getJoinWindow(new Date(appt.date), appt.duration);
-  const sessionEndsAt = new Date(new Date(appt.date).getTime() + appt.duration * 60_000);
-  const sessionHasEnded = new Date() >= sessionEndsAt;
+function StatTile({ value, label, sub }: { value: string; label: string; sub: string }) {
   return (
-    <div className={flat ? "px-4 py-4" : "bg-white border border-stone-100 rounded-xl p-4"}>
-      <div className="flex items-start gap-4">
-        <div className="text-center min-w-[56px] flex-shrink-0 bg-stone-50 rounded-lg px-2 py-2.5">
-          <div className="text-[10px] text-stone-400 uppercase font-medium">{displayDate(appt.date)}</div>
-          <div className="text-sm font-semibold text-stone-900 mt-0.5">{displayTime(appt.date)}</div>
-          <div className="text-[10px] text-stone-400 mt-0.5">{fmtDur(appt.duration)}</div>
-        </div>
-        <div className="w-8 h-8 bg-stone-100 rounded-full flex items-center justify-center text-xs font-semibold text-stone-600 flex-shrink-0 self-center">
-          {appt.client.name[0]}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <h3 className="text-sm font-medium text-stone-900">{appt.client.name}</h3>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-stone-400">{typeLabel(appt.type)}</span>
-            <span className="text-stone-200">·</span>
-            <span className={`text-[10px] border px-1.5 py-0.5 rounded ${
-              appt.status === "pending"   ? "border-amber-200 text-amber-600" :
-              appt.status === "confirmed" ? "border-stone-200 text-stone-600" :
-              appt.status === "completed" ? "border-stone-200 text-stone-400" :
-              "border-red-200 text-red-500"
-            }`}>
-              {STATUS_LABEL[appt.status] ?? appt.status}
-            </span>
-          </div>
-          {appt.notes && <p className="text-xs text-stone-400 mt-1 truncate">{appt.notes}</p>}
-        </div>
-        <div className="flex flex-col gap-1.5 flex-shrink-0">
-          {appt.status === "pending" && (
-            <>
-              <button onClick={onApprove} className="text-xs bg-stone-900 text-white px-2.5 py-1 rounded-md font-medium hover:bg-stone-800 transition-colors">Accept</button>
-              <button onClick={onDecline} className="text-xs border border-stone-200 text-stone-500 px-2.5 py-1 rounded-md hover:bg-stone-50 transition-colors">Decline</button>
-            </>
-          )}
-          {appt.status === "confirmed" && (
-            <>
-              {appt.type === "video" && joinWindow.isOpen && (
-                <button onClick={onJoin} className="text-xs bg-stone-900 text-white px-2.5 py-1 rounded-md font-medium hover:bg-stone-800 transition-colors">Join</button>
-              )}
-              {appt.type === "video" && !joinWindow.isOpen && new Date() < joinWindow.opensAt && (
-                <span className="text-[10px] text-stone-400 font-medium text-right">Available in {formatCountdown(joinWindow.opensInMs)}</span>
-              )}
-              {sessionHasEnded && (
-                <button onClick={onComplete} className="text-xs bg-sage-600 text-white px-2.5 py-1 rounded-md font-medium hover:bg-sage-700 transition-colors">Mark completed</button>
-              )}
-              <button onClick={onReschedule} className="text-xs border border-stone-200 text-stone-500 px-2.5 py-1 rounded-md hover:bg-stone-50 transition-colors">Reschedule</button>
-            </>
-          )}
-          {appt.status === "completed" && (
-            <button className="text-xs border border-stone-200 text-stone-500 px-2.5 py-1 rounded-md hover:bg-stone-50 transition-colors">Notes</button>
-          )}
-        </div>
-      </div>
+    <div className="bg-white border border-stone-100 rounded-xl p-4">
+      <div className="text-2xl font-semibold text-stone-900">{value}</div>
+      <div className="text-xs text-stone-500 mt-0.5">{label}</div>
+      <div className="text-[10px] text-stone-400 mt-0.5">{sub}</div>
     </div>
   );
 }
@@ -535,16 +477,16 @@ function BookSlotModal({
   onConfirm: (clientId: string, clientName: string, date: string, time: string, type: Appt["type"], duration: number, notes: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   onClose: () => void;
 }) {
-  const [clientSearch,    setClientSearch]    = useState("");
-  const [selectedClient,  setSelectedClient]  = useState<ClientStub | null>(null);
-  const [sessionType,     setSessionType]     = useState<Appt["type"]>("video");
-  const [date,            setDate]            = useState(todayIso());
-  const [time,            setTime]            = useState<string | null>(null);
-  const [duration,        setDuration]        = useState(50);
-  const [notes,           setNotes]           = useState("");
-  const [booked,          setBooked]          = useState(false);
-  const [booking,         setBooking]         = useState(false);
-  const [error,           setError]           = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
+  const [selectedClient, setSelectedClient] = useState<ClientStub | null>(null);
+  const [sessionType, setSessionType] = useState<Appt["type"]>("video");
+  const [date, setDate] = useState(todayIso());
+  const [time, setTime] = useState<string | null>(null);
+  const [duration, setDuration] = useState(50);
+  const [notes, setNotes] = useState("");
+  const [booked, setBooked] = useState(false);
+  const [booking, setBooking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const takenTimesOnDate = takenSlots.filter((s) => s.dateStr === date).map((s) => s.time);
   const enforceAvailability = weeklyAvailability.size > 0;
@@ -597,7 +539,6 @@ function BookSlotModal({
           <button onClick={onClose} className="p-1.5 rounded-lg text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"><X size={16} /></button>
         </div>
         <div className="overflow-y-auto flex-1 p-5 space-y-5">
-          {/* Client picker */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-stone-700">Client <span className="text-red-400">*</span></label>
             {selectedClient ? (
@@ -624,7 +565,6 @@ function BookSlotModal({
               </div>
             )}
           </div>
-          {/* Session type */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-stone-700">Session type</label>
             <div className="flex flex-wrap gap-1.5">
@@ -633,7 +573,6 @@ function BookSlotModal({
               ))}
             </div>
           </div>
-          {/* Date + Duration */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-stone-700">Date <span className="text-red-400">*</span></label>
@@ -648,7 +587,6 @@ function BookSlotModal({
               </div>
             </div>
           </div>
-          {/* Time slots */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-stone-700">Time <span className="text-red-400">*</span></label>
             <div className="grid grid-cols-4 gap-2">
@@ -660,7 +598,6 @@ function BookSlotModal({
               })}
             </div>
           </div>
-          {/* Notes */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-stone-700">Notes <span className="text-stone-400 font-normal">(optional)</span></label>
             <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Initial intake session." className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 text-stone-900 placeholder:text-stone-300 focus:outline-none focus:border-stone-400 transition-colors resize-none" />

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 const joinSchema = z.object({
   groupId: z.string(),
-  action: z.enum(["join", "leave"]),
+  action: z.enum(["join", "leave", "decline"]),
   source: z.enum(["support", "therapist"]).default("support"),
 });
 
@@ -17,7 +17,7 @@ export async function GET() {
 
   const userId = session.user.id;
 
-  const [supportGroups, therapistGroups] = await Promise.all([
+  const [supportGroups, therapistGroups, pendingInvites] = await Promise.all([
     db.supportGroup.findMany({
       include: {
         memberships: { select: { userId: true } },
@@ -34,7 +34,26 @@ export async function GET() {
       },
       orderBy: { createdAt: "desc" },
     }),
+    db.therapistGroupInvite.findMany({
+      where: { clientId: userId, accepted: false },
+      include: {
+        group: {
+          include: {
+            memberships: { select: { clientId: true } },
+            _count: { select: { memberships: true } },
+            therapist: { include: { user: { select: { name: true } } } },
+          },
+        },
+      },
+    }),
   ]);
+
+  const invitedGroupIds = new Set(pendingInvites.map((i) => i.groupId));
+  // Invite-only groups aren't in `therapistGroups` (that query is open-groups-only),
+  // so surface them separately — but only ones still active and not yet joined.
+  const inviteOnlyGroups = pendingInvites
+    .map((i) => i.group)
+    .filter((g) => g.status === "active" && g.privacy !== "open" && !g.memberships.some((m) => m.clientId === userId));
 
   const formatted = [
     ...supportGroups.map((g) => ({
@@ -49,6 +68,8 @@ export async function GET() {
       joined: g.memberships.some((m) => m.userId === userId),
       source: "support" as const,
       createdByName: null,
+      privacy: "open" as const,
+      invited: false,
     })),
     ...therapistGroups.map((g) => ({
       id: g.id,
@@ -62,6 +83,23 @@ export async function GET() {
       joined: g.memberships.some((m) => m.clientId === userId),
       source: "therapist" as const,
       createdByName: g.therapist.user.name,
+      privacy: g.privacy,
+      invited: invitedGroupIds.has(g.id),
+    })),
+    ...inviteOnlyGroups.map((g) => ({
+      id: g.id,
+      name: g.name,
+      description: g.description ?? "",
+      category: g.category,
+      icon: g.icon,
+      color: "",
+      nextSession: null,
+      members: g._count.memberships,
+      joined: false,
+      source: "therapist" as const,
+      createdByName: g.therapist.user.name,
+      privacy: g.privacy,
+      invited: true,
     })),
   ];
 
@@ -80,16 +118,29 @@ export async function POST(req: NextRequest) {
   const userId = session.user.id;
 
   if (source === "therapist") {
-    // Verify the group is open
     const group = await db.therapistGroup.findUnique({
       where: { id: groupId },
       select: { privacy: true, status: true },
     });
-    if (!group || group.privacy !== "open" || group.status !== "active") {
+    if (!group || group.status !== "active") {
       return NextResponse.json({ error: "Group not available" }, { status: 403 });
     }
 
+    if (action === "decline") {
+      await db.therapistGroupInvite.deleteMany({ where: { groupId, clientId: userId } });
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "join") {
+      if (group.privacy !== "open") {
+        const invite = await db.therapistGroupInvite.findUnique({
+          where: { groupId_clientId: { groupId, clientId: userId } },
+        });
+        if (!invite) {
+          return NextResponse.json({ error: "You need an invite to join this group" }, { status: 403 });
+        }
+        await db.therapistGroupInvite.update({ where: { id: invite.id }, data: { accepted: true } });
+      }
       await db.therapistGroupMembership.upsert({
         where: { groupId_clientId: { groupId, clientId: userId } },
         update: {},

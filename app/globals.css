@@ -24,6 +24,50 @@
   --color-stone-800: #292524;
   --color-stone-900: #1C1917;
   --font-sans: var(--font-inter);
+
+  /* "Chart" clinical palette — client roster + client chart pages */
+  --color-chart-bg: #F4F7F8;
+  --color-chart-table-head: #F8FAFA;
+  --color-chart-line: #E1E8EA;
+  --color-chart-ink: #16232A;
+  --color-chart-muted: #5D7178;
+  --color-chart-dim: #96A6AB;
+  --color-chart-teal: #0E7C86;
+  --color-chart-teal-soft: #E1F1F1;
+  --color-chart-risk-high: #D64545;
+  --color-chart-risk-medium: #D98A2B;
+  --color-chart-risk-low: #2E9E6D;
+  --color-chart-banner-high-bg: #FDEDED;
+  --color-chart-banner-high-border: #F5C6C6;
+  --color-chart-banner-high-text: #8F2B2B;
+  --color-chart-banner-medium-bg: #FDF4E7;
+  --color-chart-banner-medium-border: #F0D6A8;
+  --color-chart-banner-medium-text: #8A5A15;
+
+  /* "Console" trust & safety palette — therapist community moderation console */
+  --color-console-bg: #F2F4F8;
+  --color-console-panel: #FFFFFF;
+  --color-console-line: #DDE2ED;
+  --color-console-ink: #1B2438;
+  --color-console-muted: #5C6580;
+  --color-console-dim: #96A0BC;
+  --color-console-navy: #2C3E63;
+  --color-console-navy-soft: #E7EAF3;
+  --color-console-risk-high: #D64545;
+  --color-console-risk-medium: #D98A2B;
+  --color-console-risk-low: #2E9E6D;
+  --color-console-mindo: #6552D0;
+  --color-console-mindo-soft: #F0EEFC;
+  --color-console-banner-high-bg: #FDEDED;
+  --color-console-banner-high-border: #F5C6C6;
+  --color-console-banner-high-text: #8F2B2B;
+  --color-console-banner-moderate-bg: #FDF4E7;
+  --color-console-banner-moderate-border: #F0D6A8;
+  --color-console-banner-moderate-text: #8A5A15;
+  --color-console-privacy-open-bg: #EAF7F1;
+  --color-console-privacy-open-text: #1E7A55;
+  --color-console-privacy-invite-bg: #FDF4E7;
+  --color-console-privacy-invite-text: #8A5A15;
 }
 
 * {

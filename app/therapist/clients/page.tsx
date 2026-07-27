@@ -8,11 +8,33 @@ type Client = {
   plan: string; xp: number; level: number; joinedAt: string;
   recentMoods: { score: number; date: string }[];
   lastActivity: string;
+  riskLevel: "low" | "medium" | "high";
+  missionCompletion: number;
+  streak: number;
+  lastSession: string | null;
+  nextSession: string | null;
 };
 
 type WaitlistEntry = {
   id: string; userId: string; name: string; avatar: string | null; email: string; createdAt: string;
 };
+
+const RISK_PILL: Record<Client["riskLevel"], string> = {
+  high: "border-chart-risk-high/30 text-chart-risk-high bg-chart-risk-high/10",
+  medium: "border-chart-risk-medium/30 text-chart-risk-medium bg-chart-risk-medium/10",
+  low: "border-chart-risk-low/30 text-chart-risk-low bg-chart-risk-low/10",
+};
+const RISK_DOT: Record<Client["riskLevel"], string> = {
+  high: "bg-chart-risk-high", medium: "bg-chart-risk-medium", low: "bg-chart-risk-low",
+};
+
+function needsAttention(c: Client) {
+  return c.riskLevel !== "low" || c.lastActivity === "inactive";
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: (name: string) => void }) {
   const [code, setCode] = useState("");
@@ -45,7 +67,7 @@ function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: (n
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="px-6 pt-6 pb-4 border-b border-stone-100 flex items-center justify-between">
+        <div className="px-6 pt-6 pb-4 border-b border-chart-line flex items-center justify-between">
           <h2 className="text-lg font-semibold text-stone-900">Add client by code</h2>
           <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors text-xl leading-none">×</button>
         </div>
@@ -91,6 +113,8 @@ export default function ClientsPage() {
   const [waitlist,   setWaitlist]   = useState<WaitlistEntry[]>([]);
   const [waitlistLoading, setWaitlistLoading] = useState(true);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [riskFilter, setRiskFilter] = useState<"all" | "high" | "medium" | "low">("all");
+  const [attentionOnly, setAttentionOnly] = useState(false);
 
   function loadClients() {
     fetch("/api/therapist/clients")
@@ -125,12 +149,17 @@ export default function ClientsPage() {
     }
   }
 
-  const filtered = clients.filter((c) =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const attentionCount = clients.filter(needsAttention).length;
+
+  const filtered = clients.filter((c) => {
+    if (!(!search || c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase()))) return false;
+    if (riskFilter !== "all" && c.riskLevel !== riskFilter) return false;
+    if (attentionOnly && !needsAttention(c)) return false;
+    return true;
+  });
 
   return (
-    <div className="max-w-4xl mx-auto space-y-5">
+    <div className="max-w-6xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-stone-900">Clients</h1>
@@ -148,7 +177,7 @@ export default function ClientsPage() {
         />
       )}
 
-      <div className="flex border-b border-stone-100">
+      <div className="flex border-b border-chart-line">
         {([
           { id: "clients" as const, label: "Clients" },
           { id: "waitlist" as const, label: `Waitlist${waitlist.length > 0 ? ` (${waitlist.length})` : ""}` },
@@ -166,15 +195,15 @@ export default function ClientsPage() {
       </div>
 
       {view === "waitlist" ? (
-        <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+        <div className="bg-white border border-chart-line rounded-xl overflow-hidden">
           {waitlistLoading ? (
-            <div className="divide-y divide-stone-50 animate-pulse">
+            <div className="divide-y divide-chart-line animate-pulse">
               {[1, 2].map((i) => <div key={i} className="h-16 px-5 py-4" />)}
             </div>
           ) : waitlist.length === 0 ? (
             <div className="py-16 text-center text-sm text-stone-400">No one is waiting right now.</div>
           ) : (
-            <div className="divide-y divide-stone-50">
+            <div className="divide-y divide-chart-line">
               {waitlist.map((w) => (
                 <div key={w.id} className="flex items-center gap-4 px-5 py-4">
                   <div className="w-9 h-9 bg-stone-100 rounded-full flex items-center justify-center text-sm font-semibold text-stone-600 flex-shrink-0">
@@ -207,74 +236,107 @@ export default function ClientsPage() {
         </div>
       ) : (
         <>
-      <div className="flex gap-2">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name or email…"
-          className="flex-1 bg-white border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
-        />
-      </div>
-
-      <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="divide-y divide-stone-50 animate-pulse">
-            {[1, 2, 3].map((i) => <div key={i} className="h-16 px-5 py-4" />)}
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              className="flex-1 min-w-[200px] bg-white border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
+            />
+            {([
+              { id: "all" as const, label: "All risk levels" },
+              { id: "high" as const, label: "High risk" },
+              { id: "medium" as const, label: "Medium risk" },
+              { id: "low" as const, label: "Low risk" },
+            ]).map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setRiskFilter(f.id)}
+                className={`text-xs font-medium px-3 py-2 rounded-lg border transition-colors whitespace-nowrap ${
+                  riskFilter === f.id ? "bg-stone-900 text-white border-stone-900" : "border-stone-200 text-stone-600 hover:border-stone-400"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setAttentionOnly((v) => !v)}
+              className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg border transition-colors whitespace-nowrap ${
+                attentionOnly ? "bg-chart-teal text-white border-chart-teal" : "border-stone-200 text-stone-600 hover:border-stone-400"
+              }`}
+            >
+              <span className={`w-2.5 h-2.5 rounded-full transition-colors ${attentionOnly ? "bg-white" : "bg-stone-300"}`} />
+              Needs attention only {attentionCount > 0 ? `(${attentionCount})` : ""}
+            </button>
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-sm text-stone-400">
-            {clients.length === 0 ? "No clients yet. Invite your first client above." : "No clients match your search."}
+
+          <div className="bg-white border border-chart-line rounded-xl overflow-x-auto">
+            {loading ? (
+              <div className="divide-y divide-chart-line animate-pulse">
+                {[1, 2, 3].map((i) => <div key={i} className="h-16 px-5 py-4" />)}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-16 text-center text-sm text-stone-400">
+                {clients.length === 0 ? "No clients yet. Invite your first client above." : "No clients match your filters."}
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-chart-line bg-chart-table-head">
+                    <th className="text-left font-medium text-chart-dim text-[10px] uppercase tracking-widest px-5 py-2.5">Client</th>
+                    <th className="text-left font-medium text-chart-dim text-[10px] uppercase tracking-widest px-3 py-2.5">Risk</th>
+                    <th className="text-left font-medium text-chart-dim text-[10px] uppercase tracking-widest px-3 py-2.5">Plan</th>
+                    <th className="text-left font-medium text-chart-dim text-[10px] uppercase tracking-widest px-3 py-2.5">Mood (7d)</th>
+                    <th className="text-left font-medium text-chart-dim text-[10px] uppercase tracking-widest px-3 py-2.5">Engagement</th>
+                    <th className="text-left font-medium text-chart-dim text-[10px] uppercase tracking-widest px-3 py-2.5">Last session</th>
+                    <th className="text-left font-medium text-chart-dim text-[10px] uppercase tracking-widest px-3 py-2.5">Next session</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-chart-line">
+                  {filtered.map((client) => (
+                    <tr key={client.id} className="group hover:bg-chart-bg transition-colors">
+                      <td className="px-5 py-3">
+                        <Link href={`/therapist/clients/${client.id}`} className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 bg-chart-bg rounded-full flex items-center justify-center text-xs font-semibold text-chart-muted flex-shrink-0">
+                            {client.name[0]}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-chart-ink group-hover:underline truncate">{client.name}</div>
+                            <div className="text-xs text-chart-dim truncate">{client.email}</div>
+                          </div>
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border ${RISK_PILL[client.riskLevel]}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${RISK_DOT[client.riskLevel]}`} />
+                          {client.riskLevel}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-chart-muted whitespace-nowrap">{client.plan}</td>
+                      <td className="px-3 py-3">
+                        {client.recentMoods.length > 0 ? (
+                          <div className="flex items-end gap-0.5 h-6">
+                            {client.recentMoods.slice(0, 7).map((m, j) => (
+                              <div key={j} className={`w-1.5 rounded-t-sm ${RISK_DOT[client.riskLevel]}`} style={{ height: `${Math.max(2, (m.score / 5) * 22)}px` }} />
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-chart-dim">No data</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-chart-muted whitespace-nowrap">
+                        {client.streak > 0 ? `${client.streak}d streak` : "No streak"}
+                      </td>
+                      <td className="px-3 py-3 text-chart-dim whitespace-nowrap">{client.lastSession ? fmtDate(client.lastSession) : "—"}</td>
+                      <td className="px-3 py-3 text-chart-dim whitespace-nowrap">{client.nextSession ? fmtDate(client.nextSession) : "Not scheduled"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
-        ) : (
-          <div className="divide-y divide-stone-50">
-            {filtered.map((client) => {
-              const moodAvg = client.recentMoods.length
-                ? (client.recentMoods.reduce((s, m) => s + m.score, 0) / client.recentMoods.length).toFixed(1)
-                : "—";
-              const isActive = client.lastActivity === "recent";
-
-              return (
-                <Link key={client.id} href={`/therapist/clients/${client.id}`} className="flex items-center gap-4 px-5 py-4 hover:bg-stone-50 transition-colors group">
-                  <div className="w-9 h-9 bg-stone-100 rounded-full flex items-center justify-center text-sm font-semibold text-stone-600 flex-shrink-0">
-                    {client.name[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <span className="text-sm font-medium text-stone-900 group-hover:text-stone-700">{client.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium border ${isActive ? "border-sage-200 text-sage-600" : "border-stone-200 text-stone-400"}`}>
-                        {isActive ? "active" : "inactive"}
-                      </span>
-                    </div>
-                    <div className="text-xs text-stone-400 truncate">{client.email} · {client.plan} · Level {client.level}</div>
-                  </div>
-
-                  {/* Mini mood chart */}
-                  {client.recentMoods.length > 0 && (
-                    <div className="hidden sm:flex items-end gap-0.5 h-7 flex-shrink-0">
-                      {client.recentMoods.slice(0, 7).map((m, j) => (
-                        <div key={j} className="w-1.5 bg-stone-900 rounded-t-sm opacity-70" style={{ height: `${(m.score / 5) * 26}px` }} />
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="text-right flex-shrink-0 min-w-[80px]">
-                    <div className="text-sm font-semibold text-stone-900">{moodAvg !== "—" ? `${moodAvg} avg` : "No data"}</div>
-                    <div className="text-xs text-stone-400">Mood (7d)</div>
-                  </div>
-
-                  <div className="text-right flex-shrink-0 hidden md:block min-w-[72px]">
-                    <div className="text-xs text-stone-500">Joined</div>
-                    <div className="text-xs font-medium text-stone-700">
-                      {new Date(client.joinedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      </>
+        </>
       )}
     </div>
   );

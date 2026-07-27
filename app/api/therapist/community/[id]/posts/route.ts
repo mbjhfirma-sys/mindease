@@ -49,19 +49,39 @@ export async function GET(
   });
 
   const userId = session.user.id;
-  const formatted = posts.map((p) => ({
-    id: p.id,
-    groupId: p.groupId,
-    author: p.author.name,
-    authorId: p.author.id,
-    content: p.content,
-    pinned: p.pinned,
-    flagged: p.flagged,
-    likes: p.likes.length,
-    liked: p.likes.some((l) => l.userId === userId),
-    replyCount: p._count.replies,
-    createdAt: p.createdAt,
-  }));
+  const authorIds = [...new Set(posts.map((p) => p.author.id))];
+  const [riskFlags, escalations] = await Promise.all([
+    db.riskFlag.findMany({ where: { userId: { in: authorIds }, status: "open" }, select: { userId: true, severity: true } }),
+    db.riskFlag.findMany({ where: { source: "community", sourceId: { in: posts.map((p) => p.id) }, status: "open" }, select: { sourceId: true, severity: true, detail: true } }),
+  ]);
+
+  const riskByAuthor = new Map<string, "high" | "medium">();
+  for (const f of riskFlags) {
+    if (f.severity === "high") riskByAuthor.set(f.userId, "high");
+    else if (f.severity === "moderate" && riskByAuthor.get(f.userId) !== "high") riskByAuthor.set(f.userId, "medium");
+  }
+  const escalationByPost = new Map(escalations.map((e) => [e.sourceId, e]));
+
+  const formatted = posts.map((p) => {
+    const escalation = escalationByPost.get(p.id);
+    return {
+      id: p.id,
+      groupId: p.groupId,
+      author: p.author.name,
+      authorId: p.author.id,
+      authorRiskLevel: riskByAuthor.get(p.author.id) ?? "low",
+      content: p.content,
+      pinned: p.pinned,
+      flagged: p.flagged,
+      escalated: !!escalation,
+      escalationSeverity: escalation?.severity ?? null,
+      escalationDetail: escalation?.detail ?? null,
+      likes: p.likes.length,
+      liked: p.likes.some((l) => l.userId === userId),
+      replyCount: p._count.replies,
+      createdAt: p.createdAt,
+    };
+  });
 
   return NextResponse.json({ posts: formatted });
 }

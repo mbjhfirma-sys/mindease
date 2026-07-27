@@ -30,31 +30,25 @@ function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-
-    if (!requires2FA) {
-      setLoading(true);
-      const precheck = await fetch("/api/auth/requires-2fa", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      }).then((r) => r.json()).catch(() => ({ requires2FA: false }));
-
-      if (precheck.requires2FA) {
-        setRequires2FA(true);
-        setLoading(false);
-        return;
-      }
-    }
-
     setLoading(true);
+
     const result = await signIn("credentials", {
       email,
       password,
-      totpCode: requires2FA ? totpCode : undefined,
+      // signIn() serializes its params via URLSearchParams, which stringifies
+      // `undefined` to the literal text "undefined" — so this key must be omitted
+      // entirely rather than set to undefined, or the server would see a truthy
+      // (bogus) totpCode on the very first, code-less submission.
+      ...(requires2FA ? { totpCode } : {}),
       redirect: false,
     });
 
     setLoading(false);
+
+    if (result?.code === "requires-2fa") {
+      setRequires2FA(true);
+      return;
+    }
 
     if (result?.error) {
       setError(requires2FA ? "Invalid code. Please try again." : "Invalid email or password.");

@@ -24,5 +24,7 @@ declare module "next-auth/jwt" {
     therapistStatus?: "pending" | "approved" | "rejected" | null;
     hasOnboarded?: boolean;
     profileCompleted?: boolean;
+    /** Epoch ms of the last therapistStatus/hasOnboarded DB refresh — see auth.ts's jwt callback. */
+    statusCheckedAt?: number;
   }
 }

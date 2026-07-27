@@ -48,7 +48,15 @@ export async function GET() {
     isOwner: true,
   }));
 
-  return NextResponse.json({ groups: formatted });
+  const distinctMembers = groups.length > 0
+    ? await db.therapistGroupMembership.findMany({
+        where: { groupId: { in: groups.map((g) => g.id) } },
+        select: { clientId: true },
+        distinct: ["clientId"],
+      })
+    : [];
+
+  return NextResponse.json({ groups: formatted, totalMembers: distinctMembers.length });
 }
 
 export async function POST(req: NextRequest) {

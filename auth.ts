@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -10,6 +10,19 @@ const loginSchema = z.object({
   password: z.string().min(6),
   totpCode: z.string().optional(),
 });
+
+// Thrown instead of returning null so the login form can tell "needs a 2FA code"
+// apart from "wrong password" without a separate precheck round-trip — see the
+// login page, which used to call /api/auth/requires-2fa before every sign-in
+// attempt. Checking 2FA status only after the password already verified is also
+// stricter than the old precheck, which revealed an email's 2FA status to anyone
+// who typed it in, before checking whether they even knew the password.
+class RequiresTwoFactor extends CredentialsSignin {
+  code = "requires-2fa";
+}
+class InvalidTwoFactorCode extends CredentialsSignin {
+  code = "invalid-2fa";
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
@@ -33,9 +46,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!valid) return null;
 
         if (user.twoFactorEnabled) {
-          if (!parsed.data.totpCode) return null;
+          if (!parsed.data.totpCode) throw new RequiresTwoFactor();
           const { ok } = await verifyTwoFactorAttempt(user.id, parsed.data.totpCode);
-          if (!ok) return null;
+          if (!ok) throw new InvalidTwoFactorCode();
         }
 
         return { id: user.id, email: user.email, name: user.name, role: user.role };
@@ -43,10 +56,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.statusCheckedAt = 0; // force a fresh status lookup right after sign-in
       }
       // Back-fill role from DB for tokens issued before role was stored in JWT
       if (!token.role && token.id) {
@@ -56,24 +70,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
         if (dbUser) token.role = dbUser.role;
       }
-      // Re-checked on every session access so an admin approval takes effect
-      // immediately, without the therapist needing to sign out and back in.
-      if (token.role === "THERAPIST" && token.id) {
+      // `auth()` runs as middleware on nearly every request (see proxy.ts), so this
+      // callback fires on every page load and every API call — not just at sign-in.
+      // Re-querying therapistStatus/hasOnboarded on every single one of those was
+      // adding a full extra DB round-trip (to a remote Neon instance) to every
+      // request in the app, which is what made login — and everything after it —
+      // feel slow. A short TTL keeps "approval takes effect without signing out"
+      // true in practice while cutting the query down from every-request to
+      // roughly once per STATUS_TTL_MS.
+      const STATUS_TTL_MS = 30_000;
+      const statusIsStale =
+        trigger === "update" || Date.now() - ((token.statusCheckedAt as number) ?? 0) > STATUS_TTL_MS;
+
+      if (statusIsStale && token.role === "THERAPIST" && token.id) {
         const therapist = await db.therapist.findUnique({
           where: { userId: token.id as string },
           select: { verificationStatus: true, profileCompleted: true },
         });
         token.therapistStatus = therapist?.verificationStatus ?? null;
         token.profileCompleted = therapist?.profileCompleted ?? true;
+        token.statusCheckedAt = Date.now();
       }
       // Scoped to CLIENT only — mirrors the therapist-only check above so
       // other roles gain zero extra DB load per request.
-      if (token.role === "CLIENT" && token.id) {
+      if (statusIsStale && token.role === "CLIENT" && token.id) {
         const client = await db.user.findUnique({
           where: { id: token.id as string },
           select: { hasOnboarded: true },
         });
         token.hasOnboarded = client?.hasOnboarded ?? true;
+        token.statusCheckedAt = Date.now();
       }
       return token;
     },

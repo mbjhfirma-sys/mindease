@@ -32,9 +32,12 @@ type ApiIntake = {
   takingMedication: string | null; relationshipStatus: string | null;
 } | null;
 
+type OpenRiskFlag = { id: string; source: string; severity: string; detail: string; createdAt: string };
+
 type ClientData = {
   id: string; name: string; email: string; plan: string; level: number; xp: number;
   memberSince: string; moodHistory: { score: number; date: string }[]; moodAvg: number;
+  streak: number; riskLevel: RiskLevel; riskFlags: OpenRiskFlag[];
   journalEntries: ApiJournalEntry[]; missionCompletions: ApiMission[]; appointments: ApiAppt[];
   assessmentResults: ApiAssessmentResult[]; intake: ApiIntake;
 };
@@ -145,6 +148,21 @@ const SESSION_TYPES: { value: SessionType; label: string }[] = [
 
 const COMMON_TAGS = ["CBT", "EMDR", "Exposure", "Safety plan", "Homework", "Mindfulness", "Medication", "Family"];
 
+const RISK_PILL_CLASS: Record<RiskLevel, string> = {
+  high: "border-chart-risk-high/30 text-chart-risk-high bg-chart-risk-high/10",
+  medium: "border-chart-risk-medium/30 text-chart-risk-medium bg-chart-risk-medium/10",
+  low: "border-chart-risk-low/30 text-chart-risk-low bg-chart-risk-low/10",
+};
+const RISK_DOT_CLASS: Record<RiskLevel, string> = {
+  high: "bg-chart-risk-high", medium: "bg-chart-risk-medium", low: "bg-chart-risk-low",
+};
+const SEVERITY_LABEL: Record<string, string> = { high: "High", moderate: "Moderate" };
+const MOOD_BAR_COLOR: Record<RiskLevel, { base: string; hover: string }> = {
+  high: { base: "#D64545", hover: "#C23A3A" },
+  medium: { base: "#D98A2B", hover: "#C17A22" },
+  low: { base: "#2E9E6D", hover: "#268A5D" },
+};
+
 function todayIso() {
   return new Date(2026, 5, 24).toISOString().slice(0, 10);
 }
@@ -197,7 +215,7 @@ function ResponseDataPreview({ data }: { data: Record<string, unknown> }) {
   const entries = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && v !== "");
   if (entries.length === 0) return null;
   return (
-    <div className="mt-2 bg-stone-50 border border-stone-100 rounded-lg px-3 py-2.5 space-y-1.5">
+    <div className="mt-2 bg-stone-50 border border-chart-line rounded-lg px-3 py-2.5 space-y-1.5">
       {entries.map(([key, value]) => (
         <div key={key} className="text-xs">
           <span className="text-stone-400 font-medium">{RESPONSE_FIELD_LABELS[key] ?? key}: </span>
@@ -495,7 +513,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     return (
       <div className="max-w-4xl mx-auto space-y-5">
         <Link href="/therapist/clients" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">← Clients</Link>
-        <div className="bg-white border border-stone-100 rounded-xl p-5 animate-pulse">
+        <div className="bg-white border border-chart-line rounded-xl p-5 animate-pulse">
           <div className="h-12 bg-stone-100 rounded-lg w-1/2 mb-4" />
           <div className="h-4 bg-stone-100 rounded w-3/4" />
         </div>
@@ -507,7 +525,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     return (
       <div className="max-w-4xl mx-auto space-y-5">
         <Link href="/therapist/clients" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">← Clients</Link>
-        <div className="bg-white border border-stone-100 rounded-xl p-8 text-center text-stone-400 text-sm">
+        <div className="bg-white border border-chart-line rounded-xl p-8 text-center text-stone-400 text-sm">
           Client not found or not assigned to you.
         </div>
       </div>
@@ -529,7 +547,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       <Link href="/therapist/clients" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">← Clients</Link>
 
       {/* Client header */}
-      <div className="bg-white border border-stone-100 rounded-xl p-5">
+      <div className="bg-white border border-chart-line rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-stone-100 rounded-xl flex items-center justify-center text-lg font-semibold text-stone-600">
@@ -538,6 +556,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg font-semibold text-stone-900">{client.name}</h1>
+                <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border ${RISK_PILL_CLASS[client.riskLevel]}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${RISK_DOT_CLASS[client.riskLevel]}`} />
+                  {client.riskLevel} risk
+                </span>
                 <span className="text-[10px] border border-stone-200 text-stone-400 px-1.5 py-0.5 rounded font-medium">
                   Level {client.level}
                 </span>
@@ -562,9 +584,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 pt-4 border-t border-stone-100">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mt-4 pt-4 border-t border-chart-line">
           {[
             { label: "Avg mood", value: moodAvg > 0 ? moodAvg.toFixed(1) : "—" },
+            { label: "Streak", value: `${client.streak}d` },
             { label: "Completed tasks", value: String(completedCount) },
             { label: "XP earned", value: `${client.xp} xp` },
             { label: "Last session", value: lastSession ? fmtApptDate(lastSession.date) : "—" },
@@ -578,14 +601,48 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
+      {/* Safety banner — surfaces open, system-detected risk flags directly on the client's chart */}
+      {client.riskFlags.length > 0 && (
+        <div className={`rounded-xl px-5 py-4 border ${
+          client.riskLevel === "high"
+            ? "bg-chart-banner-high-bg border-chart-banner-high-border"
+            : "bg-chart-banner-medium-bg border-chart-banner-medium-border"
+        }`}>
+          <div className="flex items-start gap-3">
+            <span className={`mt-0.5 text-lg leading-none ${client.riskLevel === "high" ? "text-chart-risk-high" : "text-chart-risk-medium"}`}>⚠</span>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold ${client.riskLevel === "high" ? "text-chart-banner-high-text" : "text-chart-banner-medium-text"}`}>
+                {client.riskFlags.length === 1 ? "1 open risk flag" : `${client.riskFlags.length} open risk flags`} — review before the next session
+              </p>
+              <div className="mt-2 space-y-1.5">
+                {client.riskFlags.map((f) => (
+                  <div key={f.id} className="flex items-start gap-2 text-xs">
+                    <span className={`flex-shrink-0 font-semibold px-1.5 py-0.5 rounded ${
+                      f.severity === "high"
+                        ? "bg-chart-banner-high-border text-chart-banner-high-text"
+                        : "bg-chart-banner-medium-border text-chart-banner-medium-text"
+                    }`}>
+                      {SEVERITY_LABEL[f.severity] ?? f.severity}
+                    </span>
+                    <span className={client.riskLevel === "high" ? "text-chart-banner-high-text" : "text-chart-banner-medium-text"}>
+                      {f.detail} <span className="opacity-60">· {new Date(f.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
-      <div className="flex border-b border-stone-100 overflow-x-auto">
+      <div className="flex border-b border-chart-line overflow-x-auto">
         {(["overview", "journal", "missions", "notes", "plan", "insights"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2.5 text-sm font-medium capitalize whitespace-nowrap transition-colors border-b-2 -mb-px ${
-              tab === t ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-700"
+              tab === t ? "border-chart-teal text-chart-teal" : "border-transparent text-stone-500 hover:text-stone-700"
             }`}
           >
             {t === "notes" ? `Clinical notes${notes.length > 0 ? ` (${notes.length})` : ""}` : t === "plan" ? "Treatment plan" : t === "insights" ? "Mindo insights" : t}
@@ -599,7 +656,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
           {/* Intake */}
           {client.intake && (
-            <div className="bg-white border border-stone-100 rounded-xl p-5">
+            <div className="bg-white border border-chart-line rounded-xl p-5">
               <h3 className="text-sm font-semibold text-stone-900 mb-4">Intake</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div>
@@ -665,7 +722,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           )}
 
           {/* Mood chart */}
-          <div className="bg-white border border-stone-100 rounded-xl p-5">
+          <div className="bg-white border border-chart-line rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-stone-900">7-Day Mood Trend</h3>
               <span className="text-xs text-stone-400">Click a bar to edit</span>
@@ -686,7 +743,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                         className="w-full rounded-t-sm transition-colors"
                         style={{
                           height: `${(score / 5) * 60}px`,
-                          backgroundColor: hoveredMoodDay === i ? "#44403c" : "#1c1917",
+                          backgroundColor: hoveredMoodDay === i ? MOOD_BAR_COLOR[client.riskLevel].hover : MOOD_BAR_COLOR[client.riskLevel].base,
                           minHeight: "4px",
                         }}
                         onMouseEnter={() => setHoveredMoodDay(i)}
@@ -697,7 +754,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-between text-xs text-stone-400 mt-3 pt-3 border-t border-stone-50">
+                <div className="flex justify-between text-xs text-stone-400 mt-3 pt-3 border-t border-chart-line">
                   <span>Min: {Math.min(...moodScores)} / 5</span>
                   <span>Avg: {moodAvg} / 5</span>
                   <span>Max: {Math.max(...moodScores)} / 5</span>
@@ -708,7 +765,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
           {/* Assessment score trends */}
           {(client.assessmentResults?.length ?? 0) > 0 && (
-            <div className="bg-white border border-stone-100 rounded-xl p-5">
+            <div className="bg-white border border-chart-line rounded-xl p-5">
               <h3 className="text-sm font-semibold text-stone-900 mb-4">Assessment Score Trends</h3>
               <div className="space-y-5">
                 {Object.entries(
@@ -747,7 +804,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           )}
 
           {/* Mission completion */}
-          <div className="bg-white border border-stone-100 rounded-xl p-5">
+          <div className="bg-white border border-chart-line rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-stone-900">Completed tasks</h3>
               <span className="text-sm font-semibold text-stone-900">{completedCount} total</span>
@@ -778,7 +835,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           {/* Enrolled courses */}
-          <div className="bg-white border border-stone-100 rounded-xl p-5">
+          <div className="bg-white border border-chart-line rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-stone-900">Enrolled courses</h3>
               <div className="relative">
@@ -790,10 +847,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 </button>
                 {showCourseMenu && (
                   <div className="absolute right-0 top-full mt-1 bg-white border border-stone-200 rounded-xl shadow-lg z-20 w-52 overflow-hidden">
-                    <div className="px-3 py-2 border-b border-stone-100">
+                    <div className="px-3 py-2 border-b border-chart-line">
                       <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Available courses</p>
                     </div>
-                    <div className="max-h-48 overflow-y-auto divide-y divide-stone-50">
+                    <div className="max-h-48 overflow-y-auto divide-y divide-chart-line">
                       {AVAILABLE_COURSES.filter((c) => !courses.find((ec) => ec.courseName === c)).map((c) => (
                         <button
                           key={c}
@@ -814,7 +871,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             {courses.length === 0 ? (
               <p className="text-xs text-stone-400">No courses assigned. Click &quot;+ Assign&quot; to add one.</p>
             ) : (
-              <div className="divide-y divide-stone-50">
+              <div className="divide-y divide-chart-line">
                 {courses.map((course) => (
                   <div key={course.id} className="flex items-center gap-3 py-2.5 first:pt-0 group">
                     <span className="text-xs text-stone-700 flex-1 truncate">{course.courseName}</span>
@@ -850,7 +907,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       {/* ── Journal ── */}
       {tab === "journal" && (
         <div className="space-y-3">
-          <div className="bg-white border border-stone-100 rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="bg-white border border-chart-line rounded-lg px-4 py-3 flex items-center justify-between">
             <span className="text-xs text-stone-500">Client has given permission for therapist journal review.</span>
             <Link
               href="/dashboard/journal"
@@ -861,7 +918,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           {journalEntries.map((entry) => (
-            <div key={entry.id} className="bg-white border border-stone-100 rounded-xl p-4">
+            <div key={entry.id} className="bg-white border border-chart-line rounded-xl p-4">
               {/* Header */}
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex-1 min-w-0">
@@ -903,7 +960,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               )}
 
               {/* Footer actions */}
-              <div className="flex items-center justify-between pt-2 border-t border-stone-50">
+              <div className="flex items-center justify-between pt-2 border-t border-chart-line">
                 <button
                   onClick={() => setExpandedJournalId(entry.id)}
                   className="text-xs font-medium text-stone-600 hover:text-stone-900 transition-colors"
@@ -931,7 +988,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           />
           <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
             {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-stone-100 flex-shrink-0">
+            <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-chart-line flex-shrink-0">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <h2 className="text-base font-semibold text-stone-900">{expandedJournalEntry.title}</h2>
@@ -953,7 +1010,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             </div>
 
             {/* Mood + emotions */}
-            <div className="px-6 py-3 border-b border-stone-50 flex items-center gap-4 flex-shrink-0">
+            <div className="px-6 py-3 border-b border-chart-line flex items-center gap-4 flex-shrink-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-stone-400 uppercase font-medium tracking-wider">Mood</span>
                 <div className="flex items-center gap-0.5">
@@ -988,7 +1045,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             </div>
 
             {/* Modal footer */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-stone-100 bg-stone-50 flex-shrink-0">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-chart-line bg-stone-50 flex-shrink-0">
               <button
                 onClick={() => setExpandedJournalId(null)}
                 className="text-sm text-stone-500 hover:text-stone-700 transition-colors"
@@ -1015,13 +1072,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               + Assign task
             </Link>
           </div>
-          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+          <div className="bg-white border border-chart-line rounded-xl overflow-hidden">
             {completedMissions.length === 0 ? (
               <div className="py-12 text-center text-sm text-stone-400">
                 No tasks completed yet.
               </div>
             ) : (
-              <div className="divide-y divide-stone-50">
+              <div className="divide-y divide-chart-line">
                 {completedMissions.map((m) => {
                   const hasResponse = !!m.responseData && Object.values(m.responseData).some((v) => v !== null && v !== undefined && v !== "");
                   const isExpanded = expandedMissionId === m.id;
@@ -1083,7 +1140,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           {/* ── New note form ── */}
           {showNoteForm && (
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-stone-100 bg-stone-50 flex items-center justify-between gap-3">
+              <div className="px-5 py-4 border-b border-chart-line bg-stone-50 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-stone-900">New clinical note</h3>
                   <p className="text-xs text-stone-400 mt-0.5">This note is private and will not be visible to the client.</p>
@@ -1291,7 +1348,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               </div>
 
               {/* Form footer */}
-              <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-stone-100 bg-stone-50">
+              <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-chart-line bg-stone-50">
                 <button
                   onClick={() => setShowNoteForm(false)}
                   className="text-sm border border-stone-200 text-stone-600 px-4 py-2 rounded-lg hover:bg-white transition-colors"
@@ -1315,7 +1372,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
           {/* ── Notes list ── */}
           {notes.length === 0 ? (
-            <div className="bg-white border border-stone-100 rounded-xl py-16 text-center text-sm text-stone-400">
+            <div className="bg-white border border-chart-line rounded-xl py-16 text-center text-sm text-stone-400">
               No clinical notes yet. Click &quot;+ New note&quot; to add one.
             </div>
           ) : (
@@ -1323,7 +1380,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               {notes.map((note) => {
                 const isExpanded = expandedNoteId === note.id;
                 return (
-                  <div key={note.id} className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+                  <div key={note.id} className="bg-white border border-chart-line rounded-xl overflow-hidden">
                     {/* Note header */}
                     <button
                       onClick={() => setExpandedNoteId(isExpanded ? null : note.id)}
@@ -1377,7 +1434,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
                     {/* Expanded content */}
                     {isExpanded && (
-                      <div className="px-5 pb-5 space-y-4 border-t border-stone-50">
+                      <div className="px-5 pb-5 space-y-4 border-t border-chart-line">
                         {note.noteFormat === "soap" ? (
                           <div className="pt-4 space-y-3">
                             {note.subjective && (
@@ -1417,7 +1474,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                             <p className="text-sm text-stone-700 leading-relaxed">{note.nextSteps}</p>
                           </div>
                         )}
-                        <div className="pt-2 border-t border-stone-50 flex items-center justify-between">
+                        <div className="pt-2 border-t border-chart-line flex items-center justify-between">
                           <p className="text-[11px] text-stone-400">{formatNoteDate(note.date)}</p>
                           <button
                             onClick={() => deleteNote(note.id)}
@@ -1441,8 +1498,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       {tab === "plan" && (
         <div className="space-y-4">
           {/* Client's safety plan (read-only) */}
-          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-stone-100">
+          <div className="bg-white border border-chart-line rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-chart-line">
               <h3 className="text-sm font-semibold text-stone-900">Client&apos;s safety plan</h3>
             </div>
             {!safetyPlanShared || !safetyPlan ? (
@@ -1450,7 +1507,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 {safetyPlanShared ? "Client hasn't created a safety plan yet." : "Client hasn't shared a safety plan with you."}
               </div>
             ) : (
-              <div className="divide-y divide-stone-50">
+              <div className="divide-y divide-chart-line">
                 {[
                   ["Warning signs", safetyPlan.warningSigns],
                   ["Coping strategies", safetyPlan.copingStrategies],
@@ -1484,8 +1541,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           {/* Plan card */}
-          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+          <div className="bg-white border border-chart-line rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-chart-line">
               <h3 className="text-sm font-semibold text-stone-900">Treatment plan</h3>
               <div className="flex items-center gap-2">
                 {planSaved && (
@@ -1518,7 +1575,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               </div>
             </div>
 
-            <div className="divide-y divide-stone-50">
+            <div className="divide-y divide-chart-line">
               {/* Primary diagnosis */}
               <PlanField
                 label="Primary diagnosis"
@@ -1568,8 +1625,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           {/* Risk assessment card */}
-          <div className={`bg-white border rounded-xl overflow-hidden ${plan.riskLevel === "high" ? "border-red-200" : "border-stone-100"}`}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+          <div className={`bg-white border rounded-xl overflow-hidden ${plan.riskLevel === "high" ? "border-red-200" : "border-chart-line"}`}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-chart-line">
               <h3 className="text-sm font-semibold text-stone-900">Risk assessment</h3>
               {editingPlan && (
                 <div className="flex gap-1.5">
@@ -1624,7 +1681,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                         className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                           planDraft![key]
                             ? "bg-stone-900 border-stone-900"
-                            : "border-stone-300 hover:border-stone-500"
+                            : "border-stone-300 hover:border-chart-line0"
                         }`}
                       >
                         {planDraft![key] && <span className="text-[8px] text-white font-bold">✓</span>}
@@ -1681,7 +1738,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               <div className="h-32 bg-stone-100 rounded-xl" />
             </div>
           ) : !digest?.enabled ? (
-            <div className="bg-white border border-stone-100 rounded-xl px-5 py-10 text-center text-sm text-stone-400">
+            <div className="bg-white border border-chart-line rounded-xl px-5 py-10 text-center text-sm text-stone-400">
               No Mindo digest available yet — either this client hasn&apos;t opted in to Mindo, or you&apos;ve turned off Mindo digests in your own settings.
             </div>
           ) : (
@@ -1695,13 +1752,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
               {digest.facts && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <div className="bg-white border border-stone-100 rounded-xl p-4">
+                  <div className="bg-white border border-chart-line rounded-xl p-4">
                     <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Assignment completion</div>
                     <div className="text-lg font-semibold text-stone-900">
                       {digest.facts.completion.rate !== null ? `${Math.round(digest.facts.completion.rate * 100)}%` : "—"}
                     </div>
                   </div>
-                  <div className="bg-white border border-stone-100 rounded-xl p-4">
+                  <div className="bg-white border border-chart-line rounded-xl p-4">
                     <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Mood this week</div>
                     <div className="text-lg font-semibold text-stone-900">
                       {digest.facts.moodSummary.avg !== null ? `${digest.facts.moodSummary.avg} avg` : "—"}
@@ -1709,20 +1766,20 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                     <div className="text-xs text-stone-400 capitalize">{digest.facts.moodSummary.trend.replace(/_/g, " ")}</div>
                   </div>
                   {digest.facts.sleepMoodImpact && digest.facts.sleepMoodImpact.moodDeltaOnPoorSleepDays !== null && (
-                    <div className="bg-white border border-stone-100 rounded-xl p-4">
+                    <div className="bg-white border border-chart-line rounded-xl p-4">
                       <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Sleep-mood link</div>
                       <div className="text-lg font-semibold text-stone-900">{digest.facts.sleepMoodImpact.moodDeltaOnPoorSleepDays} pts</div>
                       <div className="text-xs text-stone-400 capitalize">{digest.facts.sleepMoodImpact.direction.replace(/_/g, " ")}</div>
                     </div>
                   )}
                   {digest.facts.lowestCompletionCategory && (
-                    <div className="bg-white border border-stone-100 rounded-xl p-4">
+                    <div className="bg-white border border-chart-line rounded-xl p-4">
                       <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Lowest completion</div>
                       <div className="text-sm font-semibold text-stone-900 capitalize">{digest.facts.lowestCompletionCategory.activityType}</div>
                       <div className="text-xs text-stone-400">{Math.round(digest.facts.lowestCompletionCategory.rate * 100)}% this week</div>
                     </div>
                   )}
-                  <div className="bg-white border border-stone-100 rounded-xl p-4">
+                  <div className="bg-white border border-chart-line rounded-xl p-4">
                     <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Risk flags this week</div>
                     <div className={`text-lg font-semibold ${digest.facts.riskFlagsThisWeek.length > 0 ? "text-red-600" : "text-stone-900"}`}>
                       {digest.facts.riskFlagsThisWeek.length}
@@ -1737,7 +1794,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   : "This client hasn't shared their journal with you, so sleep and journal-derived signals aren't included in this digest."}
               </p>
 
-              <div className="pt-2 border-t border-stone-100">
+              <div className="pt-2 border-t border-chart-line">
                 {digestHistory === null ? (
                   <button onClick={loadDigestHistory} disabled={digestHistoryLoading} className="text-xs font-medium text-stone-500 hover:text-stone-800 transition-colors disabled:opacity-50">
                     {digestHistoryLoading ? "Loading…" : "View past digests"}
@@ -1748,7 +1805,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   <div className="space-y-2">
                     <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest">Past digests</div>
                     {digestHistory.slice(1).map((d) => (
-                      <div key={d.id} className="bg-white border border-stone-100 rounded-lg px-3 py-2.5">
+                      <div key={d.id} className="bg-white border border-chart-line rounded-lg px-3 py-2.5">
                         <div className="text-[10px] font-medium text-stone-400 mb-0.5">Week of {formatDateKey(d.weekStart)}</div>
                         <p className="text-xs text-stone-600">{d.digestText}</p>
                       </div>

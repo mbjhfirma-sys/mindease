@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { Rss, Users, Target, ShieldAlert, Send, X, Heart, MessageCircle, Sparkles } from "lucide-react";
+import { Suspense, useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { Rss, Users, Target, ShieldAlert, Send, X, Heart, MessageCircle, Sparkles, Mail } from "lucide-react";
 import TaskActivityModal from "@/components/dashboard/TaskActivityModal";
 import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
 
@@ -15,6 +16,7 @@ type Group = {
   id: string; name: string; description: string; category: string;
   icon: string; color: string; nextSession: string | null; members: number; joined: boolean;
   source?: "support" | "therapist"; createdByName?: string | null;
+  invited?: boolean; privacy?: "open" | "invite";
 };
 
 // ─── Enrichment constants ─────────────────────────────────────────────────────
@@ -143,8 +145,21 @@ function ActivityDot({ activity }: { activity: "active" | "moderate" | "quiet" }
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CommunityPage() {
+  return (
+    <Suspense fallback={null}>
+      <CommunityPageInner />
+    </Suspense>
+  );
+}
+
+function CommunityPageInner() {
+  const searchParams = useSearchParams();
   const checkAchievements = useAchievementCheck();
-  const [tab, setTab] = useState<Tab>("feed");
+  const requestedTab = searchParams.get("tab");
+  const initialTab: Tab = (["feed", "groups", "challenges", "peers"] as const).includes(requestedTab as Tab)
+    ? (requestedTab as Tab)
+    : "feed";
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [posts, setPosts] = useState<Post[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [newPost, setNewPost] = useState("");
@@ -227,7 +242,8 @@ export default function CommunityPage() {
   }, [posts, feedFilter, filterGroupName, joinedGroupNames]);
 
   const joinedGroups = useMemo(() => groups.filter((g) => g.joined), [groups]);
-  const discoverGroups = useMemo(() => groups.filter((g) => !g.joined), [groups]);
+  const invitedGroups = useMemo(() => groups.filter((g) => !g.joined && g.invited), [groups]);
+  const discoverGroups = useMemo(() => groups.filter((g) => !g.joined && !g.invited), [groups]);
 
   const totalMembersInJoined = useMemo(
     () => joinedGroups.reduce((sum, g) => sum + g.members, 0),
@@ -286,6 +302,22 @@ export default function CommunityPage() {
       setFeedFilter("mygroups");
       setTab("feed");
     }
+  }
+
+  function declineInvite(id: string) {
+    const group = groups.find((g) => g.id === id);
+    // Invite-only groups only appear in the list because of the invite — remove them
+    // entirely. Open groups stay listed under Discover, just no longer flagged as invited.
+    setGroups((g) =>
+      group?.privacy === "open"
+        ? g.map((x) => (x.id === id ? { ...x, invited: false } : x))
+        : g.filter((x) => x.id !== id)
+    );
+    fetch("/api/community/groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupId: id, action: "decline", source: group?.source ?? "therapist" }),
+    });
   }
 
   function viewGroupPosts(groupName: string) {
@@ -725,6 +757,60 @@ export default function CommunityPage() {
             </span>{" "}
             total members across all your groups
           </p>
+
+          {/* Invited */}
+          {invitedGroups.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-xs font-semibold text-violet-600 uppercase tracking-wider flex items-center gap-1.5">
+                <Mail size={12} strokeWidth={2} /> Invited to join
+              </h2>
+              {invitedGroups.map((group) => (
+                <div
+                  key={group.id}
+                  className="bg-violet-50/50 border border-violet-200 rounded-2xl overflow-hidden"
+                >
+                  <div className="pl-5 pr-5 pt-5 pb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-2xl leading-none">{group.icon}</span>
+                      <span className="text-sm font-semibold text-stone-900 flex-1">
+                        {group.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 ml-8 mb-2 flex-wrap">
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
+                        {group.category}
+                      </span>
+                      <span className="text-[10px] text-stone-400">
+                        {group.members.toLocaleString()} members
+                      </span>
+                      {group.createdByName && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                          🩺 Invited by {group.createdByName}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-stone-500 leading-relaxed mt-2">
+                      {group.description}
+                    </p>
+                  </div>
+                  <div className="border-t border-violet-200 px-5 py-3 flex items-center gap-2">
+                    <button
+                      onClick={() => declineInvite(group.id)}
+                      className="text-xs font-medium text-stone-500 hover:text-stone-700 transition-colors px-3 py-1.5"
+                    >
+                      Decline
+                    </button>
+                    <button
+                      onClick={() => toggleJoin(group.id)}
+                      className="ml-auto text-xs font-medium px-4 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors flex-shrink-0"
+                    >
+                      Accept invite
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Your Groups */}
           {joinedGroups.length > 0 && (
