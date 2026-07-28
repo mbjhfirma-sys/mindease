@@ -20,3 +20,46 @@ export function matchesAssessmentKeywords(
   const haystack = [course.category, ...course.tags].map((s) => s.toLowerCase());
   return keywords.some((kw) => haystack.some((h) => h.includes(kw.toLowerCase())));
 }
+
+// Maps each onboarding "what brings you here" concern (lib/specializations.ts's
+// SPECIALIZATION ids — the client intake quiz and this list share the same strings)
+// to candidate course tags/category keywords, used to pick the single course Mindo
+// surfaces as "Recommended by Mindo" on the courses page. Same convention as
+// ASSESSMENT_COURSE_KEYWORDS above: if no course carries a matching tag yet for a
+// given concern, that concern just never produces a recommendation.
+export const CONCERN_COURSE_KEYWORDS: Record<string, string[]> = {
+  "Anxiety": ["anxiety"],
+  "Depression": ["depression", "mood"],
+  "Stress & Burnout": ["stress", "burnout"],
+  "Sleep Issues": ["sleep"],
+  "Self-Esteem": ["self-love", "self-esteem", "compassion", "confidence"],
+  "Trauma & PTSD": ["trauma"],
+  "Grief & Loss": ["grief", "loss"],
+  "Relationships": ["relationship"],
+};
+
+export function matchesConcernKeywords(
+  concern: string,
+  course: { category: string; tags: string[] }
+): boolean {
+  const keywords = CONCERN_COURSE_KEYWORDS[concern];
+  if (!keywords) return false;
+  const haystack = [course.category, ...course.tags].map((s) => s.toLowerCase());
+  return keywords.some((kw) => haystack.some((h) => h.includes(kw.toLowerCase())));
+}
+
+// Picks the course Mindo should recommend for a client, deterministically — the
+// client's onboarding concerns are walked in the order they picked them, and the
+// first one with a matching, not-yet-completed course wins. Keeping course
+// selection deterministic (rather than letting the AI choose) means Mindo can
+// never recommend a course that doesn't exist; only the "why" text is generated.
+export function pickOnboardingRecommendedCourse<T extends { category: string; tags: string[] }>(
+  concerns: string[],
+  eligibleCourses: T[]
+): { course: T; concern: string } | null {
+  for (const concern of concerns) {
+    const match = eligibleCourses.find((c) => matchesConcernKeywords(concern, c));
+    if (match) return { course: match, concern };
+  }
+  return null;
+}

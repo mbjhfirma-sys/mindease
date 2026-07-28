@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
 const CATEGORIES = ["All", "Mindfulness", "Mental Health", "Wellness", "Personal Growth", "Stress Management", "Self-Care"];
 
 type Course = {
@@ -10,12 +11,22 @@ type Course = {
   thumbnail: string; color: string; description: string; tags: string[];
 };
 
+type CourseRecommendation = {
+  concern: string;
+  reason: string;
+  course: {
+    id: string; title: string; instructor: string; category: string; level: string;
+    duration: string; lessons: number; rating: number; thumbnail: string; color: string; description: string;
+  };
+};
+
 export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [recommendation, setRecommendation] = useState<CourseRecommendation | null>(null);
 
   // Debounce search
   useEffect(() => {
@@ -34,6 +45,13 @@ export default function CoursesPage() {
       .catch(() => setLoading(false));
   }, [category, debouncedSearch]);
 
+  useEffect(() => {
+    fetch("/api/courses/recommended")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => setRecommendation(d.recommendation ?? null))
+      .catch(() => {});
+  }, []);
+
   const inProgress = courses.filter((c) => c.progress > 0 && c.progress < 100);
 
   return (
@@ -42,6 +60,27 @@ export default function CoursesPage() {
         <h1 className="text-xl md:text-2xl font-bold text-stone-900">My Courses</h1>
         <p className="text-stone-500 mt-0.5 text-sm">Expert-led mental health courses</p>
       </div>
+
+      {/* Recommended by Mindo, based on the client's onboarding answers */}
+      {recommendation && (
+        <div>
+          <h2 className="text-sm font-bold text-stone-600 uppercase tracking-wide mb-3">Recommended by Mindo</h2>
+          <Link
+            href={`/dashboard/courses/${recommendation.course.id}`}
+            className="flex items-center gap-4 bg-gradient-to-br from-sage-800 to-sage-600 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all group"
+          >
+            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+              <Sparkles size={18} className="text-white" strokeWidth={1.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-sage-100 uppercase tracking-widest mb-0.5">Mindo</p>
+              <h3 className="font-bold text-white text-sm group-hover:underline">{recommendation.course.title}</h3>
+              <p className="text-sage-50 text-xs mt-1 leading-relaxed">{recommendation.reason}</p>
+            </div>
+            <span className="text-white/70 flex-shrink-0">→</span>
+          </Link>
+        </div>
+      )}
 
       {/* In-progress */}
       {!loading && inProgress.length > 0 && (

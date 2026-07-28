@@ -79,6 +79,7 @@ model User {
   mindoChatMessages            MindoChatMessage[]
   clientSessionEarnings        SessionEarning[]
   couponRedemption             CouponRedemption?
+  courseRecommendation         CourseRecommendation?
 }
 
 model Therapist {
@@ -428,6 +429,7 @@ model Course {
   updatedAt   DateTime         @updatedAt
   lessons     Lesson[]
   progress    CourseProgress[]
+  recommendations CourseRecommendation[]
 }
 
 model Lesson {
@@ -477,6 +479,24 @@ model CourseProgress {
 
   @@unique([userId, courseId, lessonId])
   @@index([userId, courseId])
+}
+
+// Mindo's cached "recommended for you" course pick, generated once from the client's
+// onboarding concerns/goals (see lib/mindo/ensureCourseRecommendation.ts). Course
+// selection is always deterministic keyword-matching (lib/courseRecommendations.ts) —
+// only the one-sentence "reason" copy is AI-generated, so there's no risk of Mindo
+// recommending a course that doesn't exist.
+model CourseRecommendation {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  courseId  String
+  concern   String
+  reason    String
+  model     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 }
 
 model Article {
