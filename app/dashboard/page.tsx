@@ -46,7 +46,7 @@ const MOOD_OPTIONS = [
 
 const QUICK_LINKS = [
   { href: "/dashboard/journal",    Icon: PenLine,      label: "Write in journal",          meta: "Private & secure",   iconCls: "bg-amber-50 text-amber-600" },
-  { href: "/dashboard/ai-chat",    Icon: Bot,          label: "Ask Mindo",                 meta: "Available 24/7",     iconCls: "bg-violet-50 text-violet-600" },
+  { href: "/dashboard/ai-chat",    Icon: Bot,          label: "Ask Mindo",                 meta: "Available 24/7",     iconCls: "bg-sage-50 text-sage-700" },
   { href: "/dashboard/assessment", Icon: ClipboardList,label: "Mental health check-in",    meta: "6 assessments",      iconCls: "bg-blue-50 text-blue-600" },
   { href: "/dashboard/community",  Icon: Users,        label: "Community groups",          meta: "Join a group",       iconCls: "bg-teal-50 text-teal-600" },
 ];
@@ -333,7 +333,7 @@ export default function DashboardPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((s) => (
-          <div key={s.label} className={`bg-white border rounded-xl p-5 ${s.border}`}>
+          <div key={s.label} className={`bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow ${s.border}`}>
             <div className="flex items-start justify-between mb-3">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${s.iconCls}`}>
                 <s.Icon size={16} strokeWidth={1.5} />
@@ -358,14 +358,14 @@ export default function DashboardPage() {
 
       {/* Mindo daily briefing */}
       {!loading && mindoBriefing && (
-        <div className="bg-gradient-to-r from-sage-700 to-emerald-700 rounded-xl p-4 flex items-start gap-4 text-white shadow-sm">
+        <div className="bg-gradient-to-br from-sage-800 to-sage-600 rounded-xl p-4 flex items-start gap-4 text-white shadow-sm">
           <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
             <Sparkles size={18} className="text-white" strokeWidth={1.5} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium text-sage-200 uppercase tracking-widest mb-0.5">Mindo</p>
-              <Link href="/dashboard/mindo/history" className="text-[11px] text-sage-200 hover:text-white transition-colors flex-shrink-0">Past briefings →</Link>
+              <p className="text-xs font-medium text-sage-100 uppercase tracking-widest mb-0.5">Mindo</p>
+              <Link href="/dashboard/mindo/history" className="text-[11px] text-sage-100 hover:text-white transition-colors flex-shrink-0">Past briefings →</Link>
             </div>
             <p className="text-sm text-white leading-relaxed">{greeting}, {userName}. {mindoBriefing}</p>
           </div>
@@ -387,7 +387,7 @@ export default function DashboardPage() {
             })()}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-[11px] border border-white/30 text-white/80 px-2 py-0.5 rounded-md font-medium">Confirmed</span>
+            <span className="text-[11px] border border-white/30 text-white/80 px-2 py-0.5 rounded-full font-medium">Confirmed</span>
             {nextCallJoinWindow?.isOpen ? (
               <button
                 onClick={() => setCallOpen(true)}
@@ -412,7 +412,7 @@ export default function DashboardPage() {
         <div className="md:col-span-3 space-y-6">
 
           {/* Today's tasks */}
-          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
               <div className="flex items-center gap-2.5">
                 <CheckCircle2 size={16} className="text-sage-600" strokeWidth={1.5} />
@@ -435,6 +435,7 @@ export default function DashboardPage() {
               <div className="divide-y divide-stone-50">
                 {todayMissions.map((m) => (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors group">
+                    <span className={`w-1 h-8 rounded-full flex-shrink-0 ${TASK_CATEGORY_COLORS[m.category] ?? "bg-stone-200"}`} />
                     <span className="text-lg flex-shrink-0 w-7 text-center">
                       {MISSION_EMOJIS[m.id] ?? CATEGORY_EMOJIS[m.category] ?? "✨"}
                     </span>
@@ -471,7 +472,7 @@ export default function DashboardPage() {
 
           {/* Upcoming tasks */}
           {upcomingMissions.length > 0 && (
-            <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+            <div className="bg-white border border-stone-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
                 <div className="flex items-center gap-2.5">
                   <Lock size={15} className="text-stone-400" strokeWidth={1.5} />
@@ -484,6 +485,7 @@ export default function DashboardPage() {
               <div className="divide-y divide-stone-50">
                 {upcomingMissions.map((m) => (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className={`w-1 h-6 rounded-full flex-shrink-0 opacity-50 ${TASK_CATEGORY_COLORS[m.category] ?? "bg-stone-200"}`} />
                     <span className="text-base flex-shrink-0 w-6 text-center opacity-50">
                       {MISSION_EMOJIS[m.id] ?? CATEGORY_EMOJIS[m.category] ?? "✨"}
                     </span>
@@ -510,7 +512,7 @@ export default function DashboardPage() {
                   <Link
                     key={c.id}
                     href={`/dashboard/courses/${c.id}`}
-                    className="bg-white border border-stone-100 rounded-xl p-4 flex items-center gap-4 hover:border-stone-300 hover:shadow-sm transition-all group"
+                    className="bg-white border border-stone-100 rounded-xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md hover:border-stone-300 transition-all group"
                   >
                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${COURSE_COLORS[i % COURSE_COLORS.length]} flex items-center justify-center text-xl flex-shrink-0`}>
                       {c.thumbnail}
@@ -533,7 +535,7 @@ export default function DashboardPage() {
           )}
 
           {/* Upcoming schedule */}
-          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
               <div className="flex items-center gap-2.5">
                 <CalendarDays size={16} className="text-blue-500" strokeWidth={1.5} />
@@ -562,7 +564,7 @@ export default function DashboardPage() {
                       <div className="text-sm text-stone-700 truncate">Therapy — {a.therapist.user.name}</div>
                       <div className="text-xs text-stone-400">{fmtDur(a.duration)}</div>
                     </div>
-                    <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md font-medium flex-shrink-0 ${SCHEDULE_COLORS[a.type] ?? "bg-stone-50 text-stone-600"}`}>
+                    <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${SCHEDULE_COLORS[a.type] ?? "bg-stone-50 text-stone-600"}`}>
                       {SCHEDULE_ICONS[a.type] ?? <Video size={12} />}
                       <span className="capitalize">{a.type.replace("_", " ")}</span>
                     </div>
@@ -577,7 +579,7 @@ export default function DashboardPage() {
         <div className="md:col-span-2 space-y-6">
 
           {/* Mood check-in */}
-          <div className="bg-gradient-to-br from-sage-800 via-sage-700 to-indigo-800 rounded-xl p-5 text-white">
+          <div className="bg-gradient-to-br from-sage-800 via-sage-700 to-teal-700 rounded-xl p-5 text-white shadow-sm">
             {moodSaved ? (
               <div className="text-center py-4">
                 <div className="text-4xl mb-3">{MOOD_OPTIONS.find((m) => m.score === moodScore)?.emoji}</div>
@@ -628,7 +630,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick access */}
-          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
             <div className="px-5 py-4 border-b border-stone-100">
               <h2 className="text-sm font-semibold text-stone-900">Quick Access</h2>
             </div>
@@ -661,7 +663,7 @@ export default function DashboardPage() {
                   <Link
                     key={c.id}
                     href={`/dashboard/courses/${c.id}`}
-                    className="bg-white border border-stone-100 rounded-xl p-4 flex items-center gap-3 hover:border-stone-300 hover:shadow-sm transition-all group"
+                    className="bg-white border border-stone-100 rounded-xl p-4 flex items-center gap-3 shadow-sm hover:shadow-md hover:border-stone-300 transition-all group"
                   >
                     <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${COURSE_COLORS[(i + 2) % COURSE_COLORS.length]} flex items-center justify-center text-lg flex-shrink-0`}>
                       {c.thumbnail}
