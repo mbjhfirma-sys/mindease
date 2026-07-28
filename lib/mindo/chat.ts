@@ -66,7 +66,8 @@ export async function sendMindoChatMessage(userId: string, userMessage: string):
       reply = textBlock && textBlock.type === "text" ? textBlock.text.trim() : "";
       if (!reply) reply = "I'm having trouble responding right now — could you try rephrasing that?";
     }
-  } catch {
+  } catch (err) {
+    console.error("[mindo/chat] Anthropic call failed:", err);
     reply = "I'm having a little trouble connecting right now. Please try again in a moment.";
   }
 
