@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { SPECIALIZATIONS, MODALITY_SUGGESTIONS } from "@/lib/specializations";
 import { LANGUAGE_SUGGESTIONS } from "@/lib/languages";
 import { AGE_GROUPS } from "@/lib/ageGroups";
@@ -76,6 +77,7 @@ function ProgressBar({ step }: { step: Step }) {
 }
 
 export default function OnboardingPage() {
+  const { update } = useSession();
   const [step, setStep] = useState<Step>("concerns");
   const [concerns, setConcerns] = useState<string[]>([]);
   const [ageRange, setAgeRange] = useState("");
@@ -107,9 +109,13 @@ export default function OnboardingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ hasOnboarded: true }),
     });
-    // Hard navigation — see the comment in therapist-onboarding/page.tsx: hasOnboarded
-    // just flipped server-side and the proxy gates /dashboard on it, so a router.push
-    // here could reuse a redirect cached from before this mutation.
+    // hasOnboarded just flipped server-side, but the JWT the proxy reads caches it
+    // for up to 30s (see auth.ts's STATUS_TTL_MS) — update() forces a refresh so the
+    // proxy doesn't bounce back here on a stale token. Hard navigation (not
+    // router.push) then re-runs the proxy against the fresh cookie. Must pass a
+    // payload (even {}) — a zero-arg call sends a GET, which Auth.js does not
+    // treat as trigger:"update" (see @auth/core/lib/actions/session.js).
+    await update({});
     window.location.href = "/dashboard";
   }
 
@@ -609,7 +615,7 @@ export default function OnboardingPage() {
 
             <button
               type="button"
-              onClick={() => { window.location.href = "/dashboard"; }}
+              onClick={async () => { await update({}); window.location.href = "/dashboard"; }}
               className="w-full bg-sage-700 text-white font-semibold text-sm py-3 rounded-xl hover:bg-sage-800 transition-colors"
             >
               Go to dashboard

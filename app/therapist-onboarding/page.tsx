@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { SPECIALIZATION_LABELS, MODALITY_SUGGESTIONS } from "@/lib/specializations";
 import { LANGUAGE_SUGGESTIONS } from "@/lib/languages";
 import { AGE_GROUPS } from "@/lib/ageGroups";
@@ -45,6 +45,7 @@ function ProgressBar({ step }: { step: Step }) {
 }
 
 export default function TherapistOnboardingPage() {
+  const { update } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -112,10 +113,17 @@ export default function TherapistOnboardingPage() {
       return;
     }
 
-    // A hard navigation, not router.push — profileCompleted just flipped server-side
-    // and the proxy gates /therapist on it. A client-side push can reuse a cached
-    // redirect from before this mutation (e.g. the initial login bounce to this
-    // wizard), so force a fresh request through the proxy with the new DB state.
+    // profileCompleted just flipped server-side, but the JWT the proxy reads caches
+    // it for up to 30s (see auth.ts's STATUS_TTL_MS) — without forcing a refresh here,
+    // a fast submit lands within that window and the proxy bounces back to this same
+    // wizard using the stale token. `update()` triggers the jwt() callback with
+    // trigger:"update", which bypasses the TTL and re-signs the cookie with the fresh
+    // DB value. Then a hard navigation (not router.push) re-runs the proxy against
+    // that fresh cookie instead of reusing a client-side route cache.
+    // update() must be called with a (even empty) payload — called with zero
+    // arguments it sends a GET instead of a POST, and only a POST makes Auth.js
+    // set trigger:"update" server-side (see @auth/core/lib/actions/session.js).
+    await update({});
     window.location.href = "/therapist";
   }
 
