@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Logo from "@/components/Logo";
 import { ChevronLeft, ChevronDown, ChevronRight, LogOut, Settings } from "lucide-react";
 import { CLIENT_NAV, BUSINESS_GROUP, BUSINESS_SUBNAV } from "@/lib/therapistNav";
+import { onMessagesRead } from "@/lib/badgeEvents";
 
 type Stats = { pendingAppointments: number; unreadMessages: number };
 type ClinicSwitcher = { name: string; subtitle: string };
@@ -20,19 +21,24 @@ export default function TherapistSidebar() {
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
   const [clinic, setClinic] = useState<ClinicSwitcher | null>(null);
 
+  const fetchStats = useCallback(() => {
+    fetch("/api/therapist/stats")
+      .then((r) => r.json())
+      .then((sData) => { if (sData.stats) setStats(sData.stats); });
+  }, []);
+
   useEffect(() => {
-    Promise.all([
-      fetch("/api/user").then((r) => r.json()),
-      fetch("/api/therapist/stats").then((r) => r.json()),
-      fetch("/api/therapist/clinic").then((r) => r.json()),
-    ]).then(([uData, sData, cData]) => {
+    fetch("/api/user").then((r) => r.json()).then((uData) => {
       if (uData.user?.name) setName(uData.user.name);
-      if (sData.stats) setStats(sData.stats);
+    });
+    fetch("/api/therapist/clinic").then((r) => r.json()).then((cData) => {
       if (cData.role === "owner") setClinic({ name: cData.clinic.name, subtitle: "Clinic owner" });
       else if (cData.role === "active") setClinic({ name: cData.membership.clinicName, subtitle: "Clinic member" });
       else if (cData.role === "invited") setClinic({ name: cData.membership.clinicName, subtitle: "Invitation pending" });
     });
-  }, []);
+    fetchStats();
+    return onMessagesRead(fetchStats);
+  }, [fetchStats]);
 
   const isBusinessMode = pathname.startsWith("/therapist/business");
   const businessOpen = businessExpanded || isBusinessMode;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import NotificationPanel from "@/components/NotificationPanel";
@@ -11,6 +11,7 @@ import {
   BarChart2, Users, ClipboardList, Settings, LogOut, Stethoscope, Newspaper,
 } from "lucide-react";
 import Logo from "@/components/Logo";
+import { onMessagesRead } from "@/lib/badgeEvents";
 
 const navSections = [
   {
@@ -50,6 +51,16 @@ export default function DashboardHeader() {
   const [badges, setBadges] = useState<Record<string, number>>({});
   const pathname = usePathname();
 
+  const fetchUnread = useCallback(() => {
+    fetch("/api/messages")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const unread = (d.conversations ?? []).reduce((sum: number, c: { unread: number }) => sum + c.unread, 0);
+        setBadges((prev) => ({ ...prev, "/dashboard/messages": unread }));
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch("/api/user")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -65,14 +76,9 @@ export default function DashboardHeader() {
         setBadges((prev) => ({ ...prev, "/dashboard/missions": remaining }));
       })
       .catch(() => {});
-    fetch("/api/messages")
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((d) => {
-        const unread = (d.conversations ?? []).reduce((sum: number, c: { unread: number }) => sum + c.unread, 0);
-        setBadges((prev) => ({ ...prev, "/dashboard/messages": unread }));
-      })
-      .catch(() => {});
-  }, []);
+    fetchUnread();
+    return onMessagesRead(fetchUnread);
+  }, [fetchUnread]);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";

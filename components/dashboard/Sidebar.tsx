@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, BookOpen, CheckSquare, PenLine,
@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Logo from "@/components/Logo";
+import { onMessagesRead } from "@/lib/badgeEvents";
 
 type NavItem = { href: string; Icon: LucideIcon; label: string; exact?: boolean; accent?: boolean };
 
@@ -59,6 +60,16 @@ export default function Sidebar() {
   const userName = fullName ? fullName.split(" ")[0] : "";
   const userInit = fullName ? fullName.charAt(0).toUpperCase() : "?";
 
+  const fetchUnread = useCallback(() => {
+    fetch("/api/messages")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const unread = (d.conversations ?? []).reduce((sum: number, c: { unread: number }) => sum + c.unread, 0);
+        setBadges((prev) => ({ ...prev, "/dashboard/messages": unread }));
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch("/api/achievements")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -75,14 +86,9 @@ export default function Sidebar() {
         setBadges((prev) => ({ ...prev, "/dashboard/missions": remaining }));
       })
       .catch(() => {});
-    fetch("/api/messages")
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((d) => {
-        const unread = (d.conversations ?? []).reduce((sum: number, c: { unread: number }) => sum + c.unread, 0);
-        setBadges((prev) => ({ ...prev, "/dashboard/messages": unread }));
-      })
-      .catch(() => {});
-  }, []);
+    fetchUnread();
+    return onMessagesRead(fetchUnread);
+  }, [fetchUnread]);
 
   return (
     <aside className={`hidden md:flex flex-col bg-white border-r border-stone-100 sticky top-0 h-screen flex-shrink-0 transition-all duration-200 ${collapsed ? "w-[58px]" : "w-56"}`}>
