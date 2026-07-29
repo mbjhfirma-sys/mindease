@@ -8,7 +8,7 @@ import {
   LayoutDashboard, BookOpen, CheckSquare, PenLine,
   MessageCircle, Calendar, Search, Bot,
   BarChart2, Users, ClipboardList, Settings, LogOut,
-  ChevronLeft, Flame, Stethoscope, LifeBuoy, Newspaper,
+  ChevronLeft, ChevronRight, Stethoscope, LifeBuoy, Newspaper,
   type LucideIcon,
 } from "lucide-react";
 import Logo from "@/components/Logo";
@@ -119,29 +119,27 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* User chip */}
-      <div className={`px-3 py-4 border-b border-stone-100 flex-shrink-0 ${collapsed ? "flex justify-center" : ""}`}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-sage-100 overflow-hidden flex items-center justify-center text-sage-700 text-sm font-semibold flex-shrink-0">
-            {avatar
-              ? <img src={avatar} alt="" className="w-full h-full object-cover" />
-              : userInit}
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-stone-800 truncate leading-tight">
-                {userName || "…"}
-              </div>
-              {streak > 0 && (
-                <div className="flex items-center gap-1 mt-0.5">
-                  <Flame size={10} className="text-amber-500" />
-                  <div className="text-xs text-amber-600 font-medium leading-tight">{streak}-day streak</div>
-                </div>
-              )}
-            </div>
-          )}
+      {/* Profile switcher */}
+      <Link
+        href="/dashboard/settings"
+        title={collapsed ? (userName || "Settings") : undefined}
+        className={`flex items-center gap-2.5 mt-3 mb-1 px-2.5 py-2 rounded-lg hover:bg-stone-50 transition-colors flex-shrink-0 ${collapsed ? "justify-center mx-1" : "mx-2"}`}
+      >
+        <div className="w-8 h-8 bg-sage-50 rounded-lg overflow-hidden flex items-center justify-center text-sm font-semibold text-sage-700 flex-shrink-0">
+          {avatar
+            ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+            : userInit}
         </div>
-      </div>
+        {!collapsed && (
+          <>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold text-stone-800 truncate">{userName || "…"}</div>
+              <div className="text-[10px] text-stone-400 truncate">{streak > 0 ? `${streak}-day streak` : "Client"}</div>
+            </div>
+            <ChevronRight size={13} className="text-stone-300 flex-shrink-0" />
+          </>
+        )}
+      </Link>
 
       {/* Nav */}
       <nav className="flex-1 px-2.5 py-3 flex flex-col gap-4 min-h-0 overflow-y-auto">
@@ -160,12 +158,12 @@ export default function Sidebar() {
                     href={href}
                     data-tour={href}
                     title={collapsed ? label : undefined}
-                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-all ${
+                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm border-l-[3px] transition-all ${
                       active
-                        ? "bg-sage-50 text-sage-800 font-medium"
+                        ? "bg-sage-50 border-sage-600 text-sage-800 font-medium"
                         : accent
-                        ? "text-red-500 hover:text-red-600 hover:bg-red-50"
-                        : "text-stone-500 hover:text-stone-800 hover:bg-stone-50"
+                        ? "border-transparent text-red-500 hover:text-red-600 hover:bg-red-50"
+                        : "border-transparent text-stone-500 hover:text-stone-800 hover:bg-stone-50"
                     } ${collapsed ? "justify-center" : ""}`}
                   >
                     <Icon
@@ -175,9 +173,7 @@ export default function Sidebar() {
                     />
                     {!collapsed && <span className="flex-1 truncate">{label}</span>}
                     {!collapsed && badge ? (
-                      <span className={`text-[10px] font-semibold min-w-[18px] h-[18px] flex items-center justify-center rounded-full ${
-                        active ? "bg-sage-200 text-sage-800" : "bg-stone-100 text-stone-500"
-                      }`}>
+                      <span className="text-[10px] font-semibold bg-stone-900 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0">
                         {badge}
                       </span>
                     ) : null}
@@ -194,18 +190,23 @@ export default function Sidebar() {
         <Link
           href="/dashboard/settings"
           title={collapsed ? "Settings" : undefined}
-          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-stone-500 hover:text-stone-800 hover:bg-stone-50 transition-all ${collapsed ? "justify-center" : ""}`}
+          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-all ${collapsed ? "justify-center" : ""}`}
         >
-          <Settings size={16} strokeWidth={1.5} className="flex-shrink-0" />
-          {!collapsed && <span className="flex-1">Settings</span>}
+          <div className="w-6 h-6 bg-stone-100 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-semibold text-stone-600 flex-shrink-0">
+            {avatar
+              ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+              : userInit}
+          </div>
+          {!collapsed && <span className="flex-1 truncate">{userName || "Settings"}</span>}
+          {!collapsed && <Settings size={15} strokeWidth={1.5} className="text-stone-300 flex-shrink-0" />}
         </Link>
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
           title={collapsed ? "Sign out" : undefined}
-          className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-stone-500 hover:text-red-500 hover:bg-red-50 transition-all ${collapsed ? "justify-center" : ""}`}
+          className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-stone-400 hover:bg-stone-50 hover:text-red-500 transition-all ${collapsed ? "justify-center" : ""}`}
         >
           <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
-          {!collapsed && <span className="flex-1 text-left">Sign Out</span>}
+          {!collapsed && <span className="flex-1 text-left">Sign out</span>}
         </button>
       </div>
     </aside>
