@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { X } from "lucide-react";
 import VideoCallRoom from "@/components/video/VideoCallRoom";
+import { notifyBadgesChanged } from "@/lib/badgeEvents";
 import { TIME_SLOTS, weekdayOf } from "@/lib/scheduling";
 import AppointmentRow, { type Appt, isSameDay } from "./_components/AppointmentRow";
 import MiniCalendar from "./_components/MiniCalendar";
@@ -129,11 +130,13 @@ export default function AppointmentsPage() {
   async function approve(id: string) {
     setAppts((p) => p.map((a) => a.id === id ? { ...a, status: "confirmed" as const } : a));
     await fetch(`/api/appointments/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "confirmed" }) });
+    notifyBadgesChanged();
   }
 
   async function decline(id: string) {
     setAppts((p) => p.map((a) => a.id === id ? { ...a, status: "cancelled" as const } : a));
     await fetch(`/api/appointments/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "cancelled" }) });
+    notifyBadgesChanged();
   }
 
   async function complete(id: string) {

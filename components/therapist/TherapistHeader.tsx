@@ -7,7 +7,7 @@ import Logo from "@/components/Logo";
 import NotificationPanel from "@/components/NotificationPanel";
 import { UserCircle, LogOut, ChevronDown } from "lucide-react";
 import { CLIENT_NAV, BUSINESS_GROUP, BUSINESS_SUBNAV } from "@/lib/therapistNav";
-import { onMessagesRead } from "@/lib/badgeEvents";
+import { onBadgesChanged } from "@/lib/badgeEvents";
 
 type ClinicInfo = { name: string; subtitle: string };
 
@@ -47,7 +47,7 @@ export default function TherapistHeader() {
       else if (cData.role === "invited") setClinic({ name: cData.membership.clinicName, subtitle: "Invitation pending" });
     });
     fetchStats();
-    return onMessagesRead(fetchStats);
+    return onBadgesChanged(fetchStats);
   }, [fetchStats]);
 
   const isBusinessMode = pathname.startsWith("/therapist/business");

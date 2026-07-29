@@ -3,7 +3,7 @@
 import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowUp, Search } from "lucide-react";
-import { notifyMessagesRead } from "@/lib/badgeEvents";
+import { notifyBadgesChanged } from "@/lib/badgeEvents";
 
 type ConvSummary = {
   id: string; sender: string; avatar: string;
@@ -127,7 +127,7 @@ function TherapistMessagesPageInner() {
       setConvs((p) => p.map((c) => c.id === id ? { ...c, unread: 0 } : c));
       // The GET above marks unread messages read server-side — tell the
       // sidebar/header badges to refetch now instead of on next mount.
-      notifyMessagesRead();
+      notifyBadgesChanged();
     } finally {
       setMsgsLoading(false);
     }

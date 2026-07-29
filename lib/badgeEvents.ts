@@ -1,13 +1,14 @@
-// Lets the messages pages tell the sidebar/header nav badges to refetch
-// immediately after a conversation is marked read, instead of waiting for
+// Lets any page that resolves a sidebar-badge-worthy task (a message thread
+// read, a daily task completed, a pending appointment approved/declined,
+// etc.) tell the nav badges to refetch immediately, instead of waiting for
 // the next full mount of those components.
-const MESSAGES_READ_EVENT = "youmindo:messages-read";
+const BADGES_CHANGED_EVENT = "youmindo:badges-changed";
 
-export function notifyMessagesRead() {
-  window.dispatchEvent(new Event(MESSAGES_READ_EVENT));
+export function notifyBadgesChanged() {
+  window.dispatchEvent(new Event(BADGES_CHANGED_EVENT));
 }
 
-export function onMessagesRead(callback: () => void) {
-  window.addEventListener(MESSAGES_READ_EVENT, callback);
-  return () => window.removeEventListener(MESSAGES_READ_EVENT, callback);
+export function onBadgesChanged(callback: () => void) {
+  window.addEventListener(BADGES_CHANGED_EVENT, callback);
+  return () => window.removeEventListener(BADGES_CHANGED_EVENT, callback);
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import TaskActivityModal from "@/components/dashboard/TaskActivityModal";
 import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
 import { Flame, Check, ArrowRight } from "lucide-react";
+import { notifyBadgesChanged } from "@/lib/badgeEvents";
 
 type Category = "mindfulness" | "movement" | "journaling" | "breathing" | "social" | "habit";
 
@@ -152,12 +153,13 @@ export default function MissionsPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ missionId: id, responseData }),
-    }).then(() => checkAchievements()).catch(() => {});
+    }).then(() => { checkAchievements(); notifyBadgesChanged(); }).catch(() => {});
   }
 
   async function uncompleteMission(id: string) {
     removeDone(id);
     setMissions((p) => p.map((m) => m.id === id ? { ...m, completed: false } : m));
+    notifyBadgesChanged();
   }
 
   const completedCount = missions.filter((m) => m.completed).length;

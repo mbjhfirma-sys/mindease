@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import Logo from "@/components/Logo";
 import { ChevronLeft, ChevronDown, ChevronRight, LogOut, Settings } from "lucide-react";
 import { CLIENT_NAV, BUSINESS_GROUP, BUSINESS_SUBNAV } from "@/lib/therapistNav";
-import { onMessagesRead } from "@/lib/badgeEvents";
+import { onBadgesChanged } from "@/lib/badgeEvents";
 
 type Stats = { pendingAppointments: number; unreadMessages: number };
 type ClinicSwitcher = { name: string; subtitle: string };
@@ -37,7 +37,7 @@ export default function TherapistSidebar() {
       else if (cData.role === "invited") setClinic({ name: cData.membership.clinicName, subtitle: "Invitation pending" });
     });
     fetchStats();
-    return onMessagesRead(fetchStats);
+    return onBadgesChanged(fetchStats);
   }, [fetchStats]);
 
   const isBusinessMode = pathname.startsWith("/therapist/business");

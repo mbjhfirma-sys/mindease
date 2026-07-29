@@ -6,6 +6,7 @@ import VideoCallRoom from "@/components/video/VideoCallRoom";
 import TaskActivityModal from "@/components/dashboard/TaskActivityModal";
 import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
 import { getJoinWindow } from "@/lib/video";
+import { notifyBadgesChanged } from "@/lib/badgeEvents";
 import {
   TrendingUp, BookOpen, Clock, Flame,
   PenLine, Bot, ClipboardList, Users,
@@ -222,7 +223,7 @@ export default function DashboardPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ missionId: id, responseData }),
-    }).then(() => checkAchievements()).catch(() => {});
+    }).then(() => { checkAchievements(); notifyBadgesChanged(); }).catch(() => {});
   }
 
   async function handleMoodSave() {

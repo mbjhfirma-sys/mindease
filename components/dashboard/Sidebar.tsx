@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Logo from "@/components/Logo";
-import { onMessagesRead } from "@/lib/badgeEvents";
+import { onBadgesChanged } from "@/lib/badgeEvents";
 
 type NavItem = { href: string; Icon: LucideIcon; label: string; exact?: boolean; accent?: boolean };
 
@@ -70,6 +70,16 @@ export default function Sidebar() {
       .catch(() => {});
   }, []);
 
+  const fetchMissionsRemaining = useCallback(() => {
+    fetch("/api/missions")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const remaining = (d.missions ?? []).filter((m: { completed: boolean }) => !m.completed).length;
+        setBadges((prev) => ({ ...prev, "/dashboard/missions": remaining }));
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch("/api/achievements")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -79,16 +89,10 @@ export default function Sidebar() {
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((d) => { if (d.user?.avatar) setAvatar(d.user.avatar); })
       .catch(() => {});
-    fetch("/api/missions")
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((d) => {
-        const remaining = (d.missions ?? []).filter((m: { completed: boolean }) => !m.completed).length;
-        setBadges((prev) => ({ ...prev, "/dashboard/missions": remaining }));
-      })
-      .catch(() => {});
+    fetchMissionsRemaining();
     fetchUnread();
-    return onMessagesRead(fetchUnread);
-  }, [fetchUnread]);
+    return onBadgesChanged(() => { fetchMissionsRemaining(); fetchUnread(); });
+  }, [fetchUnread, fetchMissionsRemaining]);
 
   return (
     <aside className={`hidden md:flex flex-col bg-white border-r border-stone-100 sticky top-0 h-screen flex-shrink-0 transition-all duration-200 ${collapsed ? "w-[58px]" : "w-56"}`}>

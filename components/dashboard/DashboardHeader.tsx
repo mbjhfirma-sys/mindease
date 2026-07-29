@@ -11,7 +11,7 @@ import {
   BarChart2, Users, ClipboardList, Settings, LogOut, Stethoscope, Newspaper,
 } from "lucide-react";
 import Logo from "@/components/Logo";
-import { onMessagesRead } from "@/lib/badgeEvents";
+import { onBadgesChanged } from "@/lib/badgeEvents";
 
 const navSections = [
   {
@@ -61,6 +61,16 @@ export default function DashboardHeader() {
       .catch(() => {});
   }, []);
 
+  const fetchMissionsRemaining = useCallback(() => {
+    fetch("/api/missions")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const remaining = (d.missions ?? []).filter((m: { completed: boolean }) => !m.completed).length;
+        setBadges((prev) => ({ ...prev, "/dashboard/missions": remaining }));
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch("/api/user")
       .then((r) => r.ok ? r.json() : Promise.reject())
@@ -69,16 +79,10 @@ export default function DashboardHeader() {
         if (d.user?.name)   setUserName(d.user.name.split(" ")[0]);
       })
       .catch(() => {});
-    fetch("/api/missions")
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((d) => {
-        const remaining = (d.missions ?? []).filter((m: { completed: boolean }) => !m.completed).length;
-        setBadges((prev) => ({ ...prev, "/dashboard/missions": remaining }));
-      })
-      .catch(() => {});
+    fetchMissionsRemaining();
     fetchUnread();
-    return onMessagesRead(fetchUnread);
-  }, [fetchUnread]);
+    return onBadgesChanged(() => { fetchMissionsRemaining(); fetchUnread(); });
+  }, [fetchUnread, fetchMissionsRemaining]);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";

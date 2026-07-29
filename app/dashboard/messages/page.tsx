@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Phone, Video, Paperclip, ArrowUp, ArrowLeft, X } from "lucide-react";
-import { notifyMessagesRead } from "@/lib/badgeEvents";
+import { notifyBadgesChanged } from "@/lib/badgeEvents";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -153,7 +153,7 @@ function MessagesPageInner() {
         }
         // The GET above marks unread messages read server-side — tell the
         // sidebar/header badges to refetch now instead of on next mount.
-        notifyMessagesRead();
+        notifyBadgesChanged();
       })
       .catch(() => {});
     setConversations((prev) =>
