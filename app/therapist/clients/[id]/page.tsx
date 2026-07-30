@@ -6,17 +6,18 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { AGE_GROUPS } from "@/lib/ageGroups";
 import { AFFIRMING_CARE_TAGS } from "@/lib/affirmingCare";
+import { SeverityBadge } from "@/components/SeverityBadge";
+import type { ActiveStepUpWindow } from "@/lib/types";
+import { MatchFactorsList } from "@/components/MatchFactorsList";
+import { MatchFeedbackPrompt } from "@/components/dashboard/MatchFeedbackPrompt";
+import type { MatchReasonFactor } from "@/lib/matching";
+import { formatDateKeyDisplay as formatDateKey } from "@/lib/dateKey";
+import { WeeklyFactsGrid } from "@/components/therapist/WeeklyFactsGrid";
+import type { WeeklyFacts } from "@/lib/mindo/factsTypes";
 
 type Tab = "overview" | "journal" | "missions" | "notes" | "plan" | "insights";
 
-type DigestFacts = {
-  completion: { assigned: number; completed: number; rate: number | null };
-  moodSummary: { avg: number | null; trend: string };
-  sleepMoodImpact: { moodDeltaOnPoorSleepDays: number | null; direction: string } | null;
-  lowestCompletionCategory: { activityType: string; rate: number } | null;
-  riskFlagsThisWeek: { severity: string; createdAt: string }[];
-};
-type DigestData = { enabled: boolean; digestText?: string; facts?: DigestFacts; weekStart?: string; journalIncluded?: boolean };
+type DigestData = { enabled: boolean; digestText?: string; facts?: WeeklyFacts; weekStart?: string; journalIncluded?: boolean };
 
 type ApiJournalEntry = { id: string; title: string; content: string; mood: number; emotions: string[]; createdAt: string };
 type ApiMission = {
@@ -32,12 +33,14 @@ type ApiIntake = {
   takingMedication: string | null; relationshipStatus: string | null;
 } | null;
 
-type OpenRiskFlag = { id: string; source: string; severity: string; detail: string; createdAt: string };
+type OpenRiskFlag = { id: string; source: string; severity: "high" | "moderate"; detail: string; createdAt: string };
 
 type ClientData = {
   id: string; name: string; email: string; plan: string; level: number; xp: number;
   memberSince: string; moodHistory: { score: number; date: string }[]; moodAvg: number;
-  streak: number; riskLevel: RiskLevel; riskFlags: OpenRiskFlag[];
+  streak: number; riskLevel: RiskLevel; riskFlags: OpenRiskFlag[]; activeStepUpWindow: ActiveStepUpWindow | null;
+  matchReasoning: { method: string; totalScore: number; factors: MatchReasonFactor[]; createdAt: string } | null;
+  pendingMatchFeedbackId: string | null;
   journalEntries: ApiJournalEntry[]; missionCompletions: ApiMission[]; appointments: ApiAppt[];
   assessmentResults: ApiAssessmentResult[]; intake: ApiIntake;
 };
@@ -93,10 +96,15 @@ type ClinicalNote = {
   tags: string[];
 };
 
-type Enrollment = { id: string; courseName: string; status: "in_progress" | "completed" | "paused" };
+type Enrollment = {
+  id: string; courseName: string; courseId: string | null;
+  status: "in_progress" | "completed" | "paused";
+  completedCount: number | null; totalLessons: number | null;
+};
 const COURSE_STATUS_LABEL: Record<Enrollment["status"], string> = {
   in_progress: "In progress", completed: "Completed", paused: "Paused",
 };
+type AvailableCourse = { id: string; title: string };
 
 type ApiClinicalNote = {
   id: string; date: string; sessionType: SessionType; content: string;
@@ -156,7 +164,6 @@ const RISK_PILL_CLASS: Record<RiskLevel, string> = {
 const RISK_DOT_CLASS: Record<RiskLevel, string> = {
   high: "bg-chart-risk-high", medium: "bg-chart-risk-medium", low: "bg-chart-risk-low",
 };
-const SEVERITY_LABEL: Record<string, string> = { high: "High", moderate: "Moderate" };
 const MOOD_BAR_COLOR: Record<RiskLevel, { base: string; hover: string }> = {
   high: { base: "#D64545", hover: "#C23A3A" },
   medium: { base: "#D98A2B", hover: "#C17A22" },
@@ -177,11 +184,6 @@ function formatNoteDate(iso: string) {
 // parsing it as an ISO string treats it as UTC midnight, which can render as
 // the wrong day once formatted in the browser's own local timezone. Construct
 // via the local-time constructor instead so display always matches the label.
-function formatDateKey(dateKey: string): string {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 const RESPONSE_FIELD_LABELS: Record<string, string> = {
   items: "Gratitude items", mood: "Mood", text: "Reflection", prompt: "Prompt",
   energy: "Energy (1-5)", body: "Body tension", note: "Note", worry: "Worry",
@@ -338,25 +340,25 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const COURSE_CYCLE: Enrollment["status"][] = ["in_progress", "completed", "paused"];
   const [courses, setCourses] = useState<Enrollment[]>([]);
   const [showCourseMenu, setShowCourseMenu] = useState(false);
-  const AVAILABLE_COURSES = [
-    "Managing Anxiety", "CBT Fundamentals", "Sleep & Recovery", "Stress Resilience",
-    "Mindfulness Basics", "Emotional Regulation", "Building Self-Compassion",
-  ];
+  const [availableCourses, setAvailableCourses] = useState<AvailableCourse[]>([]);
 
   useEffect(() => {
     fetch(`/api/therapist/clients/${id}/courses`)
       .then((r) => r.json())
       .then((d) => setCourses(d.enrollments ?? []));
+    fetch("/api/courses")
+      .then((r) => r.json())
+      .then((d) => setAvailableCourses((d.courses ?? []).map((c: { id: string; title: string }) => ({ id: c.id, title: c.title }))));
   }, [id]);
 
-  async function addCourse(name: string) {
+  async function addCourse(course: AvailableCourse) {
     setShowCourseMenu(false);
-    if (courses.find((c) => c.courseName === name)) return;
+    if (courses.find((c) => c.courseId === course.id)) return;
     const r = await fetch(`/api/therapist/clients/${id}/courses`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseName: name }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseId: course.id }),
     });
     const d = await r.json();
-    if (r.ok && d.enrollment) setCourses((prev) => [...prev, d.enrollment]);
+    if (r.ok && d.enrollment) setCourses((prev) => [...prev, { ...d.enrollment, completedCount: 0, totalLessons: null }]);
   }
   async function removeCourse(enrollmentId: string) {
     setCourses((prev) => prev.filter((c) => c.id !== enrollmentId));
@@ -372,6 +374,17 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     await fetch(`/api/therapist/clients/${id}/courses`, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enrollmentId, status: next }),
     });
+  }
+
+  const [resolvingStepUp, setResolvingStepUp] = useState(false);
+  async function resolveStepUpWindow() {
+    if (!clientData?.activeStepUpWindow) return;
+    setResolvingStepUp(true);
+    const r = await fetch(`/api/risk-stepup/${clientData.activeStepUpWindow.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resolve" }),
+    });
+    if (r.ok) setClientData((prev) => prev ? { ...prev, activeStepUpWindow: null } : prev);
+    setResolvingStepUp(false);
   }
 
   // Journal state
@@ -403,14 +416,22 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       .finally(() => setDigestLoading(false));
   }, [id]);
 
-  const [digestHistory, setDigestHistory] = useState<{ id: string; weekStart: string; digestText: string }[] | null>(null);
+  const [digestHistory, setDigestHistory] = useState<{ id: string; weekStart: string; digestText: string; facts?: WeeklyFacts }[] | null>(null);
   const [digestHistoryLoading, setDigestHistoryLoading] = useState(false);
+  const [expandedDigestIds, setExpandedDigestIds] = useState<Set<string>>(new Set());
   function loadDigestHistory() {
     setDigestHistoryLoading(true);
     fetch(`/api/therapist/clients/${id}/digest/history`)
       .then((r) => r.json())
-      .then((d: { digests?: { id: string; weekStart: string; digestText: string }[] }) => setDigestHistory(d.digests ?? []))
+      .then((d: { digests?: { id: string; weekStart: string; digestText: string; facts?: WeeklyFacts }[] }) => setDigestHistory(d.digests ?? []))
       .finally(() => setDigestHistoryLoading(false));
+  }
+  function toggleDigestExpanded(id: string) {
+    setExpandedDigestIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   // Form state
@@ -601,39 +622,62 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      {/* Safety banner — surfaces open, system-detected risk flags directly on the client's chart */}
-      {client.riskFlags.length > 0 && (
+      {/* Safety banner — surfaces open, system-detected risk flags directly on the client's chart.
+          Gated on either open flags OR an active step-up window, since acknowledging every flag
+          doesn't close the window — it stays visible until "Resolve early" or natural expiry. */}
+      {(client.riskFlags.length > 0 || client.activeStepUpWindow) && (() => {
+        const bannerIsHigh = client.riskLevel === "high" || !!client.activeStepUpWindow;
+        return (
         <div className={`rounded-xl px-5 py-4 border ${
-          client.riskLevel === "high"
+          bannerIsHigh
             ? "bg-chart-banner-high-bg border-chart-banner-high-border"
             : "bg-chart-banner-medium-bg border-chart-banner-medium-border"
         }`}>
           <div className="flex items-start gap-3">
-            <span className={`mt-0.5 text-lg leading-none ${client.riskLevel === "high" ? "text-chart-risk-high" : "text-chart-risk-medium"}`}>⚠</span>
+            <span className={`mt-0.5 text-lg leading-none ${bannerIsHigh ? "text-chart-risk-high" : "text-chart-risk-medium"}`}>⚠</span>
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold ${client.riskLevel === "high" ? "text-chart-banner-high-text" : "text-chart-banner-medium-text"}`}>
-                {client.riskFlags.length === 1 ? "1 open risk flag" : `${client.riskFlags.length} open risk flags`} — review before the next session
-              </p>
-              <div className="mt-2 space-y-1.5">
-                {client.riskFlags.map((f) => (
-                  <div key={f.id} className="flex items-start gap-2 text-xs">
-                    <span className={`flex-shrink-0 font-semibold px-1.5 py-0.5 rounded ${
-                      f.severity === "high"
-                        ? "bg-chart-banner-high-border text-chart-banner-high-text"
-                        : "bg-chart-banner-medium-border text-chart-banner-medium-text"
-                    }`}>
-                      {SEVERITY_LABEL[f.severity] ?? f.severity}
-                    </span>
-                    <span className={client.riskLevel === "high" ? "text-chart-banner-high-text" : "text-chart-banner-medium-text"}>
-                      {f.detail} <span className="opacity-60">· {new Date(f.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                    </span>
+              {client.riskFlags.length > 0 && (
+                <>
+                  <p className={`text-sm font-semibold ${bannerIsHigh ? "text-chart-banner-high-text" : "text-chart-banner-medium-text"}`}>
+                    {client.riskFlags.length === 1 ? "1 open risk flag" : `${client.riskFlags.length} open risk flags`} — review before the next session
+                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    {client.riskFlags.map((f) => (
+                      <div key={f.id} className="flex items-start gap-2 text-xs">
+                        <SeverityBadge severity={f.severity} variant="chip" />
+                        <span className={bannerIsHigh ? "text-chart-banner-high-text" : "text-chart-banner-medium-text"}>
+                          {f.detail} <span className="opacity-60">· {new Date(f.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
+
+              {client.activeStepUpWindow && (
+                <div className={client.riskFlags.length > 0 ? "mt-3 pt-3 border-t border-chart-banner-high-border/40" : ""}>
+                  <p className="text-sm font-semibold text-chart-banner-high-text">Elevated Monitoring Active</p>
+                  <p className="text-xs text-red-600/70 mt-1">
+                    Structured on CAMS (Collaborative Assessment and Management of Suicidality), a framework used by clinical crisis-care programs.
+                  </p>
+                  <p className="text-xs text-chart-banner-high-text mt-1.5">
+                    Check-ins every {client.activeStepUpWindow.checkInIntervalHrs}h · Clinical contact: {client.activeStepUpWindow.contactLabel} · Active until{" "}
+                    {new Date(client.activeStepUpWindow.windowEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </p>
+                  <button
+                    onClick={resolveStepUpWindow}
+                    disabled={resolvingStepUp}
+                    className="mt-2 text-xs border border-chart-banner-high-border text-chart-banner-high-text px-3 py-1.5 rounded-lg hover:bg-white/40 transition-colors disabled:opacity-50"
+                  >
+                    {resolvingStepUp ? "Resolving…" : "Resolve early"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Tabs */}
       <div className="flex border-b border-chart-line overflow-x-auto">
@@ -719,6 +763,24 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               )}
             </div>
+          )}
+
+          {/* Why matched — omitted entirely when there's no snapshot (pre-existing
+              assignment from before this feature, or a client with no ClientIntake) */}
+          {client.matchReasoning && (
+            <div className="bg-white border border-chart-line rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-stone-900 mb-3">Why {client.name} was matched with you</h3>
+              <MatchFactorsList factors={client.matchReasoning.factors} showWeights />
+            </div>
+          )}
+
+          {client.pendingMatchFeedbackId && (
+            <MatchFeedbackPrompt
+              feedbackId={client.pendingMatchFeedbackId}
+              counterpartName={client.name}
+              counterpartRole="CLIENT"
+              onDone={() => setClientData((prev) => prev ? { ...prev, pendingMatchFeedbackId: null } : prev)}
+            />
           )}
 
           {/* Mood chart */}
@@ -851,16 +913,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                       <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Available courses</p>
                     </div>
                     <div className="max-h-48 overflow-y-auto divide-y divide-chart-line">
-                      {AVAILABLE_COURSES.filter((c) => !courses.find((ec) => ec.courseName === c)).map((c) => (
+                      {availableCourses.filter((c) => !courses.find((ec) => ec.courseId === c.id || ec.courseName === c.title)).map((c) => (
                         <button
-                          key={c}
+                          key={c.id}
                           onClick={() => addCourse(c)}
                           className="w-full text-left px-3 py-2.5 text-xs text-stone-700 hover:bg-stone-50 transition-colors"
                         >
-                          {c}
+                          {c.title}
                         </button>
                       ))}
-                      {AVAILABLE_COURSES.filter((c) => !courses.find((ec) => ec.courseName === c)).length === 0 && (
+                      {availableCourses.filter((c) => !courses.find((ec) => ec.courseId === c.id || ec.courseName === c.title)).length === 0 && (
                         <p className="px-3 py-3 text-xs text-stone-400">All courses assigned</p>
                       )}
                     </div>
@@ -874,7 +936,12 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               <div className="divide-y divide-chart-line">
                 {courses.map((course) => (
                   <div key={course.id} className="flex items-center gap-3 py-2.5 first:pt-0 group">
-                    <span className="text-xs text-stone-700 flex-1 truncate">{course.courseName}</span>
+                    <span className="text-xs text-stone-700 flex-1 truncate">
+                      {course.courseName}
+                      {course.totalLessons !== null && course.totalLessons > 0 && (
+                        <span className="text-stone-400 ml-1.5">{course.completedCount}/{course.totalLessons} lessons</span>
+                      )}
+                    </span>
                     <button
                       onClick={() => cycleCourseStatus(course.id)}
                       className={`text-[10px] font-medium border px-2 py-0.5 rounded transition-colors ${
@@ -1501,6 +1568,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           <div className="bg-white border border-chart-line rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-chart-line">
               <h3 className="text-sm font-semibold text-stone-900">Client&apos;s safety plan</h3>
+              <p className="text-xs text-stone-400 mt-1">Based on the Stanley-Brown Safety Planning method — see the client&apos;s own framing on their Safety Plan page.</p>
             </div>
             {!safetyPlanShared || !safetyPlan ? (
               <div className="px-5 py-6 text-center text-sm text-stone-400">
@@ -1750,43 +1818,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 <p className="text-sm leading-relaxed">{digest.digestText}</p>
               </div>
 
-              {digest.facts && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <div className="bg-white border border-chart-line rounded-xl p-4">
-                    <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Assignment completion</div>
-                    <div className="text-lg font-semibold text-stone-900">
-                      {digest.facts.completion.rate !== null ? `${Math.round(digest.facts.completion.rate * 100)}%` : "—"}
-                    </div>
-                  </div>
-                  <div className="bg-white border border-chart-line rounded-xl p-4">
-                    <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Mood this week</div>
-                    <div className="text-lg font-semibold text-stone-900">
-                      {digest.facts.moodSummary.avg !== null ? `${digest.facts.moodSummary.avg} avg` : "—"}
-                    </div>
-                    <div className="text-xs text-stone-400 capitalize">{digest.facts.moodSummary.trend.replace(/_/g, " ")}</div>
-                  </div>
-                  {digest.facts.sleepMoodImpact && digest.facts.sleepMoodImpact.moodDeltaOnPoorSleepDays !== null && (
-                    <div className="bg-white border border-chart-line rounded-xl p-4">
-                      <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Sleep-mood link</div>
-                      <div className="text-lg font-semibold text-stone-900">{digest.facts.sleepMoodImpact.moodDeltaOnPoorSleepDays} pts</div>
-                      <div className="text-xs text-stone-400 capitalize">{digest.facts.sleepMoodImpact.direction.replace(/_/g, " ")}</div>
-                    </div>
-                  )}
-                  {digest.facts.lowestCompletionCategory && (
-                    <div className="bg-white border border-chart-line rounded-xl p-4">
-                      <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Lowest completion</div>
-                      <div className="text-sm font-semibold text-stone-900 capitalize">{digest.facts.lowestCompletionCategory.activityType}</div>
-                      <div className="text-xs text-stone-400">{Math.round(digest.facts.lowestCompletionCategory.rate * 100)}% this week</div>
-                    </div>
-                  )}
-                  <div className="bg-white border border-chart-line rounded-xl p-4">
-                    <div className="text-[10px] font-medium text-stone-400 uppercase tracking-widest mb-1">Risk flags this week</div>
-                    <div className={`text-lg font-semibold ${digest.facts.riskFlagsThisWeek.length > 0 ? "text-red-600" : "text-stone-900"}`}>
-                      {digest.facts.riskFlagsThisWeek.length}
-                    </div>
-                  </div>
-                </div>
-              )}
+              {digest.facts && <WeeklyFactsGrid facts={digest.facts} />}
 
               <p className="text-xs text-stone-400">
                 {digest.journalIncluded
@@ -1808,6 +1840,17 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                       <div key={d.id} className="bg-white border border-chart-line rounded-lg px-3 py-2.5">
                         <div className="text-[10px] font-medium text-stone-400 mb-0.5">Week of {formatDateKey(d.weekStart)}</div>
                         <p className="text-xs text-stone-600">{d.digestText}</p>
+                        {d.facts && (
+                          <>
+                            <button
+                              onClick={() => toggleDigestExpanded(d.id)}
+                              className="text-[10px] font-medium text-stone-400 hover:text-stone-700 transition-colors mt-1.5"
+                            >
+                              {expandedDigestIds.has(d.id) ? "Hide numbers" : "What's this based on? →"}
+                            </button>
+                            {expandedDigestIds.has(d.id) && <div className="mt-2"><WeeklyFactsGrid facts={d.facts} /></div>}
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>

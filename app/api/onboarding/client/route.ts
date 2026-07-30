@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { findBestMatch } from "@/lib/matching";
 import { assignClientToTherapist } from "@/lib/therapistAssignment";
+import { recordMatchReasoning } from "@/lib/matchReasoning";
 import { AGE_GROUPS, type AgeGroupId } from "@/lib/ageGroups";
 import { AFFIRMING_CARE_TAGS, type AffirmingCareTagId } from "@/lib/affirmingCare";
 
@@ -74,10 +75,13 @@ export async function POST(req: NextRequest) {
 
   if (match) {
     await assignClientToTherapist(session.user.id, client?.name ?? "A client", match.id);
+    await recordMatchReasoning(session.user.id, match.id, match.score, match.factors, "auto");
     await db.user.update({ where: { id: session.user.id }, data: { hasOnboarded: true } });
     return NextResponse.json({
       matched: true,
       therapist: { name: match.name, title: match.title, specializations: match.specializations, yearsOfExperience: match.yearsOfExperience },
+      score: match.score,
+      factors: match.factors,
     });
   }
 

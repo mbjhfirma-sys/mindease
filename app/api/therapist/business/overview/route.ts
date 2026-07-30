@@ -89,6 +89,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     currency: billing?.currency ?? "USD",
     ratePerMinuteCents: billing?.ratePerMinuteCents ?? null,
+    stripeConnectChargesEnabled: billing?.stripeConnectChargesEnabled ?? false,
+    stripeConnectPayoutsEnabled: billing?.stripeConnectPayoutsEnabled ?? false,
     range: rangeParam,
     pendingPayoutCents:
       pendingEarnings.reduce((sum, e) => sum + e.netAmountCents, 0) + pendingCommissions.reduce((sum, c) => sum + c.amountCents, 0),

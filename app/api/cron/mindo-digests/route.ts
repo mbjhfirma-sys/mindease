@@ -2,17 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notify";
 import { ensureWeeklyDigest } from "@/lib/mindo/ensureWeeklyDigest";
+import { processInBatches } from "@/lib/cronBatch";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const BATCH_SIZE = 8;
-
-async function processInBatches<T>(items: T[], size: number, fn: (item: T) => Promise<void>) {
-  for (let i = 0; i < items.length; i += size) {
-    await Promise.all(items.slice(i, i + size).map(fn));
-  }
-}
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");

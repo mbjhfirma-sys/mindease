@@ -50,6 +50,7 @@ export async function GET() {
       id: safeUser.id, name: safeUser.name, email: safeUser.email, role: safeUser.role,
       phone: safeUser.phone, dob: safeUser.dob, timezone: safeUser.timezone, language: safeUser.language,
       createdAt: safeUser.createdAt, plan: safeUser.plan, xp: safeUser.xp, level: safeUser.level,
+      communityContentOnDeletion: safeUser.communityContentOnDeletion, dataDirective: safeUser.dataDirective,
     },
     moodEntries: safeUser.moodEntries,
     journalEntries: safeUser.journalEntries,

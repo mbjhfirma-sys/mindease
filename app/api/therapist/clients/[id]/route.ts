@@ -58,7 +58,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     : 0;
 
   const streakLookbackStart = new Date(Date.now() - STREAK_LOOKBACK * 24 * 60 * 60 * 1000);
-  const [openRiskFlags, streakMoods] = await Promise.all([
+  const [openRiskFlags, streakMoods, activeStepUpWindow, matchReasoning, pendingFeedback] = await Promise.all([
     db.riskFlag.findMany({
       where: { userId: clientId, status: "open" },
       select: { id: true, source: true, severity: true, detail: true, createdAt: true },
@@ -67,6 +67,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     db.moodEntry.findMany({
       where: { userId: clientId, createdAt: { gte: streakLookbackStart } },
       select: { createdAt: true },
+    }),
+    db.riskStepUpWindow.findFirst({
+      where: { userId: clientId, status: "active" },
+      select: { id: true, windowEnd: true, contactLabel: true, checkInIntervalHrs: true },
+    }),
+    db.matchReasoning.findUnique({
+      where: { clientId },
+      select: { method: true, totalScore: true, factors: true, createdAt: true, therapistId: true },
+    }),
+    db.matchFeedback.findUnique({
+      where: { clientId_therapistId_respondentId: { clientId, therapistId: therapist.id, respondentId: session.user.id } },
+      select: { id: true, status: true },
     }),
   ]);
 
@@ -77,6 +89,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     : "low";
   const timeZone = resolveTimeZone(client.timezone);
   const streak = computeConsecutiveDayStreak(streakMoods.map((m) => m.createdAt), timeZone);
+
+  // A reasoning snapshot from a PREVIOUS therapist relationship (before a since-happened
+  // switch) shouldn't be shown as if it explains the current match — this route only
+  // ever returns a client already confirmed assigned to this calling therapist.
+  const currentMatchReasoning = matchReasoning && matchReasoning.therapistId === therapist.id
+    ? { method: matchReasoning.method, totalScore: matchReasoning.totalScore, factors: matchReasoning.factors, createdAt: matchReasoning.createdAt }
+    : null;
 
   return NextResponse.json({
     client: {
@@ -93,6 +112,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       streak,
       riskLevel,
       riskFlags: openRiskFlags,
+      activeStepUpWindow,
+      matchReasoning: currentMatchReasoning,
+      pendingMatchFeedbackId: pendingFeedback?.status === "pending" ? pendingFeedback.id : null,
       journalEntries: shareJournal ? client.journalEntries : [],
       journalShared: shareJournal,
       missionCompletions: client.missionCompletions,

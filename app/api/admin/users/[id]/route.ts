@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { assignClientToTherapist } from "@/lib/therapistAssignment";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -46,6 +48,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         },
       },
       riskFlags: { orderBy: { createdAt: "desc" }, take: 20 },
+      riskStepUpWindows: {
+        where: { status: "active" },
+        take: 1,
+        select: { id: true, windowEnd: true, contactLabel: true, checkInIntervalHrs: true },
+      },
     },
   });
 
@@ -121,6 +128,35 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       riskFlags: user.riskFlags.map((f) => ({
         id: f.id, source: f.source, severity: f.severity, detail: f.detail, status: f.status, createdAt: f.createdAt,
       })),
+      activeStepUpWindow: user.riskStepUpWindows[0] ?? null,
+      communityContentOnDeletion: user.communityContentOnDeletion,
+      dataDirective: user.dataDirective,
     },
   });
+}
+
+const patchSchema = z.object({
+  reassignTherapistId: z.string().min(1),
+});
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const { id } = await params;
+  const body = await req.json().catch(() => null);
+  const parsed = patchSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  const client = await db.user.findUnique({ where: { id }, select: { name: true, role: true } });
+  if (!client || client.role !== "CLIENT") return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  await assignClientToTherapist(id, client.name, parsed.data.reassignTherapistId);
+
+  await db.adminAuditLog.create({
+    data: { adminId: session.user.id, action: "user.reassigned_therapist", targetType: "User", targetId: id },
+  });
+
+  return NextResponse.json({ ok: true });
 }

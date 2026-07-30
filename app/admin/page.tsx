@@ -3,6 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { AdminStats, AdminTherapistItem } from "@/lib/types";
+import { SeverityBadge } from "@/components/SeverityBadge";
+
+type AdminRiskFlagRow = {
+  id: string; userId: string; userName: string; source: string;
+  severity: "high" | "moderate"; detail: string; status: string; createdAt: string;
+  therapistName: string | null;
+  activeStepUpWindow: { windowEnd: string; contactLabel: string; checkInIntervalHrs: number } | null;
+};
 
 const EMPTY_STATS: AdminStats = {
   users: { total: 0, clients: 0, therapists: 0, admins: 0, newLast7d: 0 },
@@ -14,19 +22,35 @@ const EMPTY_STATS: AdminStats = {
 export default function AdminOverviewPage() {
   const [stats, setStats] = useState<AdminStats>(EMPTY_STATS);
   const [pending, setPending] = useState<AdminTherapistItem[]>([]);
+  const [riskFlags, setRiskFlags] = useState<AdminRiskFlagRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [ackBusyId, setAckBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/admin/stats").then((r) => r.json()),
       fetch("/api/admin/therapists").then((r) => r.json()),
-    ]).then(([sData, tData]) => {
+      fetch("/api/admin/risk-flags").then((r) => r.json()),
+    ]).then(([sData, tData, rData]) => {
       if (sData.users) setStats(sData);
       const therapists: AdminTherapistItem[] = tData.therapists ?? [];
       setPending(therapists.filter((t) => t.status === "pending"));
+      setRiskFlags(rData.flags ?? []);
     }).finally(() => setLoading(false));
   }, []);
+
+  async function acknowledgeFlag(id: string) {
+    setAckBusyId(id);
+    const res = await fetch(`/api/risk-flags/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "acknowledged" }),
+    });
+    setAckBusyId(null);
+    if (res.ok) {
+      setRiskFlags((prev) => prev.filter((f) => f.id !== id));
+      setStats((prev) => ({ ...prev, safety: { openRiskFlags: Math.max(0, prev.safety.openRiskFlags - 1) } }));
+    }
+  }
 
   async function updateStatus(id: string, status: "approved" | "rejected") {
     setBusyId(id);
@@ -145,6 +169,43 @@ export default function AdminOverviewPage() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Risk flags */}
+      <div>
+        <h2 className="text-sm font-semibold text-stone-900 mb-3">Risk Flags</h2>
+        <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+          {riskFlags.length === 0 ? (
+            <div className="py-10 text-center text-sm text-stone-400">No open risk flags.</div>
+          ) : (
+            riskFlags.map((f) => (
+              <div key={f.id} className="flex items-center gap-3 px-4 py-3 border-t border-stone-50 first:border-t-0">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-stone-800">
+                    <Link href={`/admin/users/${f.userId}`} className="hover:underline">{f.userName}</Link>
+                    <SeverityBadge severity={f.severity} className="ml-2" />
+                    {f.activeStepUpWindow && (
+                      <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border text-red-600 bg-red-50 border-red-200">
+                        Elevated monitoring
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-stone-400 mt-0.5">
+                    {f.detail} · {f.source} · {new Date(f.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    {f.therapistName ? ` · Therapist: ${f.therapistName}` : " · No assigned therapist"}
+                  </div>
+                </div>
+                <button
+                  onClick={() => acknowledgeFlag(f.id)}
+                  disabled={ackBusyId === f.id}
+                  className="text-xs border border-stone-200 bg-white text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 transition-colors disabled:opacity-50 flex-shrink-0"
+                >
+                  Acknowledge
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

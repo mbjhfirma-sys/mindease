@@ -1,29 +1,11 @@
 import { db } from "@/lib/db";
 import { dayKeyInTimeZone, getUserDayRange, offsetDateKey, computeConsecutiveDayStreak, STREAK_LOOKBACK } from "@/lib/dateKey";
+import type { MoodTrend, DailyFacts, SleepMoodDirection, RateTrend, WeeklyFacts } from "./factsTypes";
 
-export type MoodTrend = "improving" | "declining" | "stable" | "insufficient_data";
-
-export type DailyFacts = {
-  dateKey: string;
-  yesterday: {
-    dateKey: string;
-    moodEntries: { score: number; label: string; note: string | null; createdAt: string }[];
-    avgMood: number | null;
-    journalEntries: { content: string; sleepQuality: number | null; mood: number; triggers: string[]; createdAt: string }[];
-    missionsAssigned: number;
-    missionsCompleted: number;
-    completionRate: number | null;
-  };
-  last7Days: {
-    avgMood: number | null;
-    moodTrend: MoodTrend;
-    completionRate: number | null;
-    currentStreak: number;
-  };
-  activeTreatmentGoals: { shortTermGoals: string; longTermGoals: string; approach: string | null } | null;
-  todaysAssignedMissions: { title: string; activityType: string }[];
-  openRiskFlag: { severity: string; createdAt: string } | null;
-};
+// Re-exported so every existing import site (chat.ts, ensureDailyBriefing.ts,
+// ensureWeeklyDigest.ts, etc.) keeps working unmodified — the real definitions now live in
+// factsTypes.ts, which UI code can import without pulling in this file's server-only db import.
+export type { MoodTrend, DailyFacts, SleepMoodDirection, RateTrend, WeeklyFacts } from "./factsTypes";
 
 function average(nums: number[]): number | null {
   if (nums.length === 0) return null;
@@ -132,26 +114,6 @@ export async function computeClientDailyFacts(userId: string, timeZone: string, 
     openRiskFlag,
   };
 }
-
-export type SleepMoodDirection = "negative_impact" | "positive_impact" | "no_clear_pattern" | "insufficient_data";
-export type RateTrend = "improving" | "declining" | "stable" | "insufficient_data";
-
-export type WeeklyFacts = {
-  weekStart: string;
-  weekEnd: string;
-  completion: { assigned: number; completed: number; rate: number | null };
-  moodSummary: { avg: number | null; min: number | null; max: number | null; entryCount: number; trend: MoodTrend };
-  sleepMoodImpact: {
-    moodDeltaOnPoorSleepDays: number | null;
-    nPoorSleepDays: number;
-    nGoodSleepDays: number;
-    pearsonR: number | null;
-    direction: SleepMoodDirection;
-  } | null;
-  categoryCompletionTrend: { activityType: string; thisWeekRate: number; priorFourWeekAvgRate: number | null; direction: RateTrend }[];
-  lowestCompletionCategory: { activityType: string; rate: number } | null;
-  riskFlagsThisWeek: { severity: string; status: string; createdAt: string }[];
-};
 
 // Rate deltas live on a 0-1 scale (unlike the 1-5 mood scale), so a much smaller
 // absolute threshold still represents a meaningful, narratable shift.

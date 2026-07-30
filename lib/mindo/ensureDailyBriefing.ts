@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { dayKeyInTimeZone, resolveTimeZone } from "@/lib/dateKey";
 import { computeClientDailyFacts } from "@/lib/mindo/facts";
 import { generateDailyBriefing } from "@/lib/mindo/generateBriefing";
+import { planById } from "@/lib/clientPlans";
 import type { DailyBriefing } from "@prisma/client";
 
 export type EnsureDailyBriefingResult =
@@ -9,8 +10,10 @@ export type EnsureDailyBriefingResult =
   | { enabled: true; briefing: DailyBriefing; created: boolean };
 
 export async function ensureDailyBriefing(userId: string): Promise<EnsureDailyBriefingResult> {
-  const user = await db.user.findUnique({ where: { id: userId }, select: { timezone: true, privacyPrefs: true } });
+  const user = await db.user.findUnique({ where: { id: userId }, select: { timezone: true, privacyPrefs: true, plan: true } });
   if (!user) return { enabled: false };
+
+  if (!planById(user.plan).features.mindo) return { enabled: false };
 
   const privacyPrefs = (user.privacyPrefs as Record<string, boolean> | null) ?? {};
   if (privacyPrefs.mindoClientBriefingEnabled === false) return { enabled: false };

@@ -41,10 +41,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!therapist) return NextResponse.json({ error: "Therapist not found" }, { status: 404 });
 
-  const [clinicalNoteCount, treatmentPlanCount, courseEnrollmentCount] = await Promise.all([
+  const [clinicalNoteCount, treatmentPlanCount, courseEnrollmentCount, billing] = await Promise.all([
     db.clinicalNote.count({ where: { therapistId: id } }),
     db.treatmentPlan.count({ where: { therapistId: id } }),
     db.courseEnrollment.count({ where: { therapistId: id } }),
+    db.therapistBilling.findUnique({ where: { therapistId: id } }),
   ]);
 
   await db.adminAuditLog.create({
@@ -85,6 +86,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       clinicalNoteCount,
       treatmentPlanCount,
       courseEnrollmentCount,
+      platformFeeBps: billing?.platformFeeBps ?? 0,
+      stripeConnectChargesEnabled: billing?.stripeConnectChargesEnabled ?? false,
+      stripeConnectPayoutsEnabled: billing?.stripeConnectPayoutsEnabled ?? false,
     },
   });
 }

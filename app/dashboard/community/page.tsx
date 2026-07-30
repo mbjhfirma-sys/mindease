@@ -1,10 +1,21 @@
 "use client";
 
 import { Suspense, useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Rss, Users, Target, ShieldAlert, Send, X, Heart, MessageCircle, Sparkles, Mail } from "lucide-react";
 import TaskActivityModal from "@/components/dashboard/TaskActivityModal";
 import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
+import { IDENTITY_TAGS } from "@/lib/identityTags";
+import { AGE_GROUPS } from "@/lib/ageGroups";
+import { getJoinWindow } from "@/lib/video";
+import { planById } from "@/lib/clientPlans";
+import GroupCallRoom from "@/components/video/GroupCallRoom";
+
+type GroupSessionItem = {
+  id: string; scheduledStart: string; durationMin: number;
+  maxParticipants: number; rsvpCount: number; hasRsvped: boolean;
+};
 
 type Post = {
   id: string; author: string; avatar: string; group: string | null; content: string;
@@ -17,6 +28,7 @@ type Group = {
   icon: string; color: string; nextSession: string | null; members: number; joined: boolean;
   source?: "support" | "therapist"; createdByName?: string | null;
   invited?: boolean; privacy?: "open" | "invite";
+  identityTags: string[]; ageGroup: string | null;
 };
 
 // ─── Enrichment constants ─────────────────────────────────────────────────────
@@ -165,6 +177,16 @@ function CommunityPageInner() {
   const [newPost, setNewPost] = useState("");
   const [postGroup, setPostGroup] = useState("");
   const [posting, setPosting] = useState(false);
+  const [sessionsByGroup, setSessionsByGroup] = useState<Record<string, GroupSessionItem[]>>({});
+  const [activeGroupCall, setActiveGroupCall] = useState<{ sessionId: string; groupName: string } | null>(null);
+  const [hasLiveSessionAccess, setHasLiveSessionAccess] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/user")
+      .then((r) => r.json())
+      .then((d) => { if (d.user) setHasLiveSessionAccess(planById(d.user.plan).features.liveGroupSessions); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/community/groups")
@@ -180,9 +202,47 @@ function CommunityPageInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const therapistJoined = groups.filter((g) => g.joined && g.source === "therapist");
+    therapistJoined.forEach((g) => {
+      fetch(`/api/community/groups/${g.id}/sessions`)
+        .then((r) => (r.ok ? r.json() : { sessions: [] }))
+        .then((d) => setSessionsByGroup((prev) => ({ ...prev, [g.id]: d.sessions ?? [] })))
+        .catch(() => {});
+    });
+  }, [groups]);
+
+  async function toggleRsvp(groupId: string, sessionId: string, currentlyRsvped: boolean) {
+    setSessionsByGroup((prev) => ({
+      ...prev,
+      [groupId]: (prev[groupId] ?? []).map((s) =>
+        s.id === sessionId
+          ? { ...s, hasRsvped: !currentlyRsvped, rsvpCount: s.rsvpCount + (currentlyRsvped ? -1 : 1) }
+          : s
+      ),
+    }));
+    const res = await fetch(`/api/community/groups/${groupId}/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupSessionId: sessionId, action: currentlyRsvped ? "cancel_rsvp" : "rsvp" }),
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      // Revert the optimistic update — the plan gate (or another error) rejected it server-side.
+      setSessionsByGroup((prev) => ({
+        ...prev,
+        [groupId]: (prev[groupId] ?? []).map((s) => (s.id === sessionId ? { ...s, hasRsvped: currentlyRsvped, rsvpCount: s.rsvpCount } : s)),
+      }));
+      if (res && res.status === 403) setHasLiveSessionAccess(false);
+    }
+  }
+
   // Feed filter
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
   const [filterGroupName, setFilterGroupName] = useState<string | null>(null);
+
+  // Discover-groups filter
+  const [identityFilter, setIdentityFilter] = useState<string | null>(null);
+  const [ageFilter, setAgeFilter] = useState<string | null>(null);
 
   // Replies
   const [repliesByPost, setRepliesByPost] = useState<Record<string, Reply[]>>(SEED_REPLIES);
@@ -243,7 +303,14 @@ function CommunityPageInner() {
 
   const joinedGroups = useMemo(() => groups.filter((g) => g.joined), [groups]);
   const invitedGroups = useMemo(() => groups.filter((g) => !g.joined && g.invited), [groups]);
-  const discoverGroups = useMemo(() => groups.filter((g) => !g.joined && !g.invited), [groups]);
+  const discoverGroups = useMemo(
+    () => groups.filter((g) =>
+      !g.joined && !g.invited
+      && (!identityFilter || g.identityTags.includes(identityFilter))
+      && (!ageFilter || g.ageGroup === ageFilter)
+    ),
+    [groups, identityFilter, ageFilter]
+  );
 
   const totalMembersInJoined = useMemo(
     () => joinedGroups.reduce((sum, g) => sum + g.members, 0),
@@ -858,6 +925,50 @@ function CommunityPageInner() {
                       </p>
                     </div>
 
+                    {/* Live sessions (therapist-hosted groups only) */}
+                    {group.source === "therapist" && (sessionsByGroup[group.id]?.length ?? 0) > 0 && (
+                      <div className="border-t border-stone-100 px-5 py-3 space-y-2">
+                        <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Upcoming live sessions</div>
+                        {sessionsByGroup[group.id].map((s) => {
+                          const start = new Date(s.scheduledStart);
+                          const jw = getJoinWindow(start, s.durationMin);
+                          return (
+                            <div key={s.id} className="flex items-center gap-3 text-xs">
+                              <span className="text-stone-600 font-medium whitespace-nowrap">
+                                {start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ·{" "}
+                                {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                              </span>
+                              <span className="text-stone-400 whitespace-nowrap">{s.rsvpCount} going</span>
+                              {!hasLiveSessionAccess ? (
+                                <Link
+                                  href="/dashboard/settings"
+                                  className="ml-auto text-amber-700 border border-amber-200 bg-amber-50 px-3 py-1 rounded-lg font-medium hover:border-amber-400 transition-colors flex-shrink-0 whitespace-nowrap"
+                                >
+                                  Upgrade to join
+                                </Link>
+                              ) : jw.isOpen ? (
+                                <button
+                                  onClick={() => setActiveGroupCall({ sessionId: s.id, groupName: group.name })}
+                                  className="ml-auto bg-stone-900 text-white px-3 py-1 rounded-lg font-semibold hover:bg-stone-800 transition-colors flex-shrink-0"
+                                >
+                                  Join
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => toggleRsvp(group.id, s.id, s.hasRsvped)}
+                                  className={`ml-auto px-3 py-1 rounded-lg font-medium border transition-colors flex-shrink-0 ${
+                                    s.hasRsvped ? "bg-stone-900 border-stone-900 text-white" : "border-stone-200 text-stone-600 hover:border-stone-400"
+                                  }`}
+                                >
+                                  {s.hasRsvped ? "Going ✓" : "RSVP"}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     {/* Divider + stats */}
                     <div className="border-t border-stone-100 px-5 py-3 flex items-center gap-4 flex-wrap">
                       {meta && (
@@ -896,12 +1007,44 @@ function CommunityPageInner() {
           )}
 
           {/* Discover */}
-          {discoverGroups.length > 0 && (
-            <div className="space-y-3">
-              <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-                Discover
-              </h2>
-              {discoverGroups.map((group) => {
+          <div className="space-y-3">
+            <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+              Discover
+            </h2>
+
+            {/* Identity / age filter chips */}
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setAgeFilter(null)}
+                className={`text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors ${!ageFilter ? "bg-stone-900 border-stone-900 text-white" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}
+              >
+                Any age
+              </button>
+              {AGE_GROUPS.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => setAgeFilter((f) => (f === a.id ? null : a.id))}
+                  className={`text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors ${ageFilter === a.id ? "bg-stone-900 border-stone-900 text-white" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}
+                >
+                  {a.label}
+                </button>
+              ))}
+              <span className="w-px bg-stone-200 mx-1" />
+              {IDENTITY_TAGS.map((t) => (
+                <button
+                  key={t.id}
+                  title={t.description}
+                  onClick={() => setIdentityFilter((f) => (f === t.id ? null : t.id))}
+                  className={`text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors ${identityFilter === t.id ? "bg-stone-900 border-stone-900 text-white" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {discoverGroups.length === 0 ? (
+              <p className="text-xs text-stone-400 py-4 text-center">No groups match those filters.</p>
+            ) : discoverGroups.map((group) => {
                 const meta = getGroupMeta(group.id);
                 return (
                   <div
@@ -933,6 +1076,16 @@ function CommunityPageInner() {
                             🩺 {group.createdByName}
                           </span>
                         )}
+                        {group.ageGroup && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-stone-50 text-stone-500 border border-stone-100">
+                            {AGE_GROUPS.find((a) => a.id === group.ageGroup)?.label ?? group.ageGroup}
+                          </span>
+                        )}
+                        {group.identityTags.map((tagId) => (
+                          <span key={tagId} className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-stone-50 text-stone-500 border border-stone-100">
+                            {IDENTITY_TAGS.find((t) => t.id === tagId)?.label ?? tagId}
+                          </span>
+                        ))}
                       </div>
 
                       {/* Row 3 */}
@@ -959,8 +1112,7 @@ function CommunityPageInner() {
                   </div>
                 );
               })}
-            </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -1210,6 +1362,14 @@ function CommunityPageInner() {
           }}
           onComplete={(id, data) => { completeChallengeLog(id, data); setOpenChallengeTask(null); }}
           onClose={() => setOpenChallengeTask(null)}
+        />
+      )}
+
+      {activeGroupCall && (
+        <GroupCallRoom
+          sessionId={activeGroupCall.sessionId}
+          groupName={activeGroupCall.groupName}
+          onEnd={() => setActiveGroupCall(null)}
         />
       )}
     </div>

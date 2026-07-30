@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AlertTriangle, Calendar, Moon, Flag } from "lucide-react";
+import { SeverityBadge } from "@/components/SeverityBadge";
 
 export type AttentionRiskFlag = {
   id: string; clientId: string; clientName: string; source: string;
@@ -19,11 +20,6 @@ export type AttentionCommunityFlag = {
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
-
-const SEVERITY_BADGE: Record<"high" | "moderate", string> = {
-  high: "text-red-600 bg-red-50 border-red-200",
-  moderate: "text-amber-700 bg-amber-50 border-amber-200",
-};
 
 export default function NeedsAttention({
   riskFlags, bookings, inactiveClients, communityFlags,
@@ -52,7 +48,7 @@ export default function NeedsAttention({
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-stone-800">
               <Link href={`/therapist/clients/${f.clientId}`} className="hover:underline">{f.clientName}</Link>
-              <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${SEVERITY_BADGE[f.severity]}`}>{f.severity === "high" ? "High" : "Moderate"}</span>
+              <SeverityBadge severity={f.severity} className="ml-2" />
             </div>
             <div className="text-xs text-stone-400 mt-0.5">{f.detail} &middot; {fmtDate(f.createdAt)}</div>
           </div>

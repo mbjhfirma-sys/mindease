@@ -39,12 +39,14 @@ export default function PayoutsTab() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedCommissions, setSelectedCommissions] = useState<Set<string>>(new Set());
   const [requesting, setRequesting] = useState(false);
+  const [payoutsReady, setPayoutsReady] = useState(false);
 
   function load() {
     fetch("/api/therapist/business/payouts").then((r) => r.json()).then((d) => {
       if (d.pendingEarnings) setPendingEarnings(d.pendingEarnings);
       if (d.pendingCommissions) setPendingCommissions(d.pendingCommissions);
       if (d.payouts) setPayouts(d.payouts);
+      setPayoutsReady(Boolean(d.stripeConnectChargesEnabled && d.stripeConnectPayoutsEnabled));
     }).finally(() => setLoading(false));
   }
 
@@ -110,13 +112,19 @@ export default function PayoutsTab() {
           {(selected.size > 0 || selectedCommissions.size > 0) && (
             <button
               onClick={requestPayout}
-              disabled={requesting}
+              disabled={requesting || !payoutsReady}
+              title={payoutsReady ? undefined : "Connect your Stripe payout account on the Overview tab first"}
               className="bg-stone-900 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-stone-800 disabled:opacity-50 transition-colors"
             >
               {requesting ? "Requesting…" : `Request payout (${selected.size + selectedCommissions.size})`}
             </button>
           )}
         </div>
+        {!payoutsReady && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+            Connect your Stripe payout account on the Overview tab before requesting a payout.
+          </p>
+        )}
         <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
           {pendingEarnings.length === 0 && pendingCommissions.length === 0 ? (
             <div className="py-10 text-center text-sm text-stone-400">No pending earnings yet.</div>
@@ -197,7 +205,7 @@ export default function PayoutsTab() {
           )}
         </div>
         <p className="text-xs text-stone-400 mt-2">
-          Payouts here are self-reported bookkeeping — YouMindo doesn&apos;t transfer funds directly. Mark a payout paid once you&apos;ve reconciled it yourself.
+          Sessions paid for through YouMindo are transferred to your connected Stripe account the moment you mark the payout paid. Older bookkeeping-only entries (from before Stripe payments were connected) still need manual reconciliation.
         </p>
       </div>
     </div>

@@ -18,7 +18,7 @@ export async function GET() {
   const therapist = await db.therapist.findUnique({ where: { userId: session.user.id } });
   if (!therapist) return NextResponse.json({ error: "Therapist profile not found" }, { status: 404 });
 
-  const [pendingEarnings, pendingCommissions, payouts] = await Promise.all([
+  const [pendingEarnings, pendingCommissions, payouts, billing] = await Promise.all([
     db.sessionEarning.findMany({
       where: { therapistId: therapist.id, payoutId: null },
       include: { client: { select: { name: true } } },
@@ -33,9 +33,16 @@ export async function GET() {
       include: { earnings: true, commissions: true },
       orderBy: { createdAt: "desc" },
     }),
+    db.therapistBilling.findUnique({ where: { therapistId: therapist.id } }),
   ]);
 
-  return NextResponse.json({ pendingEarnings, pendingCommissions, payouts });
+  return NextResponse.json({
+    pendingEarnings,
+    pendingCommissions,
+    payouts,
+    stripeConnectChargesEnabled: billing?.stripeConnectChargesEnabled ?? false,
+    stripeConnectPayoutsEnabled: billing?.stripeConnectPayoutsEnabled ?? false,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -60,6 +67,30 @@ export async function POST(req: NextRequest) {
   ]);
   if (earnings.length === 0 && commissions.length === 0) {
     return NextResponse.json({ error: "No eligible earnings or commissions found" }, { status: 400 });
+  }
+
+  // A batch backed by a real SessionCharge (an actual Stripe payment) must never mix with
+  // legacy bookkeeping-only earnings or commissions — either would over- or under-transfer
+  // relative to what was genuinely collected via Stripe.
+  const chargedAppointmentIds = earnings.length > 0
+    ? new Set((await db.sessionCharge.findMany({
+        where: { appointmentId: { in: earnings.map((e) => e.appointmentId) }, status: "paid" },
+        select: { appointmentId: true },
+      })).map((c) => c.appointmentId))
+    : new Set<string>();
+  const chargedCount = earnings.filter((e) => chargedAppointmentIds.has(e.appointmentId)).length;
+  const isRealBatch = chargedCount > 0;
+  if (isRealBatch && (chargedCount !== earnings.length || commissions.length > 0)) {
+    return NextResponse.json(
+      { error: "Real session payments can't be requested in the same payout as bookkeeping-only earnings or commissions — split them into separate requests." },
+      { status: 400 }
+    );
+  }
+  if (isRealBatch) {
+    const billing = await db.therapistBilling.findUnique({ where: { therapistId: therapist.id } });
+    if (!billing?.stripeConnectChargesEnabled || !billing.stripeConnectPayoutsEnabled) {
+      return NextResponse.json({ error: "Connect your Stripe payout account first" }, { status: 403 });
+    }
   }
 
   const totalAmountCents = earnings.reduce((sum, e) => sum + e.netAmountCents, 0)

@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, CalendarDays, Clock, Video, Phone, MapPin } 
 import VideoCallRoom from "@/components/video/VideoCallRoom";
 import BookingModal from "@/components/dashboard/BookingModal";
 import { getJoinWindow } from "@/lib/video";
+import { getCancellationOutcome } from "@/lib/cancellationPolicy";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -121,6 +122,8 @@ export default function SchedulePage() {
   const [activeCall,      setActiveCall]      = useState<Appt | null>(null);
   const [showBooking,     setShowBooking]     = useState(false);
   const [startingConversation, setStartingConversation] = useState(false);
+  const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -164,6 +167,21 @@ export default function SchedulePage() {
     const id = setInterval(() => tick((n) => n + 1), 20_000);
     return () => clearInterval(id);
   }, []);
+
+  async function cancelAppointment(id: string) {
+    setCancelling(true);
+    try {
+      await fetch(`/api/appointments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      setConfirmingCancelId(null);
+      await load();
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   async function messageTherapist() {
     if (!therapist || startingConversation) return;
@@ -395,6 +413,11 @@ export default function SchedulePage() {
                   key={appt.id}
                   appt={appt}
                   onJoin={() => setActiveCall(appt)}
+                  confirmingCancel={confirmingCancelId === appt.id}
+                  cancelling={cancelling}
+                  onCancelClick={() => setConfirmingCancelId(appt.id)}
+                  onCancelDismiss={() => setConfirmingCancelId(null)}
+                  onCancelConfirm={() => cancelAppointment(appt.id)}
                 />
               ))}
             </div>
@@ -408,8 +431,10 @@ export default function SchedulePage() {
             <div className="bg-white rounded-2xl border border-stone-100 divide-y divide-stone-50 overflow-hidden">
               {upcoming.map((appt) => {
                 const joinWindow = getJoinWindow(appt.date, appt.durationMin);
+                const cancelable = appt.status === "pending" || appt.status === "confirmed";
                 return (
-                <div key={appt.id} className="flex items-center gap-4 px-5 py-4">
+                <div key={appt.id}>
+                <div className="flex items-center gap-4 px-5 py-4">
                   {/* Date block */}
                   <div className="flex-shrink-0 w-12 text-center">
                     <div className="text-[10px] font-bold text-stone-400 uppercase">
@@ -460,7 +485,24 @@ export default function SchedulePage() {
                         Available in {formatCountdown(joinWindow.opensInMs)}
                       </span>
                     )}
+                    {cancelable && (
+                      <button
+                        onClick={() => setConfirmingCancelId(appt.id)}
+                        className="text-[11px] font-medium text-stone-400 hover:text-red-600 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
                   </div>
+                </div>
+                {confirmingCancelId === appt.id && (
+                  <CancelConfirmRow
+                    date={appt.date}
+                    cancelling={cancelling}
+                    onDismiss={() => setConfirmingCancelId(null)}
+                    onConfirm={() => cancelAppointment(appt.id)}
+                  />
+                )}
                 </div>
                 );
               })}
@@ -527,8 +569,15 @@ export default function SchedulePage() {
 
 // ── Session card ──────────────────────────────────────────────────────────────
 
-function SessionCard({ appt, onJoin }: { appt: Appt; onJoin: () => void }) {
+function SessionCard({
+  appt, onJoin, confirmingCancel, cancelling, onCancelClick, onCancelDismiss, onCancelConfirm,
+}: {
+  appt: Appt; onJoin: () => void;
+  confirmingCancel: boolean; cancelling: boolean;
+  onCancelClick: () => void; onCancelDismiss: () => void; onCancelConfirm: () => void;
+}) {
   const joinWindow = getJoinWindow(appt.date, appt.durationMin);
+  const cancelable = appt.status === "pending" || appt.status === "confirmed";
   const borderColor = {
     video:     "border-l-blue-400",
     in_person: "border-l-sage-500",
@@ -536,43 +585,80 @@ function SessionCard({ appt, onJoin }: { appt: Appt; onJoin: () => void }) {
   }[appt.type] ?? "border-l-stone-300";
 
   return (
-    <div className={`bg-white rounded-2xl border border-stone-100 border-l-4 ${borderColor} px-5 py-4 flex items-center gap-4`}>
-      <div className="text-center min-w-[52px] flex-shrink-0">
-        <div className="text-base font-bold text-stone-800">{appt.time.split(" ")[0]}</div>
-        <div className="text-xs text-stone-400">{appt.time.split(" ")[1]}</div>
-      </div>
-      <div className="w-px h-10 bg-stone-100 flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-stone-800 leading-snug">
-          Session with {appt.therapistName}
-        </p>
-        <div className="flex items-center gap-2 text-[11px] text-stone-400 mt-0.5 flex-wrap">
-          <span className="flex items-center gap-1">
-            {TYPE_ICON[appt.type]}
-            {TYPE_LABEL[appt.type] ?? appt.type}
-          </span>
-          <span>·</span>
-          <span>{appt.duration}</span>
+    <div className={`bg-white rounded-2xl border border-stone-100 border-l-4 ${borderColor} overflow-hidden`}>
+      <div className="px-5 py-4 flex items-center gap-4">
+        <div className="text-center min-w-[52px] flex-shrink-0">
+          <div className="text-base font-bold text-stone-800">{appt.time.split(" ")[0]}</div>
+          <div className="text-xs text-stone-400">{appt.time.split(" ")[1]}</div>
         </div>
-        {appt.notes && <p className="text-xs text-stone-400 italic mt-0.5 truncate">{appt.notes}</p>}
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <span className={`text-[10px] font-semibold border px-2 py-1 rounded-full ${STATUS_STYLE[appt.status] ?? ""}`}>
-          {STATUS_LABEL[appt.status] ?? appt.status}
-        </span>
-        {appt.status === "confirmed" && appt.type === "video" && joinWindow.isOpen && (
-          <button
-            onClick={onJoin}
-            className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg transition-colors"
-          >
-            Join →
-          </button>
-        )}
-        {appt.status === "confirmed" && appt.type === "video" && !joinWindow.isOpen && new Date() < joinWindow.opensAt && (
-          <span className="text-[10px] text-stone-400 font-medium whitespace-nowrap">
-            Available in {formatCountdown(joinWindow.opensInMs)}
+        <div className="w-px h-10 bg-stone-100 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-stone-800 leading-snug">
+            Session with {appt.therapistName}
+          </p>
+          <div className="flex items-center gap-2 text-[11px] text-stone-400 mt-0.5 flex-wrap">
+            <span className="flex items-center gap-1">
+              {TYPE_ICON[appt.type]}
+              {TYPE_LABEL[appt.type] ?? appt.type}
+            </span>
+            <span>·</span>
+            <span>{appt.duration}</span>
+          </div>
+          {appt.notes && <p className="text-xs text-stone-400 italic mt-0.5 truncate">{appt.notes}</p>}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className={`text-[10px] font-semibold border px-2 py-1 rounded-full ${STATUS_STYLE[appt.status] ?? ""}`}>
+            {STATUS_LABEL[appt.status] ?? appt.status}
           </span>
-        )}
+          {appt.status === "confirmed" && appt.type === "video" && joinWindow.isOpen && (
+            <button
+              onClick={onJoin}
+              className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg transition-colors"
+            >
+              Join →
+            </button>
+          )}
+          {appt.status === "confirmed" && appt.type === "video" && !joinWindow.isOpen && new Date() < joinWindow.opensAt && (
+            <span className="text-[10px] text-stone-400 font-medium whitespace-nowrap">
+              Available in {formatCountdown(joinWindow.opensInMs)}
+            </span>
+          )}
+          {cancelable && (
+            <button onClick={onCancelClick} className="text-[11px] font-medium text-stone-400 hover:text-red-600 transition-colors">
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+      {confirmingCancel && (
+        <CancelConfirmRow date={appt.date} cancelling={cancelling} onDismiss={onCancelDismiss} onConfirm={onCancelConfirm} />
+      )}
+    </div>
+  );
+}
+
+// ── Cancel confirmation ──────────────────────────────────────────────────────
+
+function CancelConfirmRow({
+  date, cancelling, onDismiss, onConfirm,
+}: { date: Date; cancelling: boolean; onDismiss: () => void; onConfirm: () => void }) {
+  const outcome = getCancellationOutcome(date);
+  return (
+    <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 flex items-center justify-between gap-3 flex-wrap">
+      <p className="text-xs text-amber-800">
+        {outcome.isEligibleForRefund
+          ? "This is more than 24 hours away — if this session was paid, you'll get a full refund."
+          : "This is within 24 hours — if this session was paid, that charge won't be refunded."}
+      </p>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <button onClick={onDismiss} className="text-xs text-stone-500 hover:text-stone-700 px-2 py-1">Never mind</button>
+        <button
+          onClick={onConfirm}
+          disabled={cancelling}
+          className="text-xs font-semibold bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {cancelling ? "Cancelling…" : "Cancel session"}
+        </button>
       </div>
     </div>
   );

@@ -3,9 +3,12 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 
-const createSchema = z.object({
-  courseName: z.string().min(1).max(200),
-});
+const createSchema = z
+  .object({
+    courseId: z.string().optional(),
+    courseName: z.string().min(1).max(200).optional(),
+  })
+  .refine((d) => d.courseId || d.courseName, { message: "courseId or courseName is required" });
 
 const updateSchema = z.object({
   enrollmentId: z.string(),
@@ -37,7 +40,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     orderBy: { assignedAt: "asc" },
   });
 
-  return NextResponse.json({ enrollments });
+  // Never trust Course.lessonCount (a stale denormalized column) — compute fresh per linked enrollment.
+  const enriched = await Promise.all(
+    enrollments.map(async (e) => {
+      if (!e.courseId) return { ...e, completedCount: null, totalLessons: null };
+      const [totalLessons, completedCount] = await Promise.all([
+        db.lesson.count({ where: { courseId: e.courseId } }),
+        db.courseProgress.count({ where: { userId: clientId, courseId: e.courseId, completed: true } }),
+      ]);
+      return { ...e, completedCount, totalLessons };
+    })
+  );
+
+  return NextResponse.json({ enrollments: enriched });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -53,10 +68,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
+  const { courseId } = parsed.data;
+  let { courseName } = parsed.data;
+  if (courseId) {
+    const course = await db.course.findUnique({ where: { id: courseId }, select: { title: true } });
+    if (!course) return NextResponse.json({ error: "Course not found" }, { status: 404 });
+    courseName = course.title;
+  }
+  if (!courseName) return NextResponse.json({ error: "courseName is required" }, { status: 400 });
+
   const enrollment = await db.courseEnrollment.upsert({
-    where: { clientId_courseName: { clientId, courseName: parsed.data.courseName } },
-    update: {},
-    create: { therapistId: therapist.id, clientId, courseName: parsed.data.courseName },
+    where: { clientId_courseName: { clientId, courseName } },
+    update: { courseId: courseId ?? undefined },
+    create: { therapistId: therapist.id, clientId, courseName, courseId: courseId ?? undefined },
   });
 
   return NextResponse.json({ ok: true, enrollment }, { status: 201 });

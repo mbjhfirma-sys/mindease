@@ -8,6 +8,8 @@ import { LANGUAGE_SUGGESTIONS } from "@/lib/languages";
 import { AGE_GROUPS } from "@/lib/ageGroups";
 import { AFFIRMING_CARE_TAGS } from "@/lib/affirmingCare";
 import Logo from "@/components/Logo";
+import { MatchFactorsList } from "@/components/MatchFactorsList";
+import type { MatchReasonFactor } from "@/lib/matching";
 
 type Step = "concerns" | "about" | "identity" | "preferences" | "finding" | "result";
 
@@ -16,7 +18,7 @@ const QUESTION_STEPS: Step[] = ["concerns", "about", "identity", "preferences"];
 type MatchedTherapistInfo = { name: string; title: string; specializations: string[]; yearsOfExperience: number | null };
 
 type Result =
-  | { matched: true; therapist: MatchedTherapistInfo }
+  | { matched: true; therapist: MatchedTherapistInfo; score: number; factors: MatchReasonFactor[] }
   | { matched: false }
   | { alreadyAssigned: true; therapist: MatchedTherapistInfo | null };
 
@@ -93,6 +95,7 @@ export default function OnboardingPage() {
   const [takingMedication, setTakingMedication] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [skipping, setSkipping] = useState(false);
+  const [showWhy, setShowWhy] = useState(false);
 
   function toggleConcern(id: string) {
     setConcerns((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
@@ -152,6 +155,8 @@ export default function OnboardingPage() {
   const sharedSpecializations = matchedTherapist
     ? matchedTherapist.specializations.filter((s) => concerns.includes(s)).slice(0, 3)
     : [];
+
+  const matchFactors: MatchReasonFactor[] = result && "matched" in result && result.matched ? result.factors : [];
 
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center px-6 py-12">
@@ -599,6 +604,20 @@ export default function OnboardingPage() {
                 <p className="text-xs text-stone-400 mt-4 leading-relaxed">
                   Not the right fit? You can request a different therapist any time from your dashboard — no awkward conversation needed.
                 </p>
+                {matchFactors.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-stone-100">
+                    {!showWhy ? (
+                      <button onClick={() => setShowWhy(true)} className="text-xs font-medium text-sage-700 hover:text-sage-800 transition-colors">
+                        Why we matched you →
+                      </button>
+                    ) : (
+                      <>
+                        <p className="text-xs font-medium text-stone-500 mb-2">Why we matched you</p>
+                        <MatchFactorsList factors={matchFactors} />
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

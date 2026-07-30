@@ -145,8 +145,23 @@ export interface SupportGroupItem {
   icon: string;
   color: string;
   nextSession: string | null;
+  identityTags: string[];
+  ageGroup: string | null;
   members: number;
   joined: boolean;
+}
+
+export interface AdminSupportGroupItem {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  color: string;
+  identityTags: string[];
+  ageGroup: string | null;
+  memberCount: number;
+  createdAt: string;
 }
 
 export interface CommunityPostItem {
@@ -183,6 +198,8 @@ export interface TherapistGroupItem {
   icon: string;
   privacy: CommunityPrivacy;
   status: CommunityStatus;
+  identityTags: string[];
+  ageGroup: string | null;
   memberCount: number;
   postCount: number;
   createdAt: string;
@@ -359,6 +376,13 @@ export interface AdminRiskFlagItem {
   createdAt: string;
 }
 
+export interface ActiveStepUpWindow {
+  id: string;
+  windowEnd: string;
+  contactLabel: string;
+  checkInIntervalHrs: number;
+}
+
 export interface AdminUserDetail {
   id: string;
   name: string;
@@ -392,6 +416,14 @@ export interface AdminUserDetail {
   treatmentPlans: AdminTreatmentPlanItem[];
   conversations: AdminConversationItem[];
   riskFlags: AdminRiskFlagItem[];
+  activeStepUpWindow: ActiveStepUpWindow | null;
+  communityContentOnDeletion: "delete" | "anonymize";
+  dataDirective: {
+    legalDiscovery?: string;
+    incapacitation?: string;
+    trustedContact?: { name: string; relationship: string; email: string };
+    updatedAt?: string;
+  } | null;
 }
 
 export interface AdminTherapistDetail {
@@ -418,6 +450,9 @@ export interface AdminTherapistDetail {
   clinicalNoteCount: number;
   treatmentPlanCount: number;
   courseEnrollmentCount: number;
+  platformFeeBps: number;
+  stripeConnectChargesEnabled: boolean;
+  stripeConnectPayoutsEnabled: boolean;
 }
 
 export type AdminLessonType = "video" | "quiz" | "reflection" | "exercise" | "audio";
@@ -436,6 +471,7 @@ export interface AdminCourseItem {
   thumbnail: string | null;
   color: string | null;
   published: boolean;
+  isFreeTier: boolean;
   lessonCount: number;
   createdAt: string;
 }

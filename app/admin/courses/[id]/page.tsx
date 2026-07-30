@@ -168,10 +168,16 @@ export default function AdminCourseDetailPage({ params }: { params: Promise<{ id
       <div className="bg-white border border-stone-100 rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-stone-900">Course details</h2>
-          <label className="flex items-center gap-2 text-xs text-stone-600">
-            <input type="checkbox" checked={course.published} onChange={(e) => saveDetails({ published: e.target.checked })} />
-            Published
-          </label>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-xs text-stone-600">
+              <input type="checkbox" checked={course.isFreeTier} onChange={(e) => saveDetails({ isFreeTier: e.target.checked })} />
+              Free tier
+            </label>
+            <label className="flex items-center gap-2 text-xs text-stone-600">
+              <input type="checkbox" checked={course.published} onChange={(e) => saveDetails({ published: e.target.checked })} />
+              Published
+            </label>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Title" value={course.title} onBlurSave={(v) => saveDetails({ title: v })} />

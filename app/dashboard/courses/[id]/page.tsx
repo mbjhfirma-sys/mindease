@@ -7,6 +7,7 @@ import ReflectionLesson from "@/components/dashboard/ReflectionLesson";
 import ExerciseLesson from "@/components/dashboard/ExerciseLesson";
 import AudioLesson from "@/components/dashboard/AudioLesson";
 import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
+import { computeLockedLessonIds } from "@/lib/courseProgression";
 
 type LessonType = "video" | "quiz" | "reflection" | "exercise" | "audio";
 type QuizQuestion = { q: string; options: string[]; correct: number; explanation: string };
@@ -81,18 +82,23 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
     return map;
   }, [lessons]);
 
-  const markComplete = useCallback(async () => {
+  const markComplete = useCallback(async (result?: { score: number; passed: boolean }) => {
     if (!activeLessonId || !activeLesson) return;
     setCompletedIds((prev) => new Set([...prev, activeLessonId]));
     fetch("/api/progress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lessonId: activeLessonId, courseId: id, completed: true }),
+      body: JSON.stringify({
+        lessonId: activeLessonId, courseId: id, completed: true,
+        ...(result ? { score: result.score, passed: result.passed } : {}),
+      }),
     }).then(() => checkAchievements()).catch(() => {});
     const idx = lessons.findIndex((l) => l.id === activeLessonId);
     const next = lessons.slice(idx + 1).find((l) => !completedIds.has(l.id) && l.id !== activeLessonId);
     if (next) setActiveLessonId(next.id);
   }, [activeLessonId, activeLesson, completedIds, id, lessons, checkAchievements]);
+
+  const lockedIds = useMemo(() => computeLockedLessonIds(lessons, completedIds), [lessons, completedIds]);
 
   const completedCount = completedIds.size;
   const progress = Math.round((completedCount / Math.max(lessons.length, 1)) * 100);
@@ -128,11 +134,14 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
           {modLessons.map((lesson) => {
             const isActive = lesson.id === activeLessonId;
             const isDone = completedIds.has(lesson.id);
+            const isLocked = lockedIds.has(lesson.id);
             return (
               <button
                 key={lesson.id}
+                disabled={isLocked}
                 onClick={() => { setActiveLessonId(lesson.id); setDrawerOpen(false); }}
                 className={`w-full text-left flex items-center gap-3 px-4 py-3 border-b border-stone-50 last:border-0 transition-colors ${
+                  isLocked ? "opacity-50 cursor-not-allowed" :
                   isActive ? "bg-sage-50 border-l-2 border-l-sage-600" : "hover:bg-stone-50"
                 }`}
               >
@@ -141,11 +150,11 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                   isActive ? "bg-sage-700 text-white font-bold" :
                   "bg-stone-100 text-stone-400"
                 }`}>
-                  {isDone ? "✓" : <span className="text-[10px]">{TYPE_ICON[lesson.type]}</span>}
+                  {isDone ? "✓" : isLocked ? "🔒" : <span className="text-[10px]">{TYPE_ICON[lesson.type]}</span>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={`text-xs font-medium truncate leading-tight ${
-                    isActive ? "text-sage-700" : isDone ? "text-stone-400" : "text-stone-700"
+                    isActive ? "text-sage-700" : isDone || isLocked ? "text-stone-400" : "text-stone-700"
                   }`}>
                     {lesson.title}
                   </div>
@@ -226,7 +235,7 @@ export default function CoursePage({ params }: { params: Promise<{ id: string }>
                     </div>
                   )}
                   {!completedIds.has(activeLesson.id) ? (
-                    <button onClick={markComplete} className="w-full bg-sage-700 text-white font-semibold py-3 rounded-xl hover:bg-sage-800 transition-colors text-sm">
+                    <button onClick={() => markComplete()} className="w-full bg-sage-700 text-white font-semibold py-3 rounded-xl hover:bg-sage-800 transition-colors text-sm">
                       Mark as Complete & Continue →
                     </button>
                   ) : (

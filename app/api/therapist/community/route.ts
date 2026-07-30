@@ -11,6 +11,8 @@ const createSchema = z.object({
   category: z.string().min(1),
   icon: z.string().default("💬"),
   privacy: z.enum(["open", "invite"]).default("open"),
+  identityTags: z.array(z.string()).default([]),
+  ageGroup: z.string().optional(),
 });
 
 async function getTherapistId(userId: string) {
@@ -42,6 +44,8 @@ export async function GET() {
     icon: g.icon,
     privacy: g.privacy,
     status: g.status,
+    identityTags: g.identityTags,
+    ageGroup: g.ageGroup,
     memberCount: g._count.memberships,
     postCount: g._count.posts,
     createdAt: g.createdAt,

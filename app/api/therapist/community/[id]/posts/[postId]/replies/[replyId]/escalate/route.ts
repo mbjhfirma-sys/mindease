@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { notifyOfRiskFlag } from "@/lib/notify";
+import { ensureRiskStepUpWindow } from "@/lib/riskStepUp";
 
 const escalateSchema = z.object({
   severity: z.enum(["high", "moderate"]),
@@ -51,6 +53,18 @@ export async function POST(
     : await db.riskFlag.create({
         data: { userId: reply.authorId, source: "community", sourceId: reply.id, severity: parsed.data.severity, detail },
       });
+
+  await ensureRiskStepUpWindow(flag);
+
+  // Community escalation previously created a RiskFlag with no notification at all —
+  // fixed here. Skip notifying if the flagged author is the escalating therapist
+  // themselves (they just took this action; don't self-notify).
+  if (reply.authorId !== session.user.id) {
+    const flaggedUser = await db.user.findUnique({ where: { id: reply.authorId }, select: { name: true, therapistId: true } });
+    if (flaggedUser) {
+      await notifyOfRiskFlag({ id: reply.authorId, name: flaggedUser.name, therapistId: flaggedUser.therapistId }, detail, parsed.data.severity);
+    }
+  }
 
   return NextResponse.json({ ok: true, flag });
 }

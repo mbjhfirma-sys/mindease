@@ -50,10 +50,13 @@ export default function BookingModal({ onClose, therapistId: therapistIdProp, th
   const [error, setError] = useState("");
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [premiumCreditAvailable, setPremiumCreditAvailable] = useState(false);
+  const [useCredit, setUseCredit] = useState(false);
 
   useEffect(() => {
-    if (therapistIdProp) return;
     fetch("/api/user").then((r) => r.json()).then((d) => {
+      setPremiumCreditAvailable(!!d.user?.premiumCreditAvailable);
+      if (therapistIdProp) return;
       const t = d.user?.assignedTherapist;
       if (t) {
         setRealTherapistId(t.id);
@@ -110,11 +113,16 @@ export default function BookingModal({ onClose, therapistId: therapistIdProp, th
           type: apiType,
           duration,
           notes: notes.trim() || undefined,
+          useCredit: duration === 15 && useCredit,
         }),
       });
+      const d = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
         throw new Error(d.error ?? "Could not book session");
+      }
+      if (d.checkoutUrl) {
+        window.location.href = d.checkoutUrl;
+        return;
       }
       setConfirmed(true);
     } catch (err) {
@@ -261,6 +269,12 @@ export default function BookingModal({ onClose, therapistId: therapistIdProp, th
                   </button>
                 ))}
               </div>
+              {duration === 15 && premiumCreditAvailable && (
+                <label className="mt-2 flex items-center gap-2 text-xs text-sage-700 bg-sage-50 border border-sage-200 rounded-lg px-3 py-2 cursor-pointer">
+                  <input type="checkbox" checked={useCredit} onChange={(e) => setUseCredit(e.target.checked)} />
+                  Use my free 15-minute session this month (no charge)
+                </label>
+              )}
             </div>
 
             {/* Date */}

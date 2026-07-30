@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { AdminUserDetail } from "@/lib/types";
+import { SeverityBadge } from "@/components/SeverityBadge";
 
 type Tab = "overview" | "journal" | "clinical" | "activity" | "community" | "appointments" | "messages";
 const TABS: Tab[] = ["overview", "journal", "clinical", "activity", "community", "appointments", "messages"];
@@ -52,13 +53,61 @@ function AdminUserDetailInner({ id }: { id: string }) {
   const [expandedJournalId, setExpandedJournalId] = useState<string | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null);
+  const [ackBusyId, setAckBusyId] = useState<string | null>(null);
+  const [resolvingStepUp, setResolvingStepUp] = useState(false);
+  const [therapists, setTherapists] = useState<{ id: string; name: string }[]>([]);
+  const [reassignTherapistId, setReassignTherapistId] = useState("");
+  const [reassigning, setReassigning] = useState(false);
+  const [reassignDone, setReassignDone] = useState(false);
 
   useEffect(() => {
     fetch(`/api/admin/users/${id}`)
       .then((r) => r.json())
       .then((d) => { if (d.user) setUser(d.user); })
       .finally(() => setLoading(false));
+
+    fetch("/api/admin/therapists")
+      .then((r) => r.json())
+      .then((d) => setTherapists((d.therapists ?? []).filter((t: { status: string }) => t.status === "approved")))
+      .catch(() => {});
   }, [id]);
+
+  async function reassignTherapist() {
+    if (!reassignTherapistId) return;
+    setReassigning(true); setReassignDone(false);
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reassignTherapistId }),
+    });
+    setReassigning(false);
+    if (res.ok) {
+      const newTherapist = therapists.find((t) => t.id === reassignTherapistId);
+      setUser((prev) => prev ? { ...prev, assignedTherapist: newTherapist ? { id: newTherapist.id, title: "", rating: 0, name: newTherapist.name } : prev.assignedTherapist } : prev);
+      setReassignTherapistId("");
+      setReassignDone(true);
+      setTimeout(() => setReassignDone(false), 2500);
+    }
+  }
+
+  async function acknowledgeFlag(flagId: string) {
+    setAckBusyId(flagId);
+    const res = await fetch(`/api/risk-flags/${flagId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "acknowledged" }),
+    });
+    setAckBusyId(null);
+    if (res.ok) {
+      setUser((prev) => prev ? { ...prev, riskFlags: prev.riskFlags.map((f) => f.id === flagId ? { ...f, status: "acknowledged" } : f) } : prev);
+    }
+  }
+
+  async function resolveStepUpWindow() {
+    if (!user?.activeStepUpWindow) return;
+    setResolvingStepUp(true);
+    const res = await fetch(`/api/risk-stepup/${user.activeStepUpWindow.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resolve" }),
+    });
+    setResolvingStepUp(false);
+    if (res.ok) setUser((prev) => prev ? { ...prev, activeStepUpWindow: null } : prev);
+  }
 
   function selectTab(t: Tab) {
     setTab(t);
@@ -167,6 +216,26 @@ function AdminUserDetailInner({ id }: { id: string }) {
             </Link>
           )}
 
+          {user.activeStepUpWindow && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <p className="text-sm font-semibold text-red-700">Elevated Monitoring Active</p>
+              <p className="text-xs text-red-600/70 mt-1">
+                Structured on CAMS (Collaborative Assessment and Management of Suicidality), a framework used by clinical crisis-care programs.
+              </p>
+              <p className="text-xs text-red-700 mt-1.5">
+                Check-ins every {user.activeStepUpWindow.checkInIntervalHrs}h · Clinical contact: {user.activeStepUpWindow.contactLabel} · Active until{" "}
+                {new Date(user.activeStepUpWindow.windowEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </p>
+              <button
+                onClick={resolveStepUpWindow}
+                disabled={resolvingStepUp}
+                className="mt-2 text-xs border border-red-200 text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+              >
+                {resolvingStepUp ? "Resolving…" : "Resolve early"}
+              </button>
+            </div>
+          )}
+
           {user.riskFlags.length > 0 && (
             <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
               <div className="px-5 py-3 border-b border-stone-100">
@@ -176,16 +245,77 @@ function AdminUserDetailInner({ id }: { id: string }) {
                 {user.riskFlags.map((f) => (
                   <div key={f.id} className="px-5 py-3 flex items-center justify-between gap-3">
                     <div>
-                      <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded mr-2 ${f.severity === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{f.severity}</span>
+                      <SeverityBadge severity={f.severity} className="mr-2" />
                       <span className="text-sm text-stone-700">{f.detail}</span>
                       <div className="text-xs text-stone-400 mt-0.5">{f.source} · {new Date(f.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
                     </div>
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${f.status === "open" ? "border-amber-200 text-amber-700" : "border-stone-200 text-stone-400"}`}>{f.status}</span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${f.status === "open" ? "border-amber-200 text-amber-700" : "border-stone-200 text-stone-400"}`}>{f.status}</span>
+                      {f.status === "open" && (
+                        <button
+                          onClick={() => acknowledgeFlag(f.id)}
+                          disabled={ackBusyId === f.id}
+                          className="text-xs border border-stone-200 bg-white text-stone-600 px-2.5 py-1 rounded-lg hover:bg-stone-50 transition-colors disabled:opacity-50"
+                        >
+                          Acknowledge
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-stone-100">
+              <h3 className="text-sm font-semibold text-stone-900">Data handling directive</h3>
+            </div>
+            <div className="px-5 py-4 space-y-3 text-sm">
+              <div>
+                <span className="text-stone-400">On account deletion, community content: </span>
+                <span className="font-medium text-stone-700 capitalize">{user.communityContentOnDeletion}</span>
+              </div>
+              {user.dataDirective?.legalDiscovery && (
+                <div><span className="text-stone-400">Legal discovery: </span><span className="font-medium text-stone-700">{user.dataDirective.legalDiscovery}</span></div>
+              )}
+              {user.dataDirective?.incapacitation && (
+                <div><span className="text-stone-400">Incapacitation/death: </span><span className="font-medium text-stone-700">{user.dataDirective.incapacitation}</span></div>
+              )}
+              {user.dataDirective?.trustedContact && (
+                <div>
+                  <span className="text-stone-400">Trusted contact: </span>
+                  <span className="font-medium text-stone-700">
+                    {user.dataDirective.trustedContact.name} ({user.dataDirective.trustedContact.relationship}) — {user.dataDirective.trustedContact.email}
+                  </span>
+                </div>
+              )}
+              {user.dataDirective?.updatedAt && (
+                <p className="text-xs text-stone-400">Last updated {new Date(user.dataDirective.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+              )}
+              {!user.dataDirective?.legalDiscovery && !user.dataDirective?.incapacitation && (
+                <p className="text-xs text-stone-400">No directive scenarios recorded yet.</p>
+              )}
+
+              <div className="pt-3 border-t border-stone-50 flex items-center gap-2">
+                <select
+                  value={reassignTherapistId}
+                  onChange={(e) => setReassignTherapistId(e.target.value)}
+                  className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-700 focus:outline-none focus:border-stone-400"
+                >
+                  <option value="">Reassign to therapist…</option>
+                  {therapists.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <button
+                  onClick={reassignTherapist}
+                  disabled={!reassignTherapistId || reassigning}
+                  className="text-xs border border-stone-200 bg-white text-stone-600 px-3 py-2 rounded-lg hover:bg-stone-50 transition-colors disabled:opacity-50 whitespace-nowrap"
+                >
+                  {reassigning ? "Reassigning…" : reassignDone ? "Reassigned ✓" : "Reassign"}
+                </button>
+              </div>
+            </div>
+          </div>
 
           <div className="bg-white border border-stone-100 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-stone-900 mb-4">Mood trend (last {recentMoods.length} entries)</h3>

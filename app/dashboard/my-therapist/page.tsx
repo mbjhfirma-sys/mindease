@@ -4,10 +4,14 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Star, MessageCircle, CalendarPlus, GraduationCap, Languages,
+  MessageCircle, CalendarPlus, GraduationCap, Languages,
   BadgeCheck, Clock, Users, BookOpen, ChevronRight, Search,
 } from "lucide-react";
 import BookingModal from "@/components/dashboard/BookingModal";
+import { StarRating } from "@/components/dashboard/StarRating";
+import { MatchFactorsList } from "@/components/MatchFactorsList";
+import { MatchFeedbackPrompt } from "@/components/dashboard/MatchFeedbackPrompt";
+import type { MatchReasonFactor } from "@/lib/matching";
 
 type Appointment = {
   date: string; type: string; status: string; duration: number;
@@ -55,26 +59,13 @@ function fmtApptDate(iso: string) {
     " at " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function Stars({ value }: { value: number }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Star
-          key={i}
-          size={13}
-          className={i <= Math.round(value) ? "text-amber-400 fill-amber-400" : "text-stone-200 fill-stone-200"}
-        />
-      ))}
-      <span className="text-sm font-semibold text-stone-800 ml-1.5">{value.toFixed(1)}</span>
-    </div>
-  );
-}
-
 export default function MyTherapistPage() {
   const router = useRouter();
   const [therapist, setTherapist] = useState<Therapist | null | undefined>(undefined);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [startingConversation, setStartingConversation] = useState(false);
+  const [matchFactors, setMatchFactors] = useState<MatchReasonFactor[]>([]);
+  const [pendingFeedback, setPendingFeedback] = useState<{ id: string; counterpartName: string; counterpartRole: "CLIENT" | "THERAPIST" } | null>(null);
 
   async function messageTherapist() {
     if (!therapist || startingConversation) return;
@@ -109,6 +100,16 @@ export default function MyTherapistPage() {
         setTherapist(t ?? null);
       })
       .catch(() => setTherapist(null));
+
+    fetch("/api/match-reasoning/me")
+      .then((r) => r.ok ? r.json() : { reasoning: null })
+      .then((d) => setMatchFactors(d.reasoning?.factors ?? []))
+      .catch(() => setMatchFactors([]));
+
+    fetch("/api/match-feedback/pending")
+      .then((r) => r.ok ? r.json() : { pending: null })
+      .then((d) => setPendingFeedback(d.pending))
+      .catch(() => setPendingFeedback(null));
   }, []);
 
   // Loading
@@ -161,6 +162,15 @@ export default function MyTherapistPage() {
         <h1 className="text-2xl font-semibold text-stone-900">My Therapist</h1>
       </div>
 
+      {pendingFeedback && (
+        <MatchFeedbackPrompt
+          feedbackId={pendingFeedback.id}
+          counterpartName={pendingFeedback.counterpartName}
+          counterpartRole={pendingFeedback.counterpartRole}
+          onDone={() => setPendingFeedback(null)}
+        />
+      )}
+
       {/* Hero card */}
       <div className="bg-white border border-stone-100 rounded-2xl p-6">
         <div className="flex items-start gap-5">
@@ -183,7 +193,7 @@ export default function MyTherapistPage() {
                   </div>
                 )}
               </div>
-              {therapist.rating > 0 && <Stars value={therapist.rating} />}
+              {therapist.rating > 0 && <StarRating value={therapist.rating} />}
             </div>
 
             {/* Quick stats */}
@@ -250,6 +260,14 @@ export default function MyTherapistPage() {
       {therapist.bio && (
         <Section title="About">
           <p className="text-sm text-stone-600 leading-relaxed">{therapist.bio}</p>
+        </Section>
+      )}
+
+      {/* Why matched — hidden entirely if there's no snapshot (e.g. a pre-existing
+          assignment from before this feature) */}
+      {matchFactors.length > 0 && (
+        <Section title="Why you were matched">
+          <MatchFactorsList factors={matchFactors} />
         </Section>
       )}
 

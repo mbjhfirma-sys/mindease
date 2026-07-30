@@ -5,6 +5,17 @@ export function dayKeyInTimeZone(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
+// Client-side display formatting for a "YYYY-MM-DD" date key. Deliberately uses the 3-arg
+// local Date constructor rather than parsing the string directly (`new Date("YYYY-MM-DD")`
+// parses as UTC midnight, which can display a day early/late once formatted in the browser's
+// local timezone) — this exact off-by-one was independently hit and fixed twice already
+// (the streak counter, then Mindo's history views); extracted here so a 3rd/4th call site
+// never re-introduces it.
+export function formatDateKeyDisplay(dateKey: string): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export function resolveTimeZone(timezone: string | null | undefined): string {
   try {
     new Intl.DateTimeFormat("en-CA", { timeZone: timezone || "UTC" });

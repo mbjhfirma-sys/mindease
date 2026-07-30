@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Phone } from "lucide-react";
+import Link from "next/link";
+import { Send, Phone, Sparkles } from "lucide-react";
+import { planById } from "@/lib/clientPlans";
 
 type Message = { id: string; from: "ai" | "user"; text: string; time: string };
 
@@ -30,7 +32,15 @@ export default function AiChatPage() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
+  const [hasMindoAccess, setHasMindoAccess] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/user")
+      .then((r) => r.json())
+      .then((d) => { if (d.user) setHasMindoAccess(planById(d.user.plan).features.mindo); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/mindo/chat")
@@ -68,6 +78,23 @@ export default function AiChatPage() {
     } finally {
       setTyping(false);
     }
+  }
+
+  if (!hasMindoAccess) {
+    return (
+      <div className="max-w-md mx-auto mt-16 text-center bg-white border border-stone-100 rounded-2xl p-8">
+        <div className="w-12 h-12 bg-sage-700 rounded-xl flex items-center justify-center text-white mx-auto mb-4">
+          <Sparkles size={20} strokeWidth={1.5} />
+        </div>
+        <h2 className="font-bold text-stone-900 mb-1">Mindo is a Growth &amp; Premium feature</h2>
+        <p className="text-sm text-stone-500 mb-5">
+          Upgrade your plan to chat with Mindo, get daily briefings, and receive personalized course recommendations.
+        </p>
+        <Link href="/dashboard/settings" className="inline-block bg-stone-900 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-stone-800 transition-colors">
+          View plans
+        </Link>
+      </div>
+    );
   }
 
   return (

@@ -33,16 +33,42 @@ function AdminTherapistDetailInner({ id }: { id: string }) {
   const [therapist, setTherapist] = useState<AdminTherapistDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetch(`/api/admin/therapists/${id}`)
+  const [editingFee, setEditingFee] = useState(false);
+  const [feeInput, setFeeInput] = useState("");
+  const [feeSaving, setFeeSaving] = useState(false);
+  const [feeError, setFeeError] = useState("");
+
+  function load(therapistId: string) {
+    fetch(`/api/admin/therapists/${therapistId}`)
       .then((r) => r.json())
       .then((d) => { if (d.therapist) setTherapist(d.therapist); })
       .finally(() => setLoading(false));
-  }, [id]);
+  }
+
+  useEffect(() => { load(id); }, [id]);
 
   function selectTab(t: Tab) {
     setTab(t);
     router.replace(`/admin/therapists/${id}?tab=${t}`, { scroll: false });
+  }
+
+  async function saveFee() {
+    const pct = parseFloat(feeInput);
+    if (isNaN(pct) || pct < 0 || pct > 100) { setFeeError("Enter a percentage between 0 and 100"); return; }
+    setFeeSaving(true);
+    setFeeError("");
+    try {
+      const res = await fetch(`/api/admin/therapists/${id}/billing`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platformFeeBps: Math.round(pct * 100) }),
+      });
+      if (!res.ok) { setFeeError("Couldn't save — try again."); return; }
+      setEditingFee(false);
+      load(id);
+    } finally {
+      setFeeSaving(false);
+    }
   }
 
   if (loading) {
@@ -123,6 +149,47 @@ function AdminTherapistDetailInner({ id }: { id: string }) {
       {/* Overview */}
       {tab === "overview" && (
         <div className="space-y-4">
+          <div className="bg-white border border-stone-100 rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-stone-900">Platform fee</h3>
+              {!editingFee && (
+                <button
+                  onClick={() => { setFeeInput((therapist.platformFeeBps / 100).toString()); setEditingFee(true); }}
+                  className="text-xs text-stone-500 hover:text-stone-800"
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+            {editingFee ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="number" min="0" max="100" step="0.1" value={feeInput}
+                  onChange={(e) => setFeeInput(e.target.value)}
+                  autoFocus
+                  className="w-20 border border-stone-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-stone-400"
+                />
+                <span className="text-sm text-stone-500">%</span>
+                <button onClick={saveFee} disabled={feeSaving} className="text-xs font-medium bg-stone-900 text-white px-3 py-1.5 rounded-lg hover:bg-stone-800 disabled:opacity-50">
+                  {feeSaving ? "Saving…" : "Save"}
+                </button>
+                <button onClick={() => setEditingFee(false)} className="text-xs text-stone-400 hover:text-stone-600">Cancel</button>
+                {feeError && <p className="text-xs text-red-600 w-full">{feeError}</p>}
+              </div>
+            ) : (
+              <p className="text-sm text-stone-700">
+                <span className="font-semibold">{(therapist.platformFeeBps / 100).toFixed(1)}%</span> kept by YouMindo on each per-session charge — the rest transfers to this therapist.
+              </p>
+            )}
+            <div className="pt-3 border-t border-stone-100 text-xs text-stone-500">
+              Stripe Connect:{" "}
+              {therapist.stripeConnectChargesEnabled && therapist.stripeConnectPayoutsEnabled ? (
+                <span className="text-sage-700 font-medium">Onboarded — can receive payouts</span>
+              ) : (
+                <span className="text-amber-700 font-medium">Not yet onboarded</span>
+              )}
+            </div>
+          </div>
           <div className="bg-white border border-stone-100 rounded-xl overflow-hidden divide-y divide-stone-50">
             {therapist.bio && (
               <div className="px-5 py-4">

@@ -6,7 +6,7 @@ type QuizQuestion = { q: string; options: string[]; correct: number; explanation
 interface Props {
   title: string;
   questions: QuizQuestion[];
-  onComplete: () => void;
+  onComplete: (result?: { score: number; passed: boolean }) => void;
 }
 
 export default function QuizLesson({ title, questions, onComplete }: Props) {
@@ -101,7 +101,7 @@ export default function QuizLesson({ title, questions, onComplete }: Props) {
             </button>
           )}
           <button
-            onClick={onComplete}
+            onClick={() => onComplete({ score: pct, passed })}
             className="bg-sage-700 text-white font-semibold px-6 py-3 rounded-xl hover:bg-sage-800 transition-colors"
           >
             {passed ? "Continue →" : "Continue Anyway →"}

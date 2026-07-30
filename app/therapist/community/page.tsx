@@ -6,6 +6,15 @@ import {
   MessageCircle, Pin, ChevronRight, ChevronLeft, Heart, Send, ShieldCheck,
   Sparkles, Flag, UserPlus,
 } from "lucide-react";
+import { IDENTITY_TAGS } from "@/lib/identityTags";
+import { AGE_GROUPS } from "@/lib/ageGroups";
+import { getJoinWindow } from "@/lib/video";
+import GroupCallRoom from "@/components/video/GroupCallRoom";
+
+type GroupSessionItem = {
+  id: string; scheduledStart: string; durationMin: number;
+  maxParticipants: number; status: "scheduled" | "ended" | "canceled"; rsvpCount: number;
+};
 
 type Privacy = "open" | "invite";
 type CommunityStatus = "active" | "archived";
@@ -20,6 +29,8 @@ interface Community {
   icon: string;
   privacy: Privacy;
   status: CommunityStatus;
+  identityTags: string[];
+  ageGroup: string | null;
   members: number;
   postCount: number;
   createdAt: string;
@@ -109,6 +120,8 @@ const BLANK_FORM = {
   category: "Anxiety",
   icon: "🌿",
   privacy: "open" as Privacy,
+  identityTags: [] as string[],
+  ageGroup: "",
 };
 
 type Mode = "list" | "create" | "edit" | "view";
@@ -222,6 +235,13 @@ export default function TherapistCommunityPage() {
 
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [invites, setInvites] = useState<GroupInvite[]>([]);
+
+  const [sessions, setSessions] = useState<GroupSessionItem[]>([]);
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [activeGroupCall, setActiveGroupCall] = useState<{ sessionId: string; groupName: string } | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [allClients, setAllClients] = useState<ClientOption[]>([]);
@@ -245,7 +265,8 @@ export default function TherapistCommunityPage() {
       .then((d) => {
         const groups = (d.groups ?? []).map((g: {
           id: string; name: string; description: string | null; category: string; icon: string;
-          privacy: Privacy; status: CommunityStatus; memberCount: number; postCount: number; createdAt: string;
+          privacy: Privacy; status: CommunityStatus; identityTags: string[]; ageGroup: string | null;
+          memberCount: number; postCount: number; createdAt: string;
         }) => ({
           id: g.id,
           name: g.name,
@@ -254,6 +275,8 @@ export default function TherapistCommunityPage() {
           icon: g.icon,
           privacy: g.privacy,
           status: g.status,
+          identityTags: g.identityTags,
+          ageGroup: g.ageGroup,
           members: g.memberCount,
           postCount: g.postCount,
           createdAt: g.createdAt,
@@ -334,6 +357,41 @@ export default function TherapistCommunityPage() {
       .catch(() => setGroupInsight("Insight unavailable right now."));
   }, []);
 
+  const loadSessions = useCallback((communityId: string) => {
+    fetch(`/api/therapist/community/${communityId}/sessions`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setSessions(d.sessions ?? []))
+      .catch(() => setSessions([]));
+  }, []);
+
+  async function scheduleSession() {
+    if (!activeCommunityId || !scheduleDate || !scheduleTime || scheduling) return;
+    setScheduling(true);
+    try {
+      const scheduledStart = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+      const res = await fetch(`/api/therapist/community/${activeCommunityId}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduledStart }),
+      });
+      if (res.ok) {
+        setShowScheduleForm(false);
+        setScheduleDate(""); setScheduleTime("");
+        loadSessions(activeCommunityId);
+      }
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  async function cancelSession(sessionId: string) {
+    if (!activeCommunityId) return;
+    await fetch(`/api/therapist/community/${activeCommunityId}/sessions/${sessionId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cancel" }),
+    });
+    loadSessions(activeCommunityId);
+  }
+
   const activeCommunity = useMemo(() => communities.find((c) => c.id === activeCommunityId) ?? null, [communities, activeCommunityId]);
 
   const activePosts = useMemo(
@@ -353,7 +411,10 @@ export default function TherapistCommunityPage() {
 
   function openEdit(c: Community) {
     setEditingId(c.id);
-    setForm({ name: c.name, description: c.description, category: c.category, icon: c.icon, privacy: c.privacy });
+    setForm({
+      name: c.name, description: c.description, category: c.category, icon: c.icon, privacy: c.privacy,
+      identityTags: c.identityTags, ageGroup: c.ageGroup ?? "",
+    });
     setSaved(false);
     setMode("edit");
   }
@@ -364,10 +425,12 @@ export default function TherapistCommunityPage() {
     setPosts([]);
     setMembers([]);
     setInvites([]);
+    setSessions([]);
     setMode("view");
     loadPosts(id);
     loadMembers(id);
     loadGroupInsight(id);
+    loadSessions(id);
   }
 
   function goList() {
@@ -385,7 +448,7 @@ export default function TherapistCommunityPage() {
       const res = await fetch("/api/therapist/community", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, ageGroup: form.ageGroup || undefined }),
       });
       if (!res.ok) throw new Error("Failed");
       setSaved(true);
@@ -403,7 +466,7 @@ export default function TherapistCommunityPage() {
       const res = await fetch(`/api/therapist/community/${editingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, ageGroup: form.ageGroup || null }),
       });
       if (!res.ok) throw new Error("Failed");
       setSaved(true);
@@ -744,6 +807,41 @@ export default function TherapistCommunityPage() {
                 </div>
               </div>
 
+              <div>
+                <label className="text-xs font-medium text-console-dim uppercase tracking-widest block mb-1.5">Age group (optional)</label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setForm({ ...form, ageGroup: "" })}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${!form.ageGroup ? "bg-console-navy border-console-navy text-white" : "border-console-line text-console-muted hover:border-console-navy"}`}>
+                    Any
+                  </button>
+                  {AGE_GROUPS.map((a) => (
+                    <button key={a.id} type="button" onClick={() => setForm({ ...form, ageGroup: a.id })}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${form.ageGroup === a.id ? "bg-console-navy border-console-navy text-white" : "border-console-line text-console-muted hover:border-console-navy"}`}>
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-console-dim uppercase tracking-widest block mb-1.5">Identity tags (optional)</label>
+                <div className="flex flex-wrap gap-2">
+                  {IDENTITY_TAGS.map((t) => {
+                    const active = form.identityTags.includes(t.id);
+                    return (
+                      <button key={t.id} type="button" title={t.description}
+                        onClick={() => setForm({
+                          ...form,
+                          identityTags: active ? form.identityTags.filter((id) => id !== t.id) : [...form.identityTags, t.id],
+                        })}
+                        className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${active ? "bg-console-navy border-console-navy text-white" : "border-console-line text-console-muted hover:border-console-navy"}`}>
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="flex gap-2 pt-3 border-t border-console-line">
                 <button type="button" onClick={goList} className="flex-1 border border-console-line text-sm py-2.5 rounded-lg hover:bg-console-bg transition-colors text-console-muted">
                   Cancel
@@ -948,6 +1046,7 @@ export default function TherapistCommunityPage() {
               })}
             </div>
 
+            <div className="space-y-4">
             <div className="bg-console-panel border border-console-line rounded-xl p-4 space-y-3">
               <div className="text-sm font-semibold text-console-ink">Members ({members.length})</div>
               {loadingMembers ? (
@@ -981,6 +1080,66 @@ export default function TherapistCommunityPage() {
                 className="w-full text-xs font-semibold text-console-muted border border-dashed border-console-line rounded-lg py-2 hover:border-console-navy hover:text-console-navy transition-colors flex items-center justify-center gap-1.5">
                 <UserPlus size={13} strokeWidth={1.8} /> Invite a client
               </button>
+            </div>
+
+            <div className="bg-console-panel border border-console-line rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-console-ink">Live sessions</div>
+                <button onClick={() => setShowScheduleForm((v) => !v)} className="text-xs font-medium text-console-navy hover:opacity-80 transition-opacity">
+                  {showScheduleForm ? "Cancel" : "+ Schedule"}
+                </button>
+              </div>
+
+              {showScheduleForm && (
+                <div className="space-y-2 bg-console-bg border border-console-line rounded-lg p-3">
+                  <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)}
+                    className="w-full border border-console-line rounded-lg px-2.5 py-1.5 text-xs" />
+                  <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)}
+                    className="w-full border border-console-line rounded-lg px-2.5 py-1.5 text-xs" />
+                  <p className="text-[10px] text-console-dim">50 minutes · up to 6 participants</p>
+                  <button onClick={scheduleSession} disabled={!scheduleDate || !scheduleTime || scheduling}
+                    className="w-full bg-console-navy text-white text-xs font-medium py-1.5 rounded-lg hover:opacity-90 disabled:opacity-30 transition-opacity">
+                    {scheduling ? "Scheduling…" : "Schedule session"}
+                  </button>
+                </div>
+              )}
+
+              {sessions.filter((s) => s.status === "scheduled").length === 0 ? (
+                <p className="text-xs text-console-dim">No upcoming sessions.</p>
+              ) : (
+                <div className="space-y-2">
+                  {sessions.filter((s) => s.status === "scheduled").map((s) => {
+                    const start = new Date(s.scheduledStart);
+                    const jw = getJoinWindow(start, s.durationMin);
+                    return (
+                      <div key={s.id} className="bg-console-bg rounded-lg px-2.5 py-2 space-y-1.5">
+                        <div className="text-xs font-semibold text-console-ink">
+                          {start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ·{" "}
+                          {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-console-dim">{s.rsvpCount} RSVP&apos;d</span>
+                          <div className="flex items-center gap-2">
+                            {jw.isOpen ? (
+                              <button
+                                onClick={() => activeCommunity && setActiveGroupCall({ sessionId: s.id, groupName: activeCommunity.name })}
+                                className="text-[11px] font-semibold bg-console-navy text-white px-2.5 py-1 rounded-lg hover:opacity-90 transition-opacity"
+                              >
+                                Start
+                              </button>
+                            ) : (
+                              <button onClick={() => cancelSession(s.id)} className="text-[11px] text-console-dim hover:text-red-500 transition-colors">
+                                Cancel
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             </div>
           </div>
         </div>
@@ -1214,6 +1373,14 @@ export default function TherapistCommunityPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {activeGroupCall && (
+        <GroupCallRoom
+          sessionId={activeGroupCall.sessionId}
+          groupName={activeGroupCall.groupName}
+          onEnd={() => setActiveGroupCall(null)}
+        />
       )}
     </div>
   );

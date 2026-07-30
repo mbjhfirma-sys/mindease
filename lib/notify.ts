@@ -12,7 +12,16 @@ export async function notifyAdmins(data: { title: string; body: string; icon?: s
   await Promise.all(admins.map((a) => createNotification(a.id, data)));
 }
 
-export async function notifyOfRiskFlag(user: { id: string; name: string; therapistId: string | null }, detail: string) {
+// For "moderate" severity, notify either the assigned therapist OR all admins (today's
+// original either/or) to avoid alert fatigue on the more common case. For "high" severity,
+// notify BOTH — a high flag is exactly the case where a single fire-and-forget notification
+// going unseen is least acceptable.
+export async function notifyOfRiskFlag(
+  user: { id: string; name: string; therapistId: string | null },
+  detail: string,
+  severity: "high" | "moderate" = "moderate"
+) {
+  let notifiedTherapist = false;
   if (user.therapistId) {
     const therapist = await db.therapist.findUnique({ where: { id: user.therapistId }, select: { userId: true } });
     if (therapist) {
@@ -22,12 +31,15 @@ export async function notifyOfRiskFlag(user: { id: string; name: string; therapi
         icon: "⚠️",
         href: "/therapist",
       });
-      return;
+      notifiedTherapist = true;
     }
   }
+
+  if (notifiedTherapist && severity !== "high") return;
+
   await notifyAdmins({
     title: `⚠️ Risk flag for ${user.name}`,
-    body: `${detail} (no assigned therapist)`,
+    body: notifiedTherapist ? detail : `${detail} (no assigned therapist)`,
     icon: "⚠️",
     href: `/admin/users/${user.id}`,
   });

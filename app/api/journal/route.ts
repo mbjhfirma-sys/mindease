@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { detectRisk } from "@/lib/riskDetection";
 import { notifyOfRiskFlag } from "@/lib/notify";
+import { ensureRiskStepUpWindow } from "@/lib/riskStepUp";
 
 const postSchema = z.object({
   title: z.string().min(1),
@@ -52,14 +53,15 @@ export async function POST(req: NextRequest) {
 
   const risk = detectRisk(`${title} ${content}`);
   if (risk) {
-    await db.riskFlag.create({
+    const flag = await db.riskFlag.create({
       data: {
         userId: session.user.id, source: "journal", sourceId: entry.id,
         severity: risk.severity, detail: `Journal entry matched: "${risk.matched}"`,
       },
     });
+    await ensureRiskStepUpWindow(flag);
     const user = await db.user.findUnique({ where: { id: session.user.id }, select: { name: true, therapistId: true } });
-    if (user) await notifyOfRiskFlag({ id: session.user.id, name: user.name, therapistId: user.therapistId }, `Journal entry may need review.`);
+    if (user) await notifyOfRiskFlag({ id: session.user.id, name: user.name, therapistId: user.therapistId }, `Journal entry may need review.`, risk.severity);
   }
 
   return NextResponse.json({ ok: true, entry }, { status: 201 });

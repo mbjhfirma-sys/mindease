@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { signOut } from "next-auth/react";
-import { User, Bell, Shield, Lock, CreditCard, Copy, Check, Eye, EyeOff, Camera, Loader2 } from "lucide-react";
+import { User, Bell, Shield, Lock, CreditCard, Copy, Check, Eye, EyeOff, Camera, Loader2, FileText } from "lucide-react";
 import { formatCents } from "@/lib/money";
+import { CLIENT_PLANS } from "@/lib/clientPlans";
 
 function resizeToJpeg(file: File, maxPx = 200, quality = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -26,7 +27,7 @@ function resizeToJpeg(file: File, maxPx = 200, quality = 0.85): Promise<string> 
   });
 }
 
-type Tab = "profile" | "notifications" | "privacy" | "security" | "subscription";
+type Tab = "profile" | "notifications" | "privacy" | "directive" | "security" | "subscription";
 
 type Profile = {
   name: string; email: string; phone: string; dob: string;
@@ -57,16 +58,32 @@ const DEFAULT_PRIVACY: PrivacyPrefs = {
   mindoClientBriefingEnabled: true, mindoTherapistDigestEnabled: true, mindoIntroSeen: false,
 };
 
+type TrustedContact = { name: string; relationship: string; email: string };
+
+type LegalDiscoveryChoice = "" | "notify_first" | "comply_quietly" | "minimize_disclosure";
+type IncapacitationChoice = "" | "full_access" | "summary_only" | "sealed";
+
+type DataDirective = {
+  legalDiscovery: LegalDiscoveryChoice;
+  incapacitation: IncapacitationChoice;
+  trustedContact: TrustedContact;
+  updatedAt?: string;
+};
+
+const DEFAULT_TRUSTED_CONTACT: TrustedContact = { name: "", relationship: "", email: "" };
+
+const DEFAULT_DIRECTIVE: DataDirective = {
+  legalDiscovery: "",
+  incapacitation: "",
+  trustedContact: DEFAULT_TRUSTED_CONTACT,
+};
+
+type DeletionMode = "delete" | "anonymize";
+
 type SessionLogItem = {
   id: string; date: string; duration: number; type: string; status: string;
   therapist: { user: { name: string } };
 };
-
-const PLANS = [
-  { id: "free",    name: "Free",     price: "$0/mo",  priceCents: 0,    features: ["3 courses", "Basic AI chat (10 msg/day)", "Community access"], current: false },
-  { id: "growth",  name: "Growth",   price: "$19/mo", priceCents: 1900, features: ["Unlimited courses", "Unlimited AI chat", "Journal & missions", "Priority support"], current: true },
-  { id: "therapy", name: "Therapy",  price: "$79/mo", priceCents: 7900, features: ["Everything in Growth", "1 therapist session/mo", "Video consultations", "Personalised treatment plan"], current: false },
-];
 
 type CouponRedemption = {
   discountValueSnapshot: number;
@@ -89,6 +106,27 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
     >
       <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
     </button>
+  );
+}
+
+function SegmentedChoice<T extends string>({
+  value, options, onChange,
+}: { value: T; options: { id: T; label: string }[]; onChange: (v: T) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {options.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => onChange(opt.id)}
+          className={`text-left px-3 py-2.5 rounded-lg border text-sm transition-all ${
+            value === opt.id ? "bg-stone-900 border-stone-900 text-white" : "border-stone-200 text-stone-600 hover:border-stone-400"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -139,9 +177,15 @@ export default function SettingsPage() {
   const [privSaved,  setPrivSaved]  = useState(false);
   const [privError,  setPrivError]  = useState("");
 
+  const [dirSaving, setDirSaving] = useState(false);
+  const [dirSaved,  setDirSaved]  = useState(false);
+  const [dirError,  setDirError]  = useState("");
+
   const [notifications, setNotifications] = useState<NotifPrefs>(DEFAULT_NOTIF);
   const [privacy,        setPrivacy]       = useState<PrivacyPrefs>(DEFAULT_PRIVACY);
   const [peerMatchingOptIn, setPeerMatchingOptIn] = useState(false);
+  const [directive, setDirective] = useState<DataDirective>(DEFAULT_DIRECTIVE);
+  const [communityContentOnDeletion, setCommunityContentOnDeletion] = useState<DeletionMode>("delete");
 
   // 2FA state
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
@@ -180,16 +224,25 @@ export default function SettingsPage() {
 
   const [sessionLog, setSessionLog] = useState<SessionLogItem[]>([]);
   const [couponRedemption, setCouponRedemption] = useState<CouponRedemption | null>(null);
+  const [plan, setPlan] = useState("free");
+  const [billingActionLoading, setBillingActionLoading] = useState<string | null>(null);
 
   const tabs: { id: Tab; label: string; Icon: React.ElementType }[] = [
     { id: "profile",      label: "Profile",      Icon: User },
     { id: "notifications",label: "Notifications", Icon: Bell },
     { id: "privacy",      label: "Privacy",       Icon: Shield },
+    { id: "directive",    label: "Data Directive",Icon: FileText },
     { id: "security",     label: "Security",      Icon: Lock },
     { id: "subscription", label: "Subscription",  Icon: CreditCard },
   ];
 
   useEffect(() => {
+    const VALID_TABS: Tab[] = ["profile", "notifications", "privacy", "directive", "security", "subscription"];
+    const tabParam = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+    Promise.resolve().then(() => {
+      if (tabParam && VALID_TABS.includes(tabParam)) setTab(tabParam);
+    });
+
     fetch("/api/user")
       .then((r) => r.json())
       .then((d) => {
@@ -207,9 +260,18 @@ export default function SettingsPage() {
           if (d.user.avatar) setAvatar(d.user.avatar);
           if (d.user.notificationPrefs) setNotifications({ ...DEFAULT_NOTIF, ...d.user.notificationPrefs });
           if (d.user.privacyPrefs)      setPrivacy({ ...DEFAULT_PRIVACY, ...d.user.privacyPrefs });
+          if (d.user.dataDirective) {
+            setDirective({
+              ...DEFAULT_DIRECTIVE,
+              ...d.user.dataDirective,
+              trustedContact: { ...DEFAULT_TRUSTED_CONTACT, ...d.user.dataDirective.trustedContact },
+            });
+          }
+          if (d.user.communityContentOnDeletion) setCommunityContentOnDeletion(d.user.communityContentOnDeletion);
           setPeerMatchingOptIn(!!d.user.peerMatchingOptIn);
           setTwoFactorEnabled(!!d.user.twoFactorEnabled);
           if (d.user.couponRedemption) setCouponRedemption(d.user.couponRedemption);
+          if (d.user.plan) setPlan(d.user.plan);
         }
       })
       .finally(() => setLoading(false));
@@ -223,6 +285,46 @@ export default function SettingsPage() {
   function flash(setter: (v: boolean) => void) {
     setter(true);
     setTimeout(() => setter(false), 2500);
+  }
+
+  async function handleUpgrade(planId: string) {
+    setBillingActionLoading(planId);
+    try {
+      const res = await fetch("/api/user/subscription/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId }),
+      });
+      const d = await res.json();
+      if (d.url) window.location.href = d.url;
+    } finally {
+      setBillingActionLoading(null);
+    }
+  }
+
+  async function handleManageBilling() {
+    setBillingActionLoading("portal");
+    try {
+      const res = await fetch("/api/user/subscription/portal", { method: "POST" });
+      const d = await res.json();
+      if (d.url) window.location.href = d.url;
+    } finally {
+      setBillingActionLoading(null);
+    }
+  }
+
+  async function handleSwitchPlan(planId: string) {
+    setBillingActionLoading(planId);
+    try {
+      const res = await fetch("/api/user/subscription", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId }),
+      });
+      if (res.ok) setPlan(planId);
+    } finally {
+      setBillingActionLoading(null);
+    }
   }
 
   async function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -308,6 +410,48 @@ export default function SettingsPage() {
       setPrivError("Network error.");
     } finally {
       setPrivSaving(false);
+    }
+  }
+
+  function trustedContactIsValid(c: TrustedContact) {
+    const allEmpty = !c.name && !c.relationship && !c.email;
+    const allFilled = c.name && c.relationship && c.email;
+    return allEmpty || allFilled;
+  }
+
+  async function saveDirective() {
+    if (!trustedContactIsValid(directive.trustedContact)) {
+      setDirError("Fill in all three trusted contact fields, or leave all three blank.");
+      return;
+    }
+    setDirSaving(true); setDirError(""); setDirSaved(false);
+    try {
+      const res = await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          communityContentOnDeletion,
+          dataDirective: {
+            legalDiscovery: directive.legalDiscovery || undefined,
+            incapacitation: directive.incapacitation || undefined,
+            trustedContact: directive.trustedContact.name ? directive.trustedContact : undefined,
+          },
+        }),
+      });
+      if (!res.ok) { setDirError("Failed to save."); return; }
+      const d = await res.json();
+      if (d.user?.dataDirective) {
+        setDirective({
+          ...DEFAULT_DIRECTIVE,
+          ...d.user.dataDirective,
+          trustedContact: { ...DEFAULT_TRUSTED_CONTACT, ...d.user.dataDirective.trustedContact },
+        });
+      }
+      flash(setDirSaved);
+    } catch {
+      setDirError("Network error.");
+    } finally {
+      setDirSaving(false);
     }
   }
 
@@ -409,7 +553,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/user", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: deletePassword, code: twoFactorEnabled ? deleteCode : undefined }),
+        body: JSON.stringify({ password: deletePassword, code: twoFactorEnabled ? deleteCode : undefined, confirmText: deleteConfirmText }),
       });
       const d = await res.json();
       if (!res.ok) { setDeleteError(d.error ?? "Failed to delete account."); return; }
@@ -718,6 +862,90 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ── Data Directive ── */}
+      {tab === "directive" && (
+        <div className="bg-white border border-stone-100 rounded-xl p-6 space-y-6">
+          <p className="text-xs text-stone-400">
+            Tell us in advance what should happen in a few situations you hopefully never run into. We&apos;ll follow
+            these where we legally can, and they guide how our team handles the rest.
+          </p>
+
+          <div>
+            <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
+              If I delete my account, my community posts and replies should be…
+            </label>
+            <SegmentedChoice<DeletionMode>
+              value={communityContentOnDeletion}
+              onChange={setCommunityContentOnDeletion}
+              options={[
+                { id: "anonymize", label: "Kept, but no longer attributed to me (shown as “Deleted user”)" },
+                { id: "delete", label: "Removed entirely, along with my account" },
+              ]}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
+              If MindEase receives a legal request (e.g. a subpoena) for my records
+            </label>
+            <SegmentedChoice<LegalDiscoveryChoice>
+              value={directive.legalDiscovery}
+              onChange={(v) => setDirective({ ...directive, legalDiscovery: v })}
+              options={[
+                { id: "notify_first", label: "Notify me before anything is released, if legally permitted" },
+                { id: "comply_quietly", label: "Just comply — no need to notify me first" },
+                { id: "minimize_disclosure", label: "Contest or minimize disclosure as much as legally possible" },
+              ]}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">
+              If I become incapacitated or pass away
+            </label>
+            <SegmentedChoice<IncapacitationChoice>
+              value={directive.incapacitation}
+              onChange={(v) => setDirective({ ...directive, incapacitation: v })}
+              options={[
+                { id: "full_access", label: "Give my trusted contact full access to my records" },
+                { id: "summary_only", label: "Give my trusted contact a summary only, not full clinical detail" },
+                { id: "sealed", label: "Keep my records sealed — no one should be given access" },
+              ]}
+            />
+          </div>
+
+          <div className="pt-2 border-t border-stone-100">
+            <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-2">Trusted contact</label>
+            <p className="text-xs text-stone-400 mb-3">The person the two scenarios above refer to. Leave blank if you&apos;d rather not name anyone.</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <input
+                type="text" placeholder="Name" value={directive.trustedContact.name}
+                onChange={(e) => setDirective({ ...directive, trustedContact: { ...directive.trustedContact, name: e.target.value } })}
+                className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
+              />
+              <input
+                type="text" placeholder="Relationship" value={directive.trustedContact.relationship}
+                onChange={(e) => setDirective({ ...directive, trustedContact: { ...directive.trustedContact, relationship: e.target.value } })}
+                className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
+              />
+              <input
+                type="email" placeholder="Email" value={directive.trustedContact.email}
+                onChange={(e) => setDirective({ ...directive, trustedContact: { ...directive.trustedContact, email: e.target.value } })}
+                className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
+              />
+            </div>
+          </div>
+
+          {directive.updatedAt && (
+            <p className="text-xs text-stone-400">
+              Last updated {new Date(directive.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </p>
+          )}
+
+          <SaveBar saving={dirSaving} saved={dirSaved} error={dirError} onSave={saveDirective} />
+        </div>
+      )}
+
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !deleteLoading && setShowDeleteModal(false)} />
@@ -996,39 +1224,66 @@ export default function SettingsPage() {
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {PLANS.map((plan) => {
-              const discountedCents = couponRedemption ? discountedPriceCents(plan.priceCents, couponRedemption) : null;
+            {CLIENT_PLANS.map((p) => {
+              const isCurrent = plan === p.id;
+              const discountedCents = couponRedemption ? discountedPriceCents(p.priceCents, couponRedemption) : null;
+              const priceLabel = p.priceCents === 0 ? "$0/mo" : `${formatCents(p.priceCents)}/mo`;
+              const buttonLabel = isCurrent
+                ? "Current plan"
+                : plan === "free"
+                ? "Upgrade"
+                : (p.id === "free" ? "Downgrade" : "Switch plan");
+              const loadingKey = p.id === "free" ? "portal" : p.id;
               return (
-              <div key={plan.id} className={`rounded-xl border p-5 ${plan.current ? "border-stone-900 bg-stone-50" : "border-stone-100 bg-white"}`}>
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-stone-900">{plan.name}</h3>
-                  {plan.current && <span className="text-[10px] bg-stone-900 text-white px-1.5 py-0.5 rounded font-medium">Current</span>}
+              <div key={p.id} className={`rounded-xl border p-5 relative ${isCurrent ? "border-stone-900 bg-stone-50" : "border-stone-100 bg-white"}`}>
+                {p.mostPopular && !isCurrent && (
+                  <span className="absolute -top-2.5 right-4 text-[10px] bg-sage-600 text-white px-2 py-0.5 rounded-full font-medium">Most Popular</span>
+                )}
+                <div className="flex items-start justify-between mb-1">
+                  <h3 className="text-sm font-semibold text-stone-900">{p.name}</h3>
+                  {isCurrent && <span className="text-[10px] bg-stone-900 text-white px-1.5 py-0.5 rounded font-medium">Current</span>}
                 </div>
-                {discountedCents !== null && discountedCents !== plan.priceCents ? (
+                <p className="text-xs text-stone-400 mb-3">{p.tagline}</p>
+                {discountedCents !== null && discountedCents !== p.priceCents ? (
                   <div className="mb-3">
-                    <span className="text-xs text-stone-400 line-through mr-2">{plan.price}</span>
+                    <span className="text-xs text-stone-400 line-through mr-2">{priceLabel}</span>
                     <span className="text-2xl font-semibold text-sage-700">{formatCents(discountedCents)}/mo</span>
                   </div>
                 ) : (
-                  <div className="text-2xl font-semibold text-stone-900 mb-3">{plan.price}</div>
+                  <div className="text-2xl font-semibold text-stone-900 mb-3">{priceLabel}</div>
                 )}
                 <ul className="space-y-1.5 mb-4">
-                  {plan.features.map((f) => (
+                  {p.highlights.map((f) => (
                     <li key={f} className="flex items-start gap-2 text-xs text-stone-500">
                       <span className="text-stone-400 mt-0.5 flex-shrink-0">✓</span><span>{f}</span>
                     </li>
                   ))}
                 </ul>
-                <button disabled={plan.current} className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${plan.current ? "bg-stone-200 text-stone-500 cursor-default" : "bg-stone-900 text-white hover:bg-stone-800"}`}>
-                  {plan.current ? "Current plan" : plan.id === "free" ? "Downgrade" : "Upgrade"}
+                <button
+                  disabled={isCurrent || billingActionLoading !== null}
+                  onClick={() => {
+                    if (p.id === "free") return handleManageBilling();
+                    if (plan === "free") return handleUpgrade(p.id);
+                    return handleSwitchPlan(p.id);
+                  }}
+                  className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${isCurrent ? "bg-stone-200 text-stone-500 cursor-default" : "bg-stone-900 text-white hover:bg-stone-800 disabled:opacity-50"}`}
+                >
+                  {billingActionLoading === loadingKey ? "Redirecting…" : buttonLabel}
                 </button>
               </div>
               );
             })}
           </div>
+          {plan !== "free" && (
+            <div className="text-center">
+              <button onClick={handleManageBilling} disabled={billingActionLoading !== null} className="text-xs text-stone-500 hover:text-stone-800 disabled:opacity-50">
+                {billingActionLoading === "portal" ? "Redirecting…" : "Manage billing, payment method & invoices →"}
+              </button>
+            </div>
+          )}
           <div className="bg-white border border-stone-100 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-stone-900 mb-1">Session history</h3>
-            <p className="text-xs text-stone-400 mb-3">YouMindo doesn&apos;t process payments directly — this is a record of your sessions for your own reference.</p>
+            <p className="text-xs text-stone-400 mb-3">A record of your 1-on-1 sessions, each paid individually — separate from your plan subscription above.</p>
             {sessionLog.length === 0 ? (
               <p className="text-xs text-stone-400 py-4 text-center">No sessions yet.</p>
             ) : (

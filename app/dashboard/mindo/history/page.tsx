@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Sparkles, ArrowLeft } from "lucide-react";
+import { DailyFactsGrid } from "@/components/dashboard/DailyFactsGrid";
+import type { DailyFacts } from "@/lib/mindo/factsTypes";
 
-type Briefing = { id: string; date: string; briefingText: string; softened: boolean };
+type Briefing = { id: string; date: string; briefingText: string; softened: boolean; facts?: DailyFacts };
 
 // `date` is a plain "YYYY-MM-DD" calendar-day label, not an instant — parsing
 // it as an ISO string (`new Date(str)`) treats it as UTC midnight, which can
@@ -19,6 +21,15 @@ function formatDateKey(dateKey: string): string {
 export default function MindoHistoryPage() {
   const [briefings, setBriefings] = useState<Briefing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   useEffect(() => {
     fetch("/api/mindo/briefing/history")
@@ -52,11 +63,22 @@ export default function MindoHistoryPage() {
               <div className="w-8 h-8 rounded-lg bg-sage-50 text-sage-600 flex items-center justify-center flex-shrink-0">
                 <Sparkles size={15} strokeWidth={1.5} />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="text-xs font-medium text-stone-400 uppercase tracking-widest mb-1">
                   {formatDateKey(b.date)}
                 </div>
                 <p className="text-sm text-stone-700 leading-relaxed">{b.briefingText}</p>
+                {b.facts && (
+                  <>
+                    <button
+                      onClick={() => toggleExpanded(b.id)}
+                      className="text-[11px] font-medium text-stone-400 hover:text-stone-700 transition-colors mt-1.5"
+                    >
+                      {expandedIds.has(b.id) ? "Hide the numbers" : "What's this based on? →"}
+                    </button>
+                    {expandedIds.has(b.id) && <div className="mt-2"><DailyFactsGrid facts={b.facts} /></div>}
+                  </>
+                )}
               </div>
             </div>
           ))}

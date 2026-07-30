@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, Users, UserCheck, Flag, BookOpen, ChevronLeft, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, UserCheck, Flag, BookOpen, Heart, ChevronLeft, LogOut } from "lucide-react";
 import type { AdminStats } from "@/lib/types";
 
 const EMPTY_STATS: AdminStats = {
@@ -31,6 +31,7 @@ export default function AdminSidebar() {
     { href: "/admin/therapists", label: "Therapists", Icon: UserCheck, badge: stats.therapists.pending },
     { href: "/admin/community",  label: "Community",  Icon: Flag, badge: stats.community.openReports + stats.community.flaggedPosts },
     { href: "/admin/courses",    label: "Courses",    Icon: BookOpen },
+    { href: "/admin/support-groups", label: "Support Groups", Icon: Heart },
   ];
 
   return (

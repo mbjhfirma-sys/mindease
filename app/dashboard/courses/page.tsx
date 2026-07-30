@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Lock } from "lucide-react";
 const CATEGORIES = ["All", "Mindfulness", "Mental Health", "Wellness", "Personal Growth", "Stress Management", "Self-Care"];
 
 type Course = {
   id: string; title: string; instructor: string; category: string; level: string;
   duration: string; lessons: number; enrolled: number; rating: number; progress: number;
-  thumbnail: string; color: string; description: string; tags: string[];
+  thumbnail: string; color: string; description: string; tags: string[]; locked: boolean;
 };
 
 type CourseRecommendation = {
@@ -52,7 +52,7 @@ export default function CoursesPage() {
       .catch(() => {});
   }, []);
 
-  const inProgress = courses.filter((c) => c.progress > 0 && c.progress < 100);
+  const inProgress = courses.filter((c) => c.progress > 0 && c.progress < 100 && !c.locked);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -164,10 +164,17 @@ export default function CoursesPage() {
             {courses.map((c) => (
               <Link
                 key={c.id}
-                href={`/dashboard/courses/${c.id}`}
-                className="bg-white rounded-3xl overflow-hidden border border-stone-100 hover:shadow-lg transition-all group"
+                href={c.locked ? "/dashboard/settings" : `/dashboard/courses/${c.id}`}
+                className={`bg-white rounded-3xl overflow-hidden border border-stone-100 transition-all group ${c.locked ? "opacity-70 hover:opacity-100" : "hover:shadow-lg"}`}
               >
-                <div className={`${c.color} h-28 flex items-center justify-center text-5xl`}>{c.thumbnail}</div>
+                <div className={`${c.color} h-28 flex items-center justify-center text-5xl relative`}>
+                  {c.thumbnail}
+                  {c.locked && (
+                    <div className="absolute inset-0 bg-stone-900/40 flex items-center justify-center">
+                      <Lock size={22} className="text-white" strokeWidth={1.5} />
+                    </div>
+                  )}
+                </div>
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-sage-700 bg-sage-50 px-2.5 py-0.5 rounded-full">{c.category}</span>
@@ -181,7 +188,11 @@ export default function CoursesPage() {
                     <span>⏱️ {c.duration}</span>
                     <span className="flex items-center gap-0.5"><span className="text-amber-400">★</span><span className="text-stone-600 font-medium">{c.rating}</span></span>
                   </div>
-                  {c.progress > 0 && (
+                  {c.locked ? (
+                    <div className="mt-3 text-xs font-medium text-amber-700 flex items-center gap-1">
+                      <Lock size={11} /> Upgrade to unlock
+                    </div>
+                  ) : c.progress > 0 && (
                     <div className="mt-3">
                       <div className="w-full bg-stone-100 rounded-full h-1.5">
                         <div className="bg-sage-500 h-1.5 rounded-full" style={{ width: `${c.progress}%` }} />

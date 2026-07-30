@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { detectRisk } from "@/lib/riskDetection";
 import { notifyOfRiskFlag } from "@/lib/notify";
+import { ensureRiskStepUpWindow } from "@/lib/riskStepUp";
 
 const MOOD_LABELS: Record<number, string> = {
   1: "Very Low", 2: "Low", 3: "Okay", 4: "Good", 5: "Great",
@@ -48,14 +49,15 @@ export async function POST(req: NextRequest) {
 
   const risk = detectRisk(parsed.data.note);
   if (risk) {
-    await db.riskFlag.create({
+    const flag = await db.riskFlag.create({
       data: {
         userId: session.user.id, source: "mood", sourceId: entry.id,
         severity: risk.severity, detail: `Mood check-in note matched: "${risk.matched}"`,
       },
     });
+    await ensureRiskStepUpWindow(flag);
     const user = await db.user.findUnique({ where: { id: session.user.id }, select: { name: true, therapistId: true } });
-    if (user) await notifyOfRiskFlag({ id: session.user.id, name: user.name, therapistId: user.therapistId }, `Mood check-in may need review.`);
+    if (user) await notifyOfRiskFlag({ id: session.user.id, name: user.name, therapistId: user.therapistId }, `Mood check-in may need review.`, risk.severity);
   }
 
   return NextResponse.json({ ok: true, entry });

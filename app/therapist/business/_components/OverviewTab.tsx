@@ -29,6 +29,8 @@ type Transaction = {
 type Overview = {
   currency: string;
   ratePerMinuteCents: number | null;
+  stripeConnectChargesEnabled: boolean;
+  stripeConnectPayoutsEnabled: boolean;
   pendingPayoutCents: number;
   pendingEarningIds: string[];
   pendingCommissionIds: string[];
@@ -57,6 +59,8 @@ export default function OverviewTab() {
 
   const [requestingPayout, setRequestingPayout] = useState(false);
   const [payoutError, setPayoutError] = useState("");
+
+  const [connecting, setConnecting] = useState(false);
 
   function load(r: Range) {
     fetch(`/api/therapist/business/overview?range=${r}`)
@@ -89,6 +93,17 @@ export default function OverviewTab() {
       load(range);
     } finally {
       setRateSaving(false);
+    }
+  }
+
+  async function startConnectOnboarding() {
+    setConnecting(true);
+    try {
+      const res = await fetch("/api/therapist/business/connect", { method: "POST" });
+      const d = await res.json();
+      if (d.url) window.location.href = d.url;
+    } finally {
+      setConnecting(false);
     }
   }
 
@@ -182,6 +197,22 @@ export default function OverviewTab() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {!(overview.stripeConnectChargesEnabled && overview.stripeConnectPayoutsEnabled) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-sm font-medium text-amber-900">Connect your payout account</p>
+            <p className="text-xs text-amber-700 mt-0.5">You need a connected Stripe account before you can request a payout for real sessions.</p>
+          </div>
+          <button
+            onClick={startConnectOnboarding}
+            disabled={connecting}
+            className="bg-stone-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-stone-800 disabled:opacity-50 transition-colors whitespace-nowrap"
+          >
+            {connecting ? "Redirecting…" : "Set up payouts"}
+          </button>
         </div>
       )}
 

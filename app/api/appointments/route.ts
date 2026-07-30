@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { AppointmentStatus, AppointmentType } from "@prisma/client";
 import { createNotification } from "@/lib/notify";
 import { findConflictingAppointment } from "@/lib/appointmentConflict";
+import { computeSessionChargeAmounts } from "@/lib/sessionCharging";
+import { stripe } from "@/lib/stripe";
 
 const VALID_STATUSES = new Set(Object.values(AppointmentStatus));
 
@@ -15,6 +17,7 @@ const createSchema = z.object({
   type: z.enum(["video", "in_person", "phone"]).default("video"),
   duration: z.number().int().default(50),
   notes: z.string().optional(),
+  useCredit: z.boolean().default(false),
 });
 
 export async function GET(req: NextRequest) {
@@ -123,5 +126,95 @@ export async function POST(req: NextRequest) {
     }).catch(() => {});
   }
 
-  return NextResponse.json({ ok: true, appointment }, { status: 201 });
+  // Real per-session charging applies to client-initiated bookings only — a
+  // therapist-initiated booking (phone/intake, no client present to redirect to
+  // Checkout) keeps today's no-charge behavior unchanged.
+  let checkoutUrl: string | undefined;
+  if (session.user.role !== "THERAPIST") {
+    checkoutUrl = await chargeSessionIfNeeded(
+      appointment.id, clientId, therapistId, parsed.data.duration, parsed.data.useCredit, req.nextUrl.origin
+    );
+  }
+
+  return NextResponse.json({ ok: true, appointment, checkoutUrl }, { status: 201 });
+}
+
+async function chargeSessionIfNeeded(
+  appointmentId: string,
+  clientId: string,
+  therapistId: string,
+  scheduledMinutes: number,
+  useCredit: boolean,
+  origin: string
+): Promise<string | undefined> {
+  const billing = await db.therapistBilling.findUnique({ where: { therapistId } });
+  if (!billing?.ratePerMinuteCents) return undefined; // Therapist hasn't set a rate — book normally, as before.
+
+  // The Premium free credit is an explicit, visible choice the client opts into — never
+  // silently auto-applied just because a Premium client happened to pick 15 minutes.
+  if (scheduledMinutes === 15 && useCredit) {
+    const subscription = await db.clientSubscription.findUnique({ where: { userId: clientId } });
+    if (subscription?.planId === "premium" && subscription.status === "active") {
+      try {
+        await db.clientSessionCredit.create({
+          data: { clientSubscriptionId: subscription.id, periodStart: subscription.currentPeriodStart, appointmentId },
+        });
+        await db.sessionCharge.create({
+          data: {
+            appointmentId, clientId, therapistId, currency: billing.currency,
+            amountCents: 0, platformFeeCents: 0, therapistAmountCents: 0,
+            platformFeeBps: billing.platformFeeBps,
+            fundingSource: "premium_credit", status: "paid",
+          },
+        });
+        return undefined; // No Checkout needed — nothing to pay.
+      } catch (err: unknown) {
+        if ((err as { code?: string }).code !== "P2002") throw err;
+        // Credit already used this period — fall through to a real charge below.
+      }
+    }
+  }
+
+  // Reuse (or lazily create) the same Stripe Customer a subscription checkout would use,
+  // so a client's per-session payments and subscription billing live under one Customer
+  // record in Stripe rather than creating anonymous, unlinked one-time payments.
+  const client = await db.user.findUniqueOrThrow({ where: { id: clientId }, select: { stripeCustomerId: true, email: true, name: true } });
+  let customerId = client.stripeCustomerId;
+  if (!customerId) {
+    const customer = await stripe.customers.create({ email: client.email, name: client.name });
+    customerId = customer.id;
+    await db.user.update({ where: { id: clientId }, data: { stripeCustomerId: customerId } });
+  }
+
+  const amounts = computeSessionChargeAmounts(billing.ratePerMinuteCents, scheduledMinutes, billing.platformFeeBps);
+  const charge = await db.sessionCharge.create({
+    data: {
+      appointmentId, clientId, therapistId, currency: billing.currency,
+      amountCents: amounts.amountCents, platformFeeCents: amounts.platformFeeCents,
+      therapistAmountCents: amounts.therapistAmountCents, platformFeeBps: billing.platformFeeBps,
+      fundingSource: "card", status: "requires_payment",
+    },
+  });
+
+  // If this Stripe call throws, the charge above is left stuck at requires_payment with
+  // no Checkout Session behind it — the expire-unpaid-bookings cron sweeps exactly that.
+  const checkoutSession = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer: customerId,
+    line_items: [{
+      price_data: {
+        currency: billing.currency.toLowerCase(),
+        unit_amount: amounts.amountCents,
+        product_data: { name: `1-on-1 session (${scheduledMinutes} min)` },
+      },
+      quantity: 1,
+    }],
+    metadata: { sessionChargeId: charge.id },
+    success_url: `${origin}/dashboard/schedule?payment=success`,
+    cancel_url: `${origin}/dashboard/schedule?payment=canceled`,
+  });
+
+  await db.sessionCharge.update({ where: { id: charge.id }, data: { stripeCheckoutSessionId: checkoutSession.id } });
+
+  return checkoutSession.url ?? undefined;
 }

@@ -15,7 +15,7 @@ model User {
   password                     String
   role                         Role                          @default(CLIENT)
   avatar                       String?
-  plan                         String                        @default("Free")
+  plan                         String                        @default("free")
   phone                        String?
   dob                          DateTime?
   timezone                     String                        @default("UTC")
@@ -28,6 +28,9 @@ model User {
   clientCode                   String?                       @unique
   notificationPrefs            Json?
   privacyPrefs                 Json?
+  communityContentOnDeletion   CommunityContentDeletionMode  @default(delete)
+  dataDirective                Json?
+  stripeCustomerId             String?                       @unique
   twoFactorEnabled             Boolean                       @default(false)
   twoFactorSecret              String?
   twoFactorFailedAttempts      Int                           @default(0)
@@ -71,6 +74,8 @@ model User {
   adminAuditLogs               AdminAuditLog[]
   safetyPlan                   SafetyPlan?
   riskFlags                    RiskFlag[]
+  riskStepUpWindows            RiskStepUpWindow[]
+  stepUpContactFor             RiskStepUpWindow[] @relation("StepUpContact")
   waitlistEntries              WaitlistEntry[]
   backupCodes                  BackupCode[]
   clientIntake                 ClientIntake?
@@ -80,6 +85,14 @@ model User {
   clientSessionEarnings        SessionEarning[]
   couponRedemption             CouponRedemption?
   courseRecommendation         CourseRecommendation?
+  matchReasoning                MatchReasoning?
+  matchFeedbackAsClient         MatchFeedback[]                @relation("MatchFeedbackClient")
+  matchFeedbackAsRespondent     MatchFeedback[]                @relation("MatchFeedbackRespondent")
+  hostedGroupSessions           GroupSession[]                 @relation("GroupSessionHost")
+  groupSessionRsvps             GroupSessionRsvp[]
+  groupSessionParticipations    GroupSessionParticipant[]
+  clientSubscription            ClientSubscription?
+  sessionCharges                SessionCharge[]                @relation("ClientSessionCharges")
 }
 
 model Therapist {
@@ -129,6 +142,9 @@ model Therapist {
   affiliateCommissions AffiliateCommission[]
   clinicOwned          Clinic?
   clinicMemberships    ClinicMembership[]
+  matchReasonings      MatchReasoning[]
+  matchFeedback        MatchFeedback[]
+  sessionCharges       SessionCharge[]
 }
 
 // Rate configuration for a therapist's video-session earnings, plus the billing-identity/
@@ -146,9 +162,28 @@ model TherapistBilling {
   invoiceCompanyName           String?
   vatNumber                    String?
   paymentNotificationsEnabled  Boolean   @default(true)
+  // Stripe Connect Express account for real per-session payouts. The three booleans mirror
+  // Stripe's own Account object fields 1:1 — written only by the account.updated webhook,
+  // never by any therapist-facing route (same "can't self-serve platform terms" principle
+  // already applied to platformFeeBps).
+  stripeConnectAccountId        String?   @unique
+  stripeConnectChargesEnabled   Boolean   @default(false)
+  stripeConnectPayoutsEnabled   Boolean   @default(false)
+  stripeConnectDetailsSubmitted Boolean   @default(false)
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
   therapist                    Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+}
+
+// Dedup ledger for inbound Stripe webhook events. Uses create-and-catch-P2002, not the
+// upsert-with-no-op-update idiom Invoice uses below — that idiom makes a *value write*
+// idempotent, but here the row's existence is what gates whether side effects (a transfer,
+// a notification) run at all, so a silent no-op on retry would be the bug, not the fix.
+model StripeWebhookEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  type          String
+  processedAt   DateTime @default(now())
 }
 
 // A therapist's own paid plan with YouMindo (platform SaaS subscription) — separate from,
@@ -204,6 +239,52 @@ enum InvoiceStatus {
   paid
   pending
   failed
+}
+
+// A client's real Free/Growth/Premium subscription. No row at all while on Free — same
+// lazy-creation instinct as TherapistBilling/TherapistSubscription. currentPeriodStart/End
+// are a passive mirror of whatever Stripe last reported, written only by the webhook
+// handler — unlike TherapistSubscription's local reconcileSubscription math, which only
+// exists because that side has no real processor behind it yet.
+model ClientSubscription {
+  id                   String                   @id @default(cuid())
+  userId               String                   @unique
+  planId               String
+  priceCents           Int
+  currency             String                   @default("USD")
+  status               ClientSubscriptionStatus @default(active)
+  stripeSubscriptionId String                   @unique
+  stripePriceId        String
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean                  @default(false)
+  canceledAt           DateTime?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  user                 User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionCredits       ClientSessionCredit[]
+}
+
+enum ClientSubscriptionStatus {
+  active
+  past_due
+  canceled
+  incomplete
+}
+
+// A Premium client's one free 15-min session/month. The row's existence is the claim (no
+// usedAt flag) — created via `create`, caught on P2002 if the period's slot is already
+// taken. Releasing a credit on an eligible early cancellation is just deleting the row.
+model ClientSessionCredit {
+  id                   String             @id @default(cuid())
+  clientSubscriptionId String
+  periodStart          DateTime
+  appointmentId        String             @unique
+  createdAt            DateTime           @default(now())
+  clientSubscription   ClientSubscription @relation(fields: [clientSubscriptionId], references: [id], onDelete: Cascade)
+  appointment          Appointment        @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@unique([clientSubscriptionId, periodStart])
 }
 
 // Session earnings ledger — one row per completed appointment, created once, snapshotting the
@@ -425,11 +506,15 @@ model Course {
   thumbnail   String?
   color       String?
   published   Boolean          @default(true)
+  // Admin-flagged: visible/enrollable on the Free plan even without the full-library
+  // entitlement. A course-level flag, not a lesson-count cap — simpler to enforce.
+  isFreeTier  Boolean          @default(false)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   lessons     Lesson[]
   progress    CourseProgress[]
   recommendations CourseRecommendation[]
+  enrollments CourseEnrollment[]
 }
 
 model Lesson {
@@ -472,6 +557,8 @@ model CourseProgress {
   courseId  String
   lessonId  String
   completed Boolean  @default(false)
+  score     Int?
+  passed    Boolean?
   updatedAt DateTime @default(now()) @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -573,8 +660,50 @@ model RiskFlag {
   acknowledgedById String?
   createdAt        DateTime  @default(now())
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stepUpWindows    RiskStepUpWindow[]
 
   @@index([userId, status])
+}
+
+// One active elevated-monitoring window per client, opened when their highest-severity
+// RiskFlag fires. No @@unique enforcing "one active window per user" — Prisma can't express
+// a partial/conditional unique index, so (mirroring ClinicMembership's identical documented
+// tradeoff) this is enforced at the API/cron layer instead via a findFirst-then-create check.
+model RiskStepUpWindow {
+  id                        String           @id @default(cuid())
+  userId                    String
+  triggerFlagId             String
+  status                     RiskStepUpStatus @default(active)
+  // Snapshotted assigned-therapist User.id; null = no therapist, admin team is the contact.
+  contactUserId              String?
+  // e.g. "Sarah Chen, LMFT" or "MindEase Clinical Team" — snapshotted display label.
+  contactLabel                String
+  windowStart                 DateTime         @default(now())
+  // Stored explicitly (not recomputed) so a later constant change never retroactively
+  // shifts already-open windows.
+  windowEnd                   DateTime
+  checkInIntervalHrs          Int              @default(48)
+  lastContactPingAt           DateTime?
+  contactPingCount            Int              @default(0)
+  // One-time: set once unacknowledged pings cross the admin-escalation threshold.
+  escalatedToAdminsAt         DateTime?
+  lastClientActivityCheckAt   DateTime?
+  missedClientCheckIns        Int              @default(0)
+  resolvedAt                  DateTime?
+  resolvedById                String?
+  createdAt                   DateTime         @default(now())
+  user                        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  triggerFlag                 RiskFlag         @relation(fields: [triggerFlagId], references: [id], onDelete: Cascade)
+  contactUser                 User?            @relation("StepUpContact", fields: [contactUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([status, windowEnd])
+}
+
+enum RiskStepUpStatus {
+  active
+  resolved
+  expired
 }
 
 model Mission {
@@ -690,16 +819,18 @@ model MindoChatMessage {
 }
 
 model SupportGroup {
-  id          String            @id @default(cuid())
-  name        String
-  description String
-  category    String
-  icon        String
-  color       String
-  nextSession DateTime?
-  createdAt   DateTime          @default(now())
-  posts       CommunityPost[]
-  memberships GroupMembership[]
+  id           String            @id @default(cuid())
+  name         String
+  description  String
+  category     String
+  icon         String
+  color        String
+  nextSession  DateTime?
+  identityTags String[]          @default([])
+  ageGroup     String?
+  createdAt    DateTime          @default(now())
+  posts        CommunityPost[]
+  memberships  GroupMembership[]
 }
 
 model GroupMembership {
@@ -756,22 +887,87 @@ model PostReply {
 }
 
 model TherapistGroup {
-  id          String                     @id @default(cuid())
-  therapistId String
-  name        String
-  description String?
-  category    String
-  icon        String                     @default("💬")
-  privacy     CommunityPrivacy           @default(open)
-  status      CommunityStatus            @default(active)
-  createdAt   DateTime                   @default(now())
-  updatedAt   DateTime                   @updatedAt
-  therapist   Therapist                  @relation(fields: [therapistId], references: [id], onDelete: Cascade)
-  invites     TherapistGroupInvite[]
-  memberships TherapistGroupMembership[]
-  posts       TherapistGroupPost[]
+  id           String                     @id @default(cuid())
+  therapistId  String
+  name         String
+  description  String?
+  category     String
+  icon         String                     @default("💬")
+  privacy      CommunityPrivacy           @default(open)
+  status       CommunityStatus            @default(active)
+  identityTags String[]                   @default([])
+  ageGroup     String?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+  therapist    Therapist                  @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  invites      TherapistGroupInvite[]
+  memberships  TherapistGroupMembership[]
+  posts        TherapistGroupPost[]
+  sessions     GroupSession[]
 
   @@index([therapistId, status])
+}
+
+model GroupSession {
+  id               String                    @id @default(cuid())
+  therapistGroupId String
+  hostUserId       String
+  scheduledStart   DateTime
+  durationMin      Int                       @default(50)
+  maxParticipants  Int                       @default(6)
+  status           GroupSessionStatus        @default(scheduled)
+  endedAt          DateTime?
+  reminderSentAt   DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  therapistGroup   TherapistGroup            @relation(fields: [therapistGroupId], references: [id], onDelete: Cascade)
+  host             User                      @relation("GroupSessionHost", fields: [hostUserId], references: [id], onDelete: Cascade)
+  rsvps            GroupSessionRsvp[]
+  participants     GroupSessionParticipant[]
+  signals          GroupSessionSignal[]
+
+  @@index([therapistGroupId, scheduledStart])
+  @@index([status, scheduledStart])
+}
+
+model GroupSessionRsvp {
+  id             String       @id @default(cuid())
+  groupSessionId String
+  userId         String
+  createdAt      DateTime     @default(now())
+  groupSession   GroupSession @relation(fields: [groupSessionId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupSessionId, userId])
+}
+
+model GroupSessionParticipant {
+  id             String       @id @default(cuid())
+  groupSessionId String
+  userId         String
+  joinedAt       DateTime     @default(now())
+  leftAt         DateTime?
+  groupSession   GroupSession @relation(fields: [groupSessionId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupSessionId, userId])
+  @@index([groupSessionId, leftAt])
+}
+
+// recipientId is required: roster comes from GroupSessionParticipant directly, not a
+// broadcast signal. Reuses VideoSignalType as-is — no new signal-type enum needed.
+model GroupSessionSignal {
+  id             String          @id @default(cuid())
+  groupSessionId String
+  senderId       String
+  recipientId    String
+  type           VideoSignalType
+  payload        Json
+  createdAt      DateTime        @default(now())
+  deliveredAt    DateTime?
+  groupSession   GroupSession    @relation(fields: [groupSessionId], references: [id], onDelete: Cascade)
+
+  @@index([groupSessionId, recipientId, deliveredAt, createdAt])
 }
 
 model TherapistGroupMembership {
@@ -866,9 +1062,68 @@ model Appointment {
   therapist      Therapist         @relation("TherapistAppointments", fields: [therapistId], references: [id], onDelete: Cascade)
   videoSession   VideoSession?
   videoSignals   VideoSignal[]
+  sessionCredit  ClientSessionCredit?
+  sessionCharge  SessionCharge?
 
   @@index([clientId, date])
   @@index([therapistId, date])
+}
+
+// Real per-session payment ledger for client-initiated 1-on-1 bookings. onDelete: Cascade
+// (not Restrict) — the protection against a casual therapist hard-delete destroying a live
+// charge is an API-layer 409 guard (DELETE /api/appointments/[id]), not the FK, since a
+// Restrict FK would also break self-service account deletion relying on cascade.
+model SessionCharge {
+  id                    String                      @id @default(cuid())
+  appointmentId         String                      @unique
+  clientId              String
+  therapistId           String
+  amountCents           Int
+  currency              String
+  platformFeeBps        Int
+  platformFeeCents      Int
+  therapistAmountCents  Int
+  fundingSource         SessionChargeFundingSource  @default(card)
+  status                SessionChargeStatus         @default(requires_payment)
+  outcomeReason         SessionChargeOutcomeReason?
+  stripeCheckoutSessionId String?                   @unique
+  stripePaymentIntentId String?                     @unique
+  stripeRefundId        String?                     @unique
+  // Not @unique — a single batched payout Transfer can legitimately settle multiple
+  // SessionCharge rows at once (only a standalone forfeiture Transfer is ever 1:1).
+  stripeTransferId      String?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  appointment           Appointment                 @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  client                User                        @relation("ClientSessionCharges", fields: [clientId], references: [id], onDelete: Cascade)
+  therapist              Therapist                  @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@index([therapistId, createdAt])
+  @@index([clientId, createdAt])
+}
+
+enum SessionChargeFundingSource {
+  card
+  premium_credit
+}
+
+// Two real terminal states (refunded to client, or transferred to therapist) plus the
+// pre-terminal requires_payment/failed states — outcomeReason separately records *why*,
+// since completion/early-cancel/late-cancel/no-show only ever resolve to one of those two
+// money movements, not four genuinely different terminal states.
+enum SessionChargeStatus {
+  requires_payment
+  paid
+  refunded
+  transferred
+  failed
+}
+
+enum SessionChargeOutcomeReason {
+  completed
+  early_cancellation
+  late_cancellation
+  no_show
 }
 
 model VideoSession {
@@ -991,11 +1246,13 @@ model CourseEnrollment {
   therapistId String
   clientId    String
   courseName  String
+  courseId    String?
   status      CourseEnrollmentStatus @default(in_progress)
   assignedAt  DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
   therapist   Therapist              @relation(fields: [therapistId], references: [id], onDelete: Cascade)
   client      User                   @relation("ClientCourseEnrollments", fields: [clientId], references: [id], onDelete: Cascade)
+  course      Course?                @relation(fields: [courseId], references: [id], onDelete: SetNull)
 
   @@unique([clientId, courseName])
 }
@@ -1052,6 +1309,60 @@ model ClientIntake {
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
   user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A point-in-time snapshot of why a client matched with a therapist — not a history log.
+// clientId is @unique, so a rematch simply overwrites the row, matching this codebase's
+// existing "current state only" convention for User.therapistId itself. factors stores a
+// MatchReasonFactor[] (see lib/matching.ts) — every scoring branch that was applicable at
+// match time, including zero/negative-weight ones, for full transparency rather than
+// cherry-picked positives.
+model MatchReasoning {
+  id          String      @id @default(cuid())
+  clientId    String      @unique
+  therapistId String
+  method      MatchMethod
+  totalScore  Int
+  factors     Json
+  createdAt   DateTime    @default(now())
+  client      User        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  therapist   Therapist   @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+}
+
+enum MatchMethod {
+  auto
+  self_service
+  waitlist_accept
+}
+
+// Two rows are created per match (one per respondentId — the client, and the therapist's own
+// User.id) so client and therapist fit-feedback are independently trackable. respondentId is
+// deliberately a User.id even for the therapist side (not a Therapist.id), so it's directly
+// comparable to session.user.id at the API layer without an extra lookup.
+model MatchFeedback {
+  id             String              @id @default(cuid())
+  clientId       String
+  therapistId    String
+  respondentId   String
+  respondentRole Role
+  status         MatchFeedbackStatus @default(pending)
+  rating         Int?
+  wouldRecommend Boolean?
+  comment        String?
+  promptedAt     DateTime            @default(now())
+  respondedAt    DateTime?
+  client         User                @relation("MatchFeedbackClient", fields: [clientId], references: [id], onDelete: Cascade)
+  therapist      Therapist           @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  respondent     User                @relation("MatchFeedbackRespondent", fields: [respondentId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, therapistId, respondentId])
+  @@index([respondentId, status])
+}
+
+enum MatchFeedbackStatus {
+  pending
+  submitted
+  skipped
 }
 
 model CommunityReport {
@@ -1147,6 +1458,12 @@ enum VideoSignalType {
   ice_candidate
 }
 
+enum GroupSessionStatus {
+  scheduled
+  ended
+  canceled
+}
+
 enum CommunityPrivacy {
   open
   invite
@@ -1205,4 +1522,9 @@ enum CommunityReportStatus {
   open
   resolved
   dismissed
+}
+
+enum CommunityContentDeletionMode {
+  delete
+  anonymize
 }

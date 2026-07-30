@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { AppointmentStatus } from "@prisma/client";
 import { createNotification } from "@/lib/notify";
 import { recordSessionEarningForAppointment } from "@/lib/earnings";
+import { getCancellationOutcome } from "@/lib/cancellationPolicy";
+import { settleSessionCharge } from "@/lib/sessionSettlement";
 
 const patchSchema = z.object({
   status: z.enum(["pending", "confirmed", "completed", "cancelled", "no_show"]).optional(),
@@ -48,6 +50,13 @@ export async function PATCH(
     }
   }
 
+  if (parsed.data.status === "confirmed") {
+    const charge = await db.sessionCharge.findUnique({ where: { appointmentId: id } });
+    if (charge && (charge.status === "requires_payment" || charge.status === "failed")) {
+      return NextResponse.json({ error: "payment_required" }, { status: 403 });
+    }
+  }
+
   const data: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.date) data.date = new Date(parsed.data.date);
   if (parsed.data.status) data.status = parsed.data.status as AppointmentStatus;
@@ -55,7 +64,24 @@ export async function PATCH(
   const updated = await db.appointment.update({ where: { id }, data });
 
   if (parsed.data.status === "completed") {
-    await recordSessionEarningForAppointment(id).catch(() => {});
+    // A Premium free-credit session never pays the therapist through any channel — skip
+    // the normal earnings ledger entirely rather than let it create a payable entry for a
+    // session the client didn't pay for.
+    const completedCharge = await db.sessionCharge.findUnique({ where: { appointmentId: id } });
+    if (completedCharge?.fundingSource !== "premium_credit") {
+      await recordSessionEarningForAppointment(id).catch(() => {});
+    }
+    await settleSessionCharge(id, "completed");
+  } else if (parsed.data.status === "no_show") {
+    await settleSessionCharge(id, "no_show");
+  } else if (parsed.data.status === "cancelled") {
+    // A therapist canceling (or declining a still-pending request) is unconditionally a
+    // full refund/credit-release — the client didn't cause the disruption, so the notice
+    // window that protects the therapist's calendar doesn't apply against them here.
+    const outcome = userRole === "THERAPIST" || getCancellationOutcome(appt.date).isEligibleForRefund
+      ? "early_cancellation"
+      : "late_cancellation";
+    await settleSessionCharge(id, outcome);
   }
 
   const isTherapist = userRole === "THERAPIST";
@@ -103,6 +129,11 @@ export async function DELETE(
   }
   if (appt.therapist.userId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const charge = await db.sessionCharge.findUnique({ where: { appointmentId: id } });
+  if (charge) {
+    return NextResponse.json({ error: "This session has a payment on record — cancel it instead of deleting it." }, { status: 409 });
   }
 
   await db.appointment.delete({ where: { id } });

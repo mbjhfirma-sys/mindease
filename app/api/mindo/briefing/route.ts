@@ -13,5 +13,6 @@ export async function GET() {
     enabled: true,
     briefingText: result.briefing.briefingText,
     date: result.briefing.date,
+    facts: result.briefing.facts,
   });
 }

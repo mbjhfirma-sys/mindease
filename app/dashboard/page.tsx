@@ -7,6 +7,8 @@ import TaskActivityModal from "@/components/dashboard/TaskActivityModal";
 import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
 import { getJoinWindow } from "@/lib/video";
 import { notifyBadgesChanged } from "@/lib/badgeEvents";
+import { DailyFactsGrid } from "@/components/dashboard/DailyFactsGrid";
+import type { DailyFacts } from "@/lib/mindo/factsTypes";
 import {
   TrendingUp, BookOpen, Clock, Flame,
   PenLine, Bot, ClipboardList, Users,
@@ -140,6 +142,8 @@ export default function DashboardPage() {
   const [userName,    setUserName]   = useState("there");
   const [loading,     setLoading]    = useState(true);
   const [mindoBriefing, setMindoBriefing] = useState<string | null>(null);
+  const [mindoFacts, setMindoFacts] = useState<DailyFacts | null>(null);
+  const [showMindoFacts, setShowMindoFacts] = useState(false);
   const [mindoIntroSeen, setMindoIntroSeen] = useState(true);
 
   const [activeTask,  setActiveTask]  = useState<Mission | null>(null);
@@ -197,6 +201,7 @@ export default function DashboardPage() {
       setMindoIntroSeen(uData.user?.privacyPrefs?.mindoIntroSeen ?? false);
       if (briefingData.enabled && briefingData.briefingText) {
         setMindoBriefing(briefingData.briefingText);
+        setMindoFacts(briefingData.facts ?? null);
       }
     }).finally(() => setLoading(false));
   }, []);
@@ -369,6 +374,21 @@ export default function DashboardPage() {
               <Link href="/dashboard/mindo/history" className="text-[11px] text-sage-100 hover:text-white transition-colors flex-shrink-0">Past briefings →</Link>
             </div>
             <p className="text-sm text-white leading-relaxed">{greeting}, {userName}. {mindoBriefing}</p>
+            {mindoFacts && (
+              <>
+                <button
+                  onClick={() => setShowMindoFacts((v) => !v)}
+                  className="text-[11px] font-medium text-sage-100 hover:text-white transition-colors mt-2"
+                >
+                  {showMindoFacts ? "Hide the numbers" : "What's this based on? →"}
+                </button>
+                {showMindoFacts && (
+                  <div className="mt-2.5">
+                    <DailyFactsGrid facts={mindoFacts} />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

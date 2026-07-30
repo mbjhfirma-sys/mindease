@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { notifyOfRiskFlag } from "@/lib/notify";
+import { ensureRiskStepUpWindow } from "@/lib/riskStepUp";
 
 const postSchema = z.object({
   assessmentId: z.string(),
@@ -48,14 +49,15 @@ export async function POST(req: NextRequest) {
   });
 
   if (parsed.data.safetyFlagged) {
-    await db.riskFlag.create({
+    const flag = await db.riskFlag.create({
       data: {
         userId: session.user.id, source: "assessment", sourceId: result.id,
         severity: "high", detail: `${parsed.data.assessmentId.toUpperCase()} assessment flagged a safety-relevant item.`,
       },
     });
+    await ensureRiskStepUpWindow(flag);
     const user = await db.user.findUnique({ where: { id: session.user.id }, select: { name: true, therapistId: true } });
-    if (user) await notifyOfRiskFlag({ id: session.user.id, name: user.name, therapistId: user.therapistId }, `Assessment result may need review.`);
+    if (user) await notifyOfRiskFlag({ id: session.user.id, name: user.name, therapistId: user.therapistId }, `Assessment result may need review.`, "high");
   }
 
   return NextResponse.json({ ok: true, result }, { status: 201 });

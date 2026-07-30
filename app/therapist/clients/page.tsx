@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { MatchFactorsList } from "@/components/MatchFactorsList";
+import type { MatchReasonFactor } from "@/lib/matching";
 
 type Client = {
   id: string; name: string; email: string; avatar: string | null;
@@ -17,6 +19,9 @@ type Client = {
 
 type WaitlistEntry = {
   id: string; userId: string; name: string; avatar: string | null; email: string; createdAt: string;
+  intake: { concerns: string[]; ageRange: string | null; languagePreference: string | null; modalityPreference: string | null; affirmingCarePreferences: string[]; goals: string | null } | null;
+  matchScore: number | null;
+  matchFactors: MatchReasonFactor[];
 };
 
 const RISK_PILL: Record<Client["riskLevel"], string> = {
@@ -212,6 +217,20 @@ export default function ClientsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-stone-900">{w.name}</div>
                     <div className="text-xs text-stone-400 truncate">{w.email} · waiting since {new Date(w.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                    {w.intake && w.intake.concerns.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {w.intake.concerns.slice(0, 4).map((c) => (
+                          <span key={c} className="text-[10px] font-semibold uppercase tracking-wide bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded-full">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {w.matchFactors.length > 0 && (
+                      <div className="mt-1.5">
+                        <MatchFactorsList factors={w.matchFactors} compact showWeights />
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">
                     <button

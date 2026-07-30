@@ -3,6 +3,9 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notify";
+import { assignClientToTherapist } from "@/lib/therapistAssignment";
+import { scoreClientAgainstTherapist } from "@/lib/matching";
+import { recordMatchReasoning } from "@/lib/matchReasoning";
 
 const schema = z.object({ action: z.enum(["accept", "decline"]) });
 
@@ -27,8 +30,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (entry.user.therapistId) {
       return NextResponse.json({ error: "This client is already assigned to a therapist" }, { status: 409 });
     }
-    await db.user.update({ where: { id: entry.user.id }, data: { therapistId: therapist.id } });
-    await db.waitlistEntry.updateMany({ where: { userId: entry.user.id, status: "waiting" }, data: { status: "resolved" } });
+    // Previously duplicated assignClientToTherapist's logic by hand here (direct user.update +
+    // waitlistEntry.updateMany), which meant this path didn't auto-resolve the client's OTHER
+    // waitlist entries the way every other assignment path does. Reusing the shared helper
+    // fixes that inconsistency.
+    await assignClientToTherapist(entry.user.id, entry.user.name, therapist.id);
+    const scoring = await scoreClientAgainstTherapist(entry.user.id, therapist.id);
+    if (scoring) await recordMatchReasoning(entry.user.id, therapist.id, scoring.score, scoring.factors, "waitlist_accept");
     await createNotification(entry.user.id, {
       title: "You've been matched with a therapist",
       body: "Your waitlist request was accepted — you can now message and book sessions.",

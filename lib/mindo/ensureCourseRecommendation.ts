@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { pickOnboardingRecommendedCourse } from "@/lib/courseRecommendations";
 import { generateCourseRecommendationReason } from "@/lib/mindo/generateCourseRecommendation";
+import { planById } from "@/lib/clientPlans";
 
 export type CourseRecommendationView = {
   concern: string;
@@ -41,6 +42,9 @@ function toView(concern: string, reason: string, course: {
 }
 
 export async function ensureCourseRecommendation(userId: string): Promise<EnsureCourseRecommendationResult> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { plan: true } });
+  if (!user || !planById(user.plan).features.mindo) return { enabled: false };
+
   const intake = await db.clientIntake.findUnique({ where: { userId }, select: { concerns: true, goals: true } });
   if (!intake || intake.concerns.length === 0) return { enabled: false };
 

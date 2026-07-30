@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { canAccessCourse } from "@/lib/courseAccess";
 
 export async function GET(
   _request: Request,
@@ -23,6 +24,10 @@ export async function GET(
   if (!course) {
     return NextResponse.json({ error: "Course not found" }, { status: 404 });
   }
+
+  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { plan: true } });
+  const allowed = await canAccessCourse(session.user.id, user?.plan ?? "free", course);
+  if (!allowed) return NextResponse.json({ error: "plan_required" }, { status: 403 });
 
   const { lessons, ...courseFields } = course;
 

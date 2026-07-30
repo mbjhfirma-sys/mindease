@@ -4,10 +4,12 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { verifyTwoFactorAttempt } from "@/lib/twoFactor";
+import { deleteUserAccount } from "@/lib/accountDeletion";
 
 const deleteSchema = z.object({
   password: z.string().min(1),
   code: z.string().optional(),
+  confirmText: z.literal("DELETE"),
 });
 
 const notificationPrefsSchema = z.object({
@@ -30,18 +32,30 @@ const privacyPrefsSchema = z.object({
   mindoIntroSeen:               z.boolean().optional(),
 });
 
+const dataDirectiveSchema = z.object({
+  legalDiscovery:   z.string().max(500).optional(),
+  incapacitation:   z.string().max(500).optional(),
+  trustedContact: z.object({
+    name:         z.string().min(1).max(100),
+    relationship: z.string().min(1).max(100),
+    email:        z.string().email(),
+  }).optional(),
+});
+
 const patchSchema = z.object({
-  name:              z.string().min(2).optional(),
-  phone:             z.string().optional(),
-  dob:               z.string().refine((v) => !isNaN(new Date(v).getTime()), { message: "Invalid date" }).optional(),
-  timezone:          z.string().optional(),
-  language:          z.string().optional(),
-  avatar:            z.string().max(200000).optional(),
-  notificationPrefs: notificationPrefsSchema.optional(),
-  privacyPrefs:      privacyPrefsSchema.optional(),
-  hasOnboarded:      z.boolean().optional(),
-  hasSeenClientTour: z.boolean().optional(),
-  peerMatchingOptIn: z.boolean().optional(),
+  name:                        z.string().min(2).optional(),
+  phone:                       z.string().optional(),
+  dob:                         z.string().refine((v) => !isNaN(new Date(v).getTime()), { message: "Invalid date" }).optional(),
+  timezone:                    z.string().optional(),
+  language:                    z.string().optional(),
+  avatar:                      z.string().max(200000).optional(),
+  notificationPrefs:           notificationPrefsSchema.optional(),
+  privacyPrefs:                privacyPrefsSchema.optional(),
+  hasOnboarded:                z.boolean().optional(),
+  hasSeenClientTour:           z.boolean().optional(),
+  peerMatchingOptIn:           z.boolean().optional(),
+  communityContentOnDeletion:  z.enum(["delete", "anonymize"]).optional(),
+  dataDirective:               dataDirectiveSchema.optional(),
 });
 
 const DEFAULT_NOTIFICATION_PREFS = {
@@ -55,6 +69,8 @@ const DEFAULT_PRIVACY_PREFS = {
   anonymousCommunity: true, dataForResearch: false,
   mindoClientBriefingEnabled: true, mindoTherapistDigestEnabled: true, mindoIntroSeen: false,
 };
+
+const DEFAULT_DATA_DIRECTIVE = {};
 
 function generateClientCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -75,6 +91,7 @@ export async function GET() {
         plan: true, phone: true, dob: true, timezone: true, language: true, xp: true, level: true,
         createdAt: true, clientCode: true, hasOnboarded: true, hasSeenClientTour: true,
         notificationPrefs: true, privacyPrefs: true, twoFactorEnabled: true, peerMatchingOptIn: true,
+        communityContentOnDeletion: true, dataDirective: true,
         assignedTherapist: {
           include: { user: { select: { name: true, avatar: true } } },
         },
@@ -89,6 +106,17 @@ export async function GET() {
     });
 
     if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    let premiumCreditAvailable = false;
+    if (user.plan === "premium") {
+      const subscription = await db.clientSubscription.findUnique({ where: { userId: user.id } });
+      if (subscription?.status === "active") {
+        const usedThisPeriod = await db.clientSessionCredit.findFirst({
+          where: { clientSubscriptionId: subscription.id, periodStart: subscription.currentPeriodStart },
+        });
+        premiumCreditAvailable = !usedThisPeriod;
+      }
+    }
 
     // Lazy-generate clientCode for existing users who don't have one
     if (!user.clientCode) {
@@ -113,6 +141,8 @@ export async function GET() {
           clientCode: code,
           notificationPrefs: user.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS,
           privacyPrefs: user.privacyPrefs ?? DEFAULT_PRIVACY_PREFS,
+          dataDirective: user.dataDirective ?? DEFAULT_DATA_DIRECTIVE,
+          premiumCreditAvailable,
         },
       });
     }
@@ -122,6 +152,8 @@ export async function GET() {
         ...user,
         notificationPrefs: user.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS,
         privacyPrefs: user.privacyPrefs ?? DEFAULT_PRIVACY_PREFS,
+        dataDirective: user.dataDirective ?? DEFAULT_DATA_DIRECTIVE,
+        premiumCreditAvailable,
       },
     });
   } catch (err) {
@@ -138,7 +170,7 @@ export async function PATCH(req: NextRequest) {
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { notificationPrefs, privacyPrefs, dob, ...rest } = parsed.data;
+  const { notificationPrefs, privacyPrefs, dataDirective, dob, ...rest } = parsed.data;
   const data: Record<string, unknown> = { ...rest };
   if (dob) data.dob = new Date(dob);
 
@@ -160,6 +192,15 @@ export async function PATCH(req: NextRequest) {
     data.privacyPrefs = { ...current, ...privacyPrefs };
   }
 
+  if (dataDirective) {
+    const existing = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { dataDirective: true },
+    });
+    const current = (existing?.dataDirective as Record<string, unknown>) ?? DEFAULT_DATA_DIRECTIVE;
+    data.dataDirective = { ...current, ...dataDirective, updatedAt: new Date().toISOString() };
+  }
+
   const user = await db.user.update({
     where: { id: session.user.id },
     data,
@@ -167,6 +208,7 @@ export async function PATCH(req: NextRequest) {
       id: true, name: true, email: true, role: true, avatar: true,
       plan: true, phone: true, dob: true, timezone: true, language: true,
       notificationPrefs: true, privacyPrefs: true, hasOnboarded: true, hasSeenClientTour: true, peerMatchingOptIn: true,
+      communityContentOnDeletion: true, dataDirective: true,
     },
   });
 
@@ -179,11 +221,11 @@ export async function DELETE(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const parsed = deleteSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Password is required" }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Password and confirmation are required" }, { status: 400 });
 
   const user = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { password: true, role: true, twoFactorEnabled: true, therapistProfile: { select: { id: true } } },
+    select: { password: true, role: true, twoFactorEnabled: true, communityContentOnDeletion: true, therapistProfile: { select: { id: true } } },
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -211,7 +253,22 @@ export async function DELETE(req: NextRequest) {
     }
   }
 
-  await db.user.delete({ where: { id: session.user.id } });
+  const nonTerminalChargeCount = await db.sessionCharge.count({
+    where: {
+      status: { in: ["requires_payment", "paid"] },
+      ...(user.role === "THERAPIST" && user.therapistProfile
+        ? { therapistId: user.therapistProfile.id }
+        : { clientId: session.user.id }),
+    },
+  });
+  if (nonTerminalChargeCount > 0) {
+    return NextResponse.json(
+      { error: "You have a session payment in progress — it needs to be resolved (completed, cancelled, or paid out) before you can delete your account." },
+      { status: 409 }
+    );
+  }
+
+  await deleteUserAccount(session.user.id, { anonymizeCommunityContent: user.communityContentOnDeletion === "anonymize" });
 
   return NextResponse.json({ ok: true });
 }

@@ -12,6 +12,8 @@ const patchSchema = z.object({
   icon: z.string().optional(),
   privacy: z.enum(["open", "invite"]).optional(),
   status: z.enum(["active", "archived"]).optional(),
+  identityTags: z.array(z.string()).optional(),
+  ageGroup: z.string().nullable().optional(),
 });
 
 async function getTherapistId(userId: string) {
@@ -61,6 +63,8 @@ export async function GET(
       icon: group.icon,
       privacy: group.privacy,
       status: group.status,
+      identityTags: group.identityTags,
+      ageGroup: group.ageGroup,
       memberCount: group._count.memberships,
       postCount: group._count.posts,
       createdAt: group.createdAt,

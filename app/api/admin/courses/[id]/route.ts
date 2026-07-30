@@ -16,6 +16,7 @@ const updateSchema = z.object({
   rating: z.number().min(0).max(5).optional(),
   enrolled: z.number().int().min(0).optional(),
   published: z.boolean().optional(),
+  isFreeTier: z.boolean().optional(),
 });
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

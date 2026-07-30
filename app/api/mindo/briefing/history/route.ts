@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     where: { userId: session.user.id },
     orderBy: { date: "desc" },
     take: limit,
-    select: { id: true, date: true, briefingText: true, softened: true },
+    select: { id: true, date: true, briefingText: true, softened: true, facts: true },
   });
 
   return NextResponse.json({ briefings });

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     where: { clientId, therapistId: therapist.id },
     orderBy: { weekStart: "desc" },
     take: limit,
-    select: { id: true, weekStart: true, digestText: true },
+    select: { id: true, weekStart: true, digestText: true, facts: true },
   });
 
   return NextResponse.json({ digests });

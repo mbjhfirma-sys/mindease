@@ -3,6 +3,8 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notify";
 import { assignClientToTherapist } from "@/lib/therapistAssignment";
+import { scoreClientAgainstTherapist } from "@/lib/matching";
+import { recordMatchReasoning } from "@/lib/matchReasoning";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -25,6 +27,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const hasRoom = therapist.maxClients == null || therapist._count.clients < therapist.maxClients;
+  const scoring = await scoreClientAgainstTherapist(session.user.id, therapist.id);
 
   if (hasRoom) {
     // Switching away from a current therapist (as opposed to a first-time pick) —
@@ -42,7 +45,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       }
     }
     await assignClientToTherapist(session.user.id, client?.name ?? "A client", therapist.id);
-    return NextResponse.json({ ok: true, assigned: true });
+    if (scoring) await recordMatchReasoning(session.user.id, therapist.id, scoring.score, scoring.factors, "self_service");
+    return NextResponse.json({ ok: true, assigned: true, score: scoring?.score, factors: scoring?.factors });
   }
 
   // Waitlisting for a new therapist never touches the client's current
@@ -61,5 +65,5 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     href: "/therapist/clients",
   });
 
-  return NextResponse.json({ ok: true, assigned: false, waitlisted: true });
+  return NextResponse.json({ ok: true, assigned: false, waitlisted: true, score: scoring?.score, factors: scoring?.factors });
 }
