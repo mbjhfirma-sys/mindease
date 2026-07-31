@@ -7,14 +7,17 @@ import { notifyBadgesChanged } from "@/lib/badgeEvents";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Attachment = { name: string; mime: string; size: string };
-type Message = { from: string; text: string; time: string; attachment?: Attachment };
+type Attachment = { id?: string; name: string; mimeType: string; size: number; url: string };
+type Message = { from: string; text: string; time: string; attachment?: Attachment | null };
 type Conversation = {
   id: string; sender: string; avatar: string; preview: string; time: string; unread: number;
   role?: string; messages: Message[];
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const ACCEPTED_FILE_TYPES = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp";
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -106,7 +109,8 @@ function MessagesPageInner() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [chatMsgs, setChatMsgs] = useState<Message[]>([]);
-  const [pendingFile, setPendingFile] = useState<Attachment | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -169,15 +173,21 @@ function MessagesPageInner() {
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setPendingFile({ name: file.name, mime: file.type, size: formatBytes(file.size) });
     e.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_FILE_BYTES) {
+      setFileError("File is too large (15MB max)");
+      return;
+    }
+    setFileError(null);
+    setPendingFile(file);
   }
 
   async function handleSend() {
     if ((!input.trim() && !pendingFile) || !activeId || sending) return;
     const text = input.trim();
-    const attachment = pendingFile ?? undefined;
+    const file = pendingFile;
+    const objectUrl = file ? URL.createObjectURL(file) : null;
     setInput("");
     setPendingFile(null);
     setSending(true);
@@ -186,25 +196,27 @@ function MessagesPageInner() {
       from: "me",
       text,
       time: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
-      ...(attachment ? { attachment } : {}),
+      ...(file && objectUrl ? { attachment: { name: file.name, mimeType: file.type, size: file.size, url: objectUrl } } : {}),
     };
     setChatMsgs((prev) => [...prev, optimistic]);
 
     try {
-      const res = await fetch(`/api/messages/${activeId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
+      const formData = new FormData();
+      formData.append("text", text);
+      if (file) formData.append("file", file);
+      const res = await fetch(`/api/messages/${activeId}`, { method: "POST", body: formData });
       const data = await res.json();
       if (data.ok) {
         setChatMsgs((prev) => [
           ...prev.slice(0, -1),
-          { from: "me", text: data.message.text, time: data.message.time, ...(attachment ? { attachment } : {}) },
+          { from: "me", text: data.message.text, time: data.message.time, attachment: data.message.attachment },
         ]);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      } else {
+        setFileError(data.error ?? "Failed to send");
       }
     } catch {
-      // keep optimistic message
+      // keep optimistic message (and its object URL) on network failure
     } finally {
       setSending(false);
     }
@@ -338,19 +350,31 @@ function MessagesPageInner() {
                             : "bg-stone-100 text-stone-800 rounded-bl-md"
                         }`}>
                           {msg.attachment && (
-                            <div className={`flex items-center gap-2.5 mb-2 px-3 py-2 rounded-xl ${
-                              isMe ? "bg-white/10" : "bg-white border border-stone-200"
-                            }`}>
-                              <span className="text-xl flex-shrink-0">{fileIcon(msg.attachment.mime)}</span>
-                              <div className="min-w-0">
-                                <p className={`text-xs font-semibold truncate ${isMe ? "text-white" : "text-stone-800"}`}>
-                                  {msg.attachment.name}
-                                </p>
-                                <p className={`text-[10px] mt-0.5 ${isMe ? "text-white/60" : "text-stone-400"}`}>
-                                  {msg.attachment.size}
-                                </p>
-                              </div>
-                            </div>
+                            msg.attachment.mimeType.startsWith("image/") ? (
+                              <a href={msg.attachment.url} target="_blank" rel="noopener noreferrer" className="block mb-2 -mx-0.5">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={msg.attachment.url} alt={msg.attachment.name} className="max-w-full max-h-56 rounded-xl object-cover" />
+                              </a>
+                            ) : (
+                              <a
+                                href={msg.attachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`flex items-center gap-2.5 mb-2 px-3 py-2 rounded-xl transition-colors ${
+                                  isMe ? "bg-white/10 hover:bg-white/20" : "bg-white border border-stone-200 hover:border-stone-300"
+                                }`}
+                              >
+                                <span className="text-xl flex-shrink-0">{fileIcon(msg.attachment.mimeType)}</span>
+                                <div className="min-w-0">
+                                  <p className={`text-xs font-semibold truncate ${isMe ? "text-white" : "text-stone-800"}`}>
+                                    {msg.attachment.name}
+                                  </p>
+                                  <p className={`text-[10px] mt-0.5 ${isMe ? "text-white/60" : "text-stone-400"}`}>
+                                    {formatBytes(msg.attachment.size)}
+                                  </p>
+                                </div>
+                              </a>
+                            )
                           )}
                           {msg.text && <span className="whitespace-pre-line">{msg.text}</span>}
                         </div>
@@ -374,10 +398,10 @@ function MessagesPageInner() {
               {/* Pending file chip */}
               {activeConvo.id !== WELCOME_ID && pendingFile && (
                 <div className="flex items-center gap-2.5 mx-4 mb-2 px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl">
-                  <span className="text-lg flex-shrink-0">{fileIcon(pendingFile.mime)}</span>
+                  <span className="text-lg flex-shrink-0">{fileIcon(pendingFile.type)}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-stone-800 truncate">{pendingFile.name}</p>
-                    <p className="text-[10px] text-stone-400 mt-0.5">{pendingFile.size}</p>
+                    <p className="text-[10px] text-stone-400 mt-0.5">{formatBytes(pendingFile.size)}</p>
                   </div>
                   <button
                     onClick={() => setPendingFile(null)}
@@ -388,12 +412,22 @@ function MessagesPageInner() {
                 </div>
               )}
 
+              {/* File error */}
+              {activeConvo.id !== WELCOME_ID && fileError && (
+                <div className="flex items-center justify-between gap-2.5 mx-4 mb-2 px-3.5 py-2 bg-red-50 border border-red-100 rounded-xl">
+                  <p className="text-xs text-red-600">{fileError}</p>
+                  <button onClick={() => setFileError(null)} className="text-red-400 hover:text-red-600 transition-colors p-1">
+                    <X size={12} strokeWidth={2} />
+                  </button>
+                </div>
+              )}
+
               {/* Input bar — hidden for the YouMindo welcome thread */}
               {activeConvo.id !== WELCOME_ID && <div className="px-4 py-3 border-t border-stone-100 flex-shrink-0 bg-white">
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp"
+                  accept={ACCEPTED_FILE_TYPES}
                   className="hidden"
                   onChange={handleFileChange}
                 />

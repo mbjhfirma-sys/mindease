@@ -9,8 +9,11 @@ type ConvSummary = {
   id: string; sender: string; avatar: string;
   preview: string; time: string; unread: number; role?: string;
 };
-type Message = { id: string; from: "me" | "them"; text: string; time: string };
-type Attachment = { name: string; mime: string; size: string };
+type Attachment = { id?: string; name: string; mimeType: string; size: number; url: string };
+type Message = { id: string; from: "me" | "them"; text: string; time: string; attachment?: Attachment | null };
+
+const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const ACCEPTED_FILE_TYPES = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp";
 
 // ── Static YouMindo Pro welcome conversation ──────────────────────────────────
 
@@ -93,7 +96,8 @@ function TherapistMessagesPageInner() {
   const [msgsLoading,    setMsgsLoading]   = useState(false);
   const [input,          setInput]         = useState("");
   const [showResources,  setShowResources] = useState(false);
-  const [pendingFile,    setPendingFile]   = useState<Attachment | null>(null);
+  const [pendingFile,    setPendingFile]   = useState<File | null>(null);
+  const [fileError,      setFileError]     = useState<string | null>(null);
   const [search,         setSearch]        = useState("");
   const bottomRef   = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -150,33 +154,49 @@ function TherapistMessagesPageInner() {
     loadMessages(id);
   }
 
-  async function send(text: string, attachment?: Attachment) {
-    if (!selectedId || (!text.trim() && !attachment)) return;
-    const displayText = attachment ? (text.trim() ? text.trim() : `📎 ${attachment.name}`) : text.trim();
-    const optimistic: Message = { id: `opt-${Date.now()}`, from: "me", text: displayText, time: getTime() };
+  async function send(text: string, file?: File | null) {
+    if (!selectedId || (!text.trim() && !file)) return;
+    const previewText = text.trim() || (file ? `📎 ${file.name}` : "");
+    const objectUrl = file ? URL.createObjectURL(file) : null;
+    const tempId = `opt-${Date.now()}`;
+    const optimistic: Message = {
+      id: tempId, from: "me", text: text.trim(), time: getTime(),
+      ...(file && objectUrl ? { attachment: { name: file.name, mimeType: file.type, size: file.size, url: objectUrl } } : {}),
+    };
     setMessages((p) => [...p, optimistic]);
     setInput("");
     setShowResources(false);
     setPendingFile(null);
     // Update preview in conv list
-    setConvs((p) => p.map((c) => c.id === selectedId ? { ...c, preview: displayText, time: getTime() } : c));
+    setConvs((p) => p.map((c) => c.id === selectedId ? { ...c, preview: previewText, time: getTime() } : c));
 
     try {
-      await fetch(`/api/messages/${selectedId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: displayText }),
-      });
+      const formData = new FormData();
+      formData.append("text", text.trim());
+      if (file) formData.append("file", file);
+      const res = await fetch(`/api/messages/${selectedId}`, { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.ok) {
+        setMessages((p) => p.map((m) => (m.id === tempId ? { ...data.message, from: "me" } : m)));
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      } else {
+        setFileError(data.error ?? "Failed to send");
+      }
     } catch {
-      // Message stays in local state even if API call fails
+      // Message stays in local state (with its object URL) even if the API call fails
     }
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setPendingFile({ name: file.name, mime: file.type, size: formatBytes(file.size) });
     e.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_FILE_BYTES) {
+      setFileError("File is too large (15MB max)");
+      return;
+    }
+    setFileError(null);
+    setPendingFile(file);
   }
 
   const currentConv = convs.find((c) => c.id === selectedId) ?? null;
@@ -286,6 +306,33 @@ function TherapistMessagesPageInner() {
                     <div className={`max-w-[80%] md:max-w-sm rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                       msg.from === "me" ? "bg-stone-900 text-white rounded-br-sm" : "bg-stone-100 text-stone-700 rounded-bl-sm"
                     }`}>
+                      {msg.attachment && (
+                        msg.attachment.mimeType.startsWith("image/") ? (
+                          <a href={msg.attachment.url} target="_blank" rel="noopener noreferrer" className="block mb-2 -mx-0.5">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={msg.attachment.url} alt={msg.attachment.name} className="max-w-full max-h-56 rounded-xl object-cover" />
+                          </a>
+                        ) : (
+                          <a
+                            href={msg.attachment.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`flex items-center gap-2.5 mb-2 px-3 py-2 rounded-xl transition-colors ${
+                              msg.from === "me" ? "bg-white/10 hover:bg-white/20" : "bg-white border border-stone-200 hover:border-stone-300"
+                            }`}
+                          >
+                            <span className="text-xl flex-shrink-0">{fileIcon(msg.attachment.mimeType)}</span>
+                            <div className="min-w-0">
+                              <p className={`text-xs font-semibold truncate ${msg.from === "me" ? "text-white" : "text-stone-800"}`}>
+                                {msg.attachment.name}
+                              </p>
+                              <p className={`text-[10px] mt-0.5 ${msg.from === "me" ? "text-white/60" : "text-stone-400"}`}>
+                                {formatBytes(msg.attachment.size)}
+                              </p>
+                            </div>
+                          </a>
+                        )
+                      )}
                       {msg.text && <span className="whitespace-pre-line">{msg.text}</span>}
                       <div className={`text-[10px] mt-1 opacity-60 ${msg.from === "me" ? "text-right" : ""}`}>{msg.time}</div>
                     </div>
@@ -324,13 +371,23 @@ function TherapistMessagesPageInner() {
               {/* Pending file chip */}
               {currentConv.id !== WELCOME_ID && pendingFile && (
                 <div className="border-t border-stone-100 px-3 pt-2.5 pb-0 flex items-center gap-2 flex-shrink-0">
-                  <span className="text-base">{fileIcon(pendingFile.mime)}</span>
+                  <span className="text-base">{fileIcon(pendingFile.type)}</span>
                   <span className="text-xs text-stone-700 font-medium truncate max-w-[200px]">{pendingFile.name}</span>
-                  <span className="text-[10px] text-stone-400">{pendingFile.size}</span>
+                  <span className="text-[10px] text-stone-400">{formatBytes(pendingFile.size)}</span>
                   <button
                     onClick={() => setPendingFile(null)}
                     className="ml-auto text-stone-400 hover:text-stone-700 text-sm leading-none transition-colors"
                   >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* File error */}
+              {currentConv.id !== WELCOME_ID && fileError && (
+                <div className="border-t border-stone-100 px-3 pt-2.5 pb-0 flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-red-600">{fileError}</span>
+                  <button onClick={() => setFileError(null)} className="ml-auto text-red-400 hover:text-red-600 text-sm leading-none transition-colors">
                     ✕
                   </button>
                 </div>
@@ -344,7 +401,7 @@ function TherapistMessagesPageInner() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp"
+                  accept={ACCEPTED_FILE_TYPES}
                   className="hidden"
                   onChange={handleFileChange}
                 />
@@ -371,7 +428,7 @@ function TherapistMessagesPageInner() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      pendingFile ? send(input, pendingFile) : send(input);
+                      send(input, pendingFile);
                     }
                   }}
                   placeholder="Write a message…"

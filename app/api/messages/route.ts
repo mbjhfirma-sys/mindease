@@ -16,7 +16,7 @@ export async function GET() {
     include: {
       client: { select: { id: true, name: true, avatar: true, role: true } },
       therapist: { include: { user: { select: { id: true, name: true, avatar: true } } } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, include: { attachment: true } },
       _count: { select: { messages: { where: { read: false, fromUserId: { not: userId } } } } },
     },
     orderBy: { createdAt: "desc" },
@@ -26,13 +26,16 @@ export async function GET() {
     const other = userRole === "THERAPIST" ? c.client : c.therapist.user;
     const lastMsg = c.messages[0];
     const unread = c._count.messages;
+    const preview = lastMsg
+      ? lastMsg.text || (lastMsg.attachment ? `📎 ${lastMsg.attachment.name}` : "")
+      : "No messages yet";
     return {
       id: c.id,
       otherId: other.id,
       sender: other.name,
       avatar: other.avatar ?? other.name.slice(0, 2).toUpperCase(),
       role: userRole === "THERAPIST" ? "Client" : "Therapist",
-      preview: lastMsg?.text ?? "No messages yet",
+      preview,
       time: lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
       unread,
     };
