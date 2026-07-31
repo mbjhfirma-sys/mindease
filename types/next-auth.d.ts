@@ -26,5 +26,7 @@ declare module "next-auth/jwt" {
     profileCompleted?: boolean;
     /** Epoch ms of the last therapistStatus/hasOnboarded DB refresh — see auth.ts's jwt callback. */
     statusCheckedAt?: number;
+    /** Epoch ms of the last login-streak sync — see auth.ts's jwt callback and lib/loginStreak.ts. */
+    streakSyncedAt?: number;
   }
 }

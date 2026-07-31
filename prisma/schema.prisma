@@ -37,6 +37,8 @@ model User {
   twoFactorLockedUntil         DateTime?
   hasOnboarded                 Boolean                       @default(false)
   hasSeenClientTour            Boolean                       @default(true)
+  loginStreak                  Int                           @default(0)
+  lastActiveDay                String?
   peerMatchingOptIn            Boolean                       @default(false)
   lastDailyReminderSentAt      DateTime?
   lastMissionReminderSentAt    DateTime?

@@ -8,8 +8,8 @@ export type BadgeDef = {
 };
 
 export const BADGE_DEFINITIONS: BadgeDef[] = [
-  { badgeId: "streak_7",      category: "streak",    label: "7-day consistency",   desc: "Logged mood 7 days in a row" },
-  { badgeId: "streak_30",     category: "streak",    label: "Monthly practice",    desc: "Logged mood 30 days in a row" },
+  { badgeId: "streak_7",      category: "streak",    label: "7-day consistency",   desc: "Signed in 7 days in a row" },
+  { badgeId: "streak_30",     category: "streak",    label: "Monthly practice",    desc: "Signed in 30 days in a row" },
   { badgeId: "mission_10",    category: "mission",   label: "10 tasks completed",  desc: "Completed 10 daily missions" },
   { badgeId: "mission_50",    category: "mission",   label: "50 tasks completed",  desc: "Completed 50 daily missions" },
   { badgeId: "journal_5",     category: "journal",   label: "Journalling habit",   desc: "Wrote 5 journal entries" },

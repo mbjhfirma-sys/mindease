@@ -3,24 +3,21 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { BADGE_DEFINITIONS, BADGE_ELIGIBILITY, type UserStats } from "@/lib/achievements";
 import { createNotification } from "@/lib/notify";
-import { computeConsecutiveDayStreak, resolveTimeZone, STREAK_LOOKBACK } from "@/lib/dateKey";
 
 async function computeStats(userId: string): Promise<UserStats> {
-  const [moodCount, journalCount, missionCompletions, courseProgress, communityGroups, recentMoods, user] = await Promise.all([
+  const [moodCount, journalCount, missionCompletions, courseProgress, communityGroups, user] = await Promise.all([
     db.moodEntry.count({ where: { userId } }),
     db.journalEntry.count({ where: { userId } }),
     db.missionCompletion.count({ where: { userId } }),
     db.courseProgress.count({ where: { userId, completed: true } }),
     db.groupMembership.count({ where: { userId } }),
-    db.moodEntry.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: STREAK_LOOKBACK, select: { createdAt: true } }),
-    db.user.findUnique({ where: { id: userId }, select: { timezone: true } }),
+    // Kept up to date on nearly every request by auth.ts's jwt callback (syncLoginStreak),
+    // which always runs ahead of this handler within the same request via `auth()` above.
+    db.user.findUnique({ where: { id: userId }, select: { loginStreak: true } }),
   ]);
 
-  const timeZone = resolveTimeZone(user?.timezone);
-  const streak = computeConsecutiveDayStreak(recentMoods.map((m) => m.createdAt), timeZone);
-
   return {
-    streak,
+    streak: user?.loginStreak ?? 0,
     moodEntries: moodCount,
     journalEntries: journalCount,
     missionsCompleted: missionCompletions,

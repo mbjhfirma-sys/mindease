@@ -4,6 +4,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { verifyTwoFactorAttempt } from "@/lib/twoFactor";
+import { syncLoginStreak } from "@/lib/loginStreak";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -69,6 +70,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           select: { role: true },
         });
         if (dbUser) token.role = dbUser.role;
+      }
+      // Login streak only needs day-boundary precision, not real-time freshness, so an
+      // hour-long TTL is plenty — it just needs to run at least once on the first request
+      // of each new calendar day for this token, and syncLoginStreak() itself is already a
+      // no-op once today's been recorded.
+      const STREAK_SYNC_TTL_MS = 60 * 60 * 1000;
+      if (token.id && Date.now() - ((token.streakSyncedAt as number) ?? 0) > STREAK_SYNC_TTL_MS) {
+        await syncLoginStreak(token.id as string);
+        token.streakSyncedAt = Date.now();
       }
       // `auth()` runs as middleware on nearly every request (see proxy.ts), so this
       // callback fires on every page load and every API call — not just at sign-in.

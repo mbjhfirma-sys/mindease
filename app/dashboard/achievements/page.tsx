@@ -99,7 +99,7 @@ export default function ProgressPage() {
   ));
 
   const metrics = [
-    { label: "Consistency streak",   value: `${stats.streak} days`,           sub: "Mood check-ins",              Icon: Flame },
+    { label: "Consistency streak",   value: `${stats.streak} days`,           sub: "Consecutive days active",     Icon: Flame },
     { label: "Tasks completed",      value: stats.missionsCompleted,           sub: "Since joining",               Icon: CheckSquare },
     { label: "Mood entries",         value: stats.moodEntries,                 sub: "Daily check-ins",             Icon: Clock },
     { label: "Lessons completed",    value: stats.lessonsCompleted,            sub: "Course progress",             Icon: BookOpen },
