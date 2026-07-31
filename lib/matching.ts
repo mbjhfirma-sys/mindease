@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getEffectiveMaxClients } from "@/lib/therapistCapacity";
 
 export type IntakeAnswers = {
   concerns: string[];
@@ -191,12 +192,16 @@ export async function findBestMatch(intake: IntakeAnswers): Promise<MatchedThera
       id: true, userId: true, specializations: true, languages: true, gender: true,
       maxClients: true, title: true, ageGroupsServed: true, modalities: true,
       affirmingCareTags: true, yearsOfExperience: true,
+      subscription: { select: { planId: true } },
       user: { select: { name: true } },
       _count: { select: { clients: true } },
     },
   });
 
-  const withRoom = candidates.filter((t) => t.maxClients == null || t._count.clients < t.maxClients);
+  const withRoom = candidates.filter((t) => {
+    const effectiveCap = getEffectiveMaxClients(t.maxClients, t.subscription?.planId);
+    return effectiveCap == null || t._count.clients < effectiveCap;
+  });
   if (withRoom.length === 0) return null;
 
   const feedbackModifiers = await feedbackModifiersFor(withRoom.map((t) => t.id));

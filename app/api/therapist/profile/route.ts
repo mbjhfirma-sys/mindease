@@ -39,12 +39,15 @@ export async function GET() {
       specializations: true, education: true, languages: true, licenseNumber: true,
       rating: true, totalSessions: true, maxClients: true, professionType: true, gender: true,
       ageGroupsServed: true, modalities: true, affirmingCareTags: true,
+      subscription: { select: { planId: true } },
       _count: { select: { clients: true } },
     },
   });
   if (!therapist) return NextResponse.json({ error: "Not a therapist" }, { status: 403 });
 
-  return NextResponse.json({ profile: { ...therapist, activeClients: therapist._count.clients } });
+  return NextResponse.json({
+    profile: { ...therapist, activeClients: therapist._count.clients, subscriptionPlanId: therapist.subscription?.planId ?? "starter" },
+  });
 }
 
 export async function PATCH(req: NextRequest) {

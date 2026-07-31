@@ -14,8 +14,9 @@ type Subscription = {
   currency: string;
   billingCycle: "monthly" | "annual";
   autoRenew: boolean;
-  status: "active" | "canceled";
+  status: "active" | "past_due" | "canceled" | "incomplete";
   currentPeriodEnd: string;
+  stripeSubscriptionId: string | null;
 } | null;
 
 type Billing = {
@@ -46,6 +47,7 @@ export default function SubscriptionTab() {
   });
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [planBusy, setPlanBusy] = useState(false);
+  const [portalBusy, setPortalBusy] = useState(false);
 
   const [billingSaving, setBillingSaving] = useState(false);
   const [billingSaved, setBillingSaved] = useState(false);
@@ -67,6 +69,20 @@ export default function SubscriptionTab() {
   async function subscribeTo(planId: string) {
     setPlanBusy(true);
     try {
+      // Not yet a real Stripe subscription and moving to a paid tier — needs Checkout to
+      // create one. Every other case (Starter-local, switching between two already-real
+      // paid tiers, scheduling a downgrade back to Starter) goes through the existing
+      // POST/PATCH route, which now handles each of those directly.
+      if (planId !== "starter" && !subscription?.stripeSubscriptionId) {
+        const res = await fetch("/api/therapist/business/subscription/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planId }),
+        });
+        const d = await res.json();
+        if (d.url) window.location.href = d.url;
+        return;
+      }
       const method = subscription ? "PATCH" : "POST";
       const res = await fetch("/api/therapist/business/subscription", {
         method,
@@ -76,6 +92,17 @@ export default function SubscriptionTab() {
       if (res.ok) loadAll();
     } finally {
       setPlanBusy(false);
+    }
+  }
+
+  async function openPortal() {
+    setPortalBusy(true);
+    try {
+      const res = await fetch("/api/therapist/business/subscription/portal", { method: "POST" });
+      const d = await res.json();
+      if (d.url) window.location.href = d.url;
+    } finally {
+      setPortalBusy(false);
     }
   }
 
@@ -171,26 +198,41 @@ export default function SubscriptionTab() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-stone-700">
-                {subscription.status === "canceled" ? "Subscription canceled" : "Next renewal"}
+                {subscription.status === "canceled"
+                  ? "Subscription canceled"
+                  : subscription.status === "active" && !subscription.autoRenew
+                  ? "Downgrading to Starter"
+                  : subscription.status === "past_due"
+                  ? "Payment past due"
+                  : "Next renewal"}
               </p>
               <p className="text-xs text-stone-400 mt-0.5">
                 {subscription.status === "canceled"
                   ? "Access continues until the end of the current period."
+                  : subscription.status === "active" && !subscription.autoRenew
+                  ? `Your plan reverts to Starter on ${new Date(subscription.currentPeriodEnd).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.`
                   : new Date(subscription.currentPeriodEnd).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
               </p>
             </div>
-            {subscription.status === "active" && (
+            {subscription.status === "active" && subscription.stripeSubscriptionId && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-stone-500">Auto-renew</span>
                 <Toggle checked={subscription.autoRenew} onChange={toggleAutoRenew} />
               </div>
             )}
           </div>
-          {subscription.status === "active" && (
-            <button onClick={cancelSubscription} disabled={planBusy} className="text-xs text-red-500 hover:text-red-700 transition-colors">
-              Cancel subscription
-            </button>
-          )}
+          <div className="flex items-center gap-4">
+            {subscription.status === "active" && subscription.autoRenew && (
+              <button onClick={cancelSubscription} disabled={planBusy} className="text-xs text-red-500 hover:text-red-700 transition-colors">
+                Cancel subscription
+              </button>
+            )}
+            {subscription.stripeSubscriptionId && (
+              <button onClick={openPortal} disabled={portalBusy} className="text-xs text-stone-500 hover:text-stone-800 transition-colors">
+                {portalBusy ? "Redirecting…" : "Manage billing, payment method & invoices →"}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

@@ -34,7 +34,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // waitlistEntry.updateMany), which meant this path didn't auto-resolve the client's OTHER
     // waitlist entries the way every other assignment path does. Reusing the shared helper
     // fixes that inconsistency.
-    await assignClientToTherapist(entry.user.id, entry.user.name, therapist.id);
+    const result = await assignClientToTherapist(entry.user.id, entry.user.name, therapist.id);
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: "You've reached your Starter plan's client limit — upgrade to accept more clients" },
+        { status: 409 }
+      );
+    }
     const scoring = await scoreClientAgainstTherapist(entry.user.id, therapist.id);
     if (scoring) await recordMatchReasoning(entry.user.id, therapist.id, scoring.score, scoring.factors, "waitlist_accept");
     await createNotification(entry.user.id, {

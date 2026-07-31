@@ -8,6 +8,7 @@ import { LANGUAGE_SUGGESTIONS } from "@/lib/languages";
 import { AGE_GROUPS } from "@/lib/ageGroups";
 import { AFFIRMING_CARE_TAGS } from "@/lib/affirmingCare";
 import TwoFactorAuth from "@/components/settings/TwoFactorAuth";
+import { getEffectiveMaxClients } from "@/lib/therapistCapacity";
 
 type Tab = "profile" | "security";
 
@@ -163,6 +164,7 @@ export default function TherapistSettingsPage() {
     professionType: "", gender: "", ageGroupsServed: [], affirmingCareTags: [],
   });
   const [activeClients, setActiveClients] = useState(0);
+  const [subscriptionPlanId, setSubscriptionPlanId] = useState("starter");
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [loading, setSaving_] = useState(true);
   const [saving,  setSaving]  = useState(false);
@@ -193,6 +195,7 @@ export default function TherapistSettingsPage() {
             affirmingCareTags: d.profile.affirmingCareTags ?? [],
           });
           setActiveClients(d.profile.activeClients ?? 0);
+          setSubscriptionPlanId(d.profile.subscriptionPlanId ?? "starter");
         }
         if (uData.user) setTwoFactorEnabled(!!uData.user.twoFactorEnabled);
       })
@@ -352,6 +355,11 @@ export default function TherapistSettingsPage() {
               className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
             />
             <p className="text-[11px] text-stone-400 mt-1">{activeClients} active {activeClients === 1 ? "client" : "clients"}. New clients join a waitlist once you&apos;re full.</p>
+            {subscriptionPlanId === "starter" && (
+              <p className="text-[11px] text-amber-600 mt-1">
+                Starter plans are capped at {getEffectiveMaxClients(null, "starter")} active clients, regardless of this setting — upgrade in Business &rarr; Subscription for more.
+              </p>
+            )}
           </div>
         </div>
 

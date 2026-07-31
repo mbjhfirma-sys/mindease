@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notify";
 import { assignClientToTherapist } from "@/lib/therapistAssignment";
+import { getEffectiveMaxClients } from "@/lib/therapistCapacity";
 import { scoreClientAgainstTherapist } from "@/lib/matching";
 import { recordMatchReasoning } from "@/lib/matchReasoning";
 
@@ -20,13 +21,18 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const therapist = await db.therapist.findUnique({
     where: { id: therapistId },
-    select: { id: true, userId: true, maxClients: true, verificationStatus: true, _count: { select: { clients: true } } },
+    select: {
+      id: true, userId: true, maxClients: true, verificationStatus: true,
+      subscription: { select: { planId: true } },
+      _count: { select: { clients: true } },
+    },
   });
   if (!therapist || therapist.verificationStatus !== "approved") {
     return NextResponse.json({ error: "Therapist not found" }, { status: 404 });
   }
 
-  const hasRoom = therapist.maxClients == null || therapist._count.clients < therapist.maxClients;
+  const effectiveCap = getEffectiveMaxClients(therapist.maxClients, therapist.subscription?.planId);
+  const hasRoom = effectiveCap == null || therapist._count.clients < effectiveCap;
   const scoring = await scoreClientAgainstTherapist(session.user.id, therapist.id);
 
   if (hasRoom) {
@@ -44,7 +50,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         });
       }
     }
-    await assignClientToTherapist(session.user.id, client?.name ?? "A client", therapist.id);
+    // hasRoom above already checked the effective cap, so this should never actually
+    // reject in practice — handled defensively in case of a race with another assignment.
+    const result = await assignClientToTherapist(session.user.id, client?.name ?? "A client", therapist.id);
+    if (!result.ok) return NextResponse.json({ error: "This therapist just reached their client limit — try again" }, { status: 409 });
     if (scoring) await recordMatchReasoning(session.user.id, therapist.id, scoring.score, scoring.factors, "self_service");
     return NextResponse.json({ ok: true, assigned: true, score: scoring?.score, factors: scoring?.factors });
   }

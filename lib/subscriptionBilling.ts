@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { TherapistSubscription } from "@prisma/client";
+import type { InvoiceStatus, TherapistSubscription } from "@prisma/client";
 
 const MAX_RECONCILE_ITERATIONS = 36; // safety guard against runaway catch-up loops
 
@@ -15,8 +15,26 @@ function addCycle(date: Date, cycle: "monthly" | "annual"): Date {
 // it — the one real, persisted trigger for affiliate earnings. Used both by the initial
 // subscribe (which seeds the first period's invoice immediately) and by reconciliation
 // (which creates each subsequent period's invoice once it has actually elapsed), so the
-// commission logic never gets bypassed by either path.
-export async function createInvoiceForPeriod(subscription: TherapistSubscription, periodStart: Date, periodEnd: Date) {
+// commission logic never gets bypassed by either path. `overrides` lets a real Stripe
+// invoice.paid/payment_failed webhook feed in the true amount/status/Stripe ID instead of
+// the locally-computed defaults below — every existing call site keeps today's exact
+// behavior by simply not passing it.
+export async function createInvoiceForPeriod(
+  subscription: TherapistSubscription,
+  periodStart: Date,
+  periodEnd: Date,
+  overrides?: { amountCents?: number; status?: InvoiceStatus; stripeInvoiceId?: string }
+) {
+  const amountCents = overrides?.amountCents ?? subscription.priceCents;
+  const status = overrides?.status ?? "paid";
+
+  // update is a real write, not the no-op-on-conflict idiom used elsewhere in this codebase
+  // (e.g. StripeWebhookEvent's dedup gate) — a real Stripe invoice can legitimately
+  // transition status for the *same* period (a failed payment Stripe later retries
+  // successfully re-fires invoice.paid for the same underlying invoice), and that
+  // transition must actually land. Safe for the local/no-overrides path too: amountCents/
+  // status are deterministically the same value on every call there, so "updating" to an
+  // identical value is a no-op in effect, just not by construction.
   const invoice = await db.invoice.upsert({
     where: { subscriptionId_periodStart: { subscriptionId: subscription.id, periodStart } },
     create: {
@@ -24,12 +42,16 @@ export async function createInvoiceForPeriod(subscription: TherapistSubscription
       therapistId: subscription.therapistId,
       periodStart,
       periodEnd,
-      amountCents: subscription.priceCents,
+      amountCents,
       currency: subscription.currency,
-      status: "paid",
+      status,
+      stripeInvoiceId: overrides?.stripeInvoiceId,
     },
-    update: {},
+    update: { amountCents, status, stripeInvoiceId: overrides?.stripeInvoiceId },
   });
+
+  // A failed invoice collected no money — a referrer must never accrue commission on it.
+  if (invoice.status !== "paid") return invoice;
 
   const therapist = await db.therapist.findUnique({ where: { id: subscription.therapistId }, select: { userId: true } });
   const redemption = therapist
@@ -62,6 +84,13 @@ export async function createInvoiceForPeriod(subscription: TherapistSubscription
 export async function reconcileSubscription(subscriptionId: string): Promise<TherapistSubscription | null> {
   let subscription: TherapistSubscription | null = await db.therapistSubscription.findUnique({ where: { id: subscriptionId } });
   if (!subscription || subscription.status !== "active") return subscription;
+
+  // A real Stripe-backed subscription has its periods driven by the invoice.paid/
+  // customer.subscription.updated webhooks, not local math — this must be provably
+  // unreachable for those rows, not just unlikely to fire, or a webhook delay at the wrong
+  // moment could let this loop upsert a locally-guessed invoice that a slightly-later real
+  // webhook's upsert would then silently no-op against (discarding the real amount).
+  if (subscription.stripeSubscriptionId) return subscription;
 
   let iterations = 0;
   const now = new Date();

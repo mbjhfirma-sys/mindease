@@ -170,6 +170,11 @@ model TherapistBilling {
   stripeConnectChargesEnabled   Boolean   @default(false)
   stripeConnectPayoutsEnabled   Boolean   @default(false)
   stripeConnectDetailsSubmitted Boolean   @default(false)
+  // This therapist's own Stripe Customer, for their real SaaS subscription — deliberately
+  // separate from User.stripeCustomerId (which is client-subscription-only) rather than
+  // shared, so the client/therapist distinction in webhook lookups is true by schema,
+  // not by convention.
+  stripeCustomerId             String?   @unique
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
   therapist                    Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
@@ -200,6 +205,11 @@ model TherapistSubscription {
   currentPeriodStart DateTime
   currentPeriodEnd   DateTime
   canceledAt         DateTime?
+  // Both nullable — unlike ClientSubscription's non-null equivalents, a Starter row is a
+  // real, persisted, Stripe-less state this app keeps forever (ClientSubscription never
+  // occupies that state: Free has no row at all).
+  stripeSubscriptionId String?          @unique
+  stripePriceId         String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   therapist          Therapist          @relation(fields: [therapistId], references: [id], onDelete: Cascade)
@@ -218,6 +228,9 @@ model Invoice {
   currency       String
   status         InvoiceStatus         @default(paid)
   issuedAt       DateTime              @default(now())
+  // Traceability only — idempotency stays entirely on the @@unique([subscriptionId,
+  // periodStart]) constraint below, same as before this field existed.
+  stripeInvoiceId String?              @unique
   subscription   TherapistSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   commission     AffiliateCommission?
 
@@ -232,7 +245,9 @@ enum BillingCycle {
 
 enum SubscriptionStatus {
   active
+  past_due
   canceled
+  incomplete
 }
 
 enum InvoiceStatus {

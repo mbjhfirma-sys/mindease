@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { stripe } from "@/lib/stripe";
 import { reconcileSubscription, createInvoiceForPeriod } from "@/lib/subscriptionBilling";
 import { THERAPIST_PLANS, planById } from "@/lib/therapistPlans";
 
@@ -23,7 +24,10 @@ export async function GET() {
   return NextResponse.json({ subscription, plans: THERAPIST_PLANS });
 }
 
-const postSchema = z.object({ planId: z.enum(["starter", "professional", "practice"]) });
+// Starter only — paid tiers now go through /checkout, which creates a real Stripe
+// subscription. Leaving this accepting all 3 tiers (as it did before real billing existed)
+// would let a raw POST {planId:"practice"} hand out a paid tier for free.
+const postSchema = z.object({ planId: z.enum(["starter"]) });
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -85,19 +89,45 @@ export async function PATCH(req: NextRequest) {
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const data: { planId?: string; priceCents?: number; autoRenew?: boolean; status?: "active" | "canceled"; canceledAt?: Date } = {};
-  if (parsed.data.planId) {
-    const plan = planById(parsed.data.planId);
-    if (!plan) return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
-    data.planId = plan.id;
-    data.priceCents = plan.priceCents;
-  }
-  if (parsed.data.autoRenew !== undefined) data.autoRenew = parsed.data.autoRenew;
-  if (parsed.data.cancel) {
-    data.status = "canceled";
-    data.canceledAt = new Date();
+  if (!existing.stripeSubscriptionId) {
+    // Starter-local path — unchanged behavior from before real billing existed.
+    if (parsed.data.planId && parsed.data.planId !== "starter") {
+      return NextResponse.json({ error: "Use /checkout to subscribe to a paid plan" }, { status: 400 });
+    }
+    const data: { autoRenew?: boolean; status?: "active" | "canceled"; canceledAt?: Date } = {};
+    if (parsed.data.autoRenew !== undefined) data.autoRenew = parsed.data.autoRenew;
+    if (parsed.data.cancel) {
+      data.status = "canceled";
+      data.canceledAt = new Date();
+    }
+    const subscription = await db.therapistSubscription.update({ where: { id: existing.id }, data });
+    return NextResponse.json({ subscription });
   }
 
-  const subscription = await db.therapistSubscription.update({ where: { id: existing.id }, data });
-  return NextResponse.json({ subscription });
+  // Real, Stripe-backed subscription — every change below is a direct Stripe API call; the
+  // webhook (not this route) is what ever writes the resulting state back to the DB.
+  if (parsed.data.planId === "professional" || parsed.data.planId === "practice") {
+    const plan = planById(parsed.data.planId);
+    if (!plan?.stripePriceId) return NextResponse.json({ error: "Plan not configured" }, { status: 500 });
+    const stripeSub = await stripe.subscriptions.retrieve(existing.stripeSubscriptionId);
+    const currentItem = stripeSub.items.data[0];
+    await stripe.subscriptions.update(existing.stripeSubscriptionId, {
+      items: [{ id: currentItem.id, price: plan.stripePriceId }],
+      proration_behavior: "create_prorations",
+    });
+    return NextResponse.json({ ok: true, pending: true });
+  }
+
+  if (parsed.data.planId === "starter" || parsed.data.cancel || parsed.data.autoRenew !== undefined) {
+    // "Downgrade to Starter," the explicit Cancel action, and the autoRenew toggle all
+    // collapse into the same real operation on a Stripe-backed row — Stripe's own default
+    // Portal cancel button schedules at period end too, it doesn't cancel immediately.
+    const cancelAtPeriodEnd = parsed.data.planId === "starter" || parsed.data.cancel === true
+      ? true
+      : parsed.data.autoRenew === false;
+    await stripe.subscriptions.update(existing.stripeSubscriptionId, { cancel_at_period_end: cancelAtPeriodEnd });
+    return NextResponse.json({ ok: true, pending: true });
+  }
+
+  return NextResponse.json({ error: "No changes requested" }, { status: 400 });
 }

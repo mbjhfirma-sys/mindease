@@ -150,7 +150,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const client = await db.user.findUnique({ where: { id }, select: { name: true, role: true } });
   if (!client || client.role !== "CLIENT") return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  await assignClientToTherapist(id, client.name, parsed.data.reassignTherapistId);
+  // Admin reassignment bypasses the client-count cap — an admin handling an exceptional
+  // case shouldn't be blocked by a subscription-tier technicality.
+  await assignClientToTherapist(id, client.name, parsed.data.reassignTherapistId, { bypassCapacityCheck: true });
 
   await db.adminAuditLog.create({
     data: { adminId: session.user.id, action: "user.reassigned_therapist", targetType: "User", targetId: id },

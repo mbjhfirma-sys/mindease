@@ -74,15 +74,20 @@ export async function POST(req: NextRequest) {
   const match = await findBestMatch({ concerns, languagePreference, genderPreference, ageRange, modalityPreference, affirmingCarePreferences });
 
   if (match) {
-    await assignClientToTherapist(session.user.id, client?.name ?? "A client", match.id);
-    await recordMatchReasoning(session.user.id, match.id, match.score, match.factors, "auto");
-    await db.user.update({ where: { id: session.user.id }, data: { hasOnboarded: true } });
-    return NextResponse.json({
-      matched: true,
-      therapist: { name: match.name, title: match.title, specializations: match.specializations, yearsOfExperience: match.yearsOfExperience },
-      score: match.score,
-      factors: match.factors,
-    });
+    // findBestMatch already excludes at-capacity Starter therapists from consideration —
+    // this should never actually reject in practice, handled defensively in case of a
+    // race with another assignment landing between the match and this call.
+    const result = await assignClientToTherapist(session.user.id, client?.name ?? "A client", match.id);
+    if (result.ok) {
+      await recordMatchReasoning(session.user.id, match.id, match.score, match.factors, "auto");
+      await db.user.update({ where: { id: session.user.id }, data: { hasOnboarded: true } });
+      return NextResponse.json({
+        matched: true,
+        therapist: { name: match.name, title: match.title, specializations: match.specializations, yearsOfExperience: match.yearsOfExperience },
+        score: match.score,
+        factors: match.factors,
+      });
+    }
   }
 
   await db.user.update({ where: { id: session.user.id }, data: { hasOnboarded: true } });
