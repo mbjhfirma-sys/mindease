@@ -11,7 +11,7 @@ export async function GET() {
     where: { role: "CLIENT" },
     orderBy: { createdAt: "desc" },
     select: {
-      id: true, name: true, email: true, avatar: true, plan: true, xp: true, level: true, createdAt: true,
+      id: true, name: true, email: true, avatar: true, plan: true, createdAt: true,
       assignedTherapist: { select: { id: true, user: { select: { name: true } } } },
       missionCompletions: { select: { id: true }, take: 1 },
     },
@@ -24,8 +24,6 @@ export async function GET() {
       email: u.email,
       avatar: u.avatar,
       plan: u.plan,
-      xp: u.xp,
-      level: u.level,
       createdAt: u.createdAt,
       therapistId: u.assignedTherapist?.id ?? null,
       therapistName: u.assignedTherapist?.user.name ?? null,

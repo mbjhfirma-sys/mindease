@@ -206,8 +206,8 @@ export default function JournalPage() {
       {/* Tabs */}
       <div className="flex border-b border-stone-100">
         {([
-          { id: "entries", label: "Entries",     icon: <BookOpen size={14} /> },
           { id: "new",     label: "Write",        icon: <PenLine size={14} /> },
+          { id: "entries", label: "Entries",     icon: <BookOpen size={14} /> },
           { id: "trends",  label: "Mood Trends",  icon: <TrendingUp size={14} /> },
         ] as { id: Tab; label: string; icon: React.ReactNode }[]).map((t) => (
           <button

@@ -21,6 +21,7 @@ type Props = {
 export default function NotificationPanel({ role: _role }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -32,10 +33,15 @@ export default function NotificationPanel({ role: _role }: Props) {
       .then((d) => setItems(d.notifications ?? []));
   }, []);
 
+  function closePanel() {
+    setOpen(false);
+    setExpanded(false);
+  }
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
+        closePanel();
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -54,7 +60,7 @@ export default function NotificationPanel({ role: _role }: Props) {
 
   function handleSelect(n: NotificationItem) {
     markRead(n.id);
-    setOpen(false);
+    closePanel();
     if (n.href) router.push(n.href);
   }
 
@@ -63,7 +69,7 @@ export default function NotificationPanel({ role: _role }: Props) {
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? closePanel() : setOpen(true))}
         className="relative p-2 rounded-xl text-sage-600 hover:text-sage-700 hover:bg-sage-50 transition-colors"
         aria-label="Notifications"
       >
@@ -84,7 +90,7 @@ export default function NotificationPanel({ role: _role }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-stone-100 z-50 overflow-hidden">
+        <div className="fixed inset-x-4 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-2xl shadow-xl border border-stone-100 z-50 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100">
             <span className="font-semibold text-stone-800 text-sm">Notifications</span>
             {unread > 0 && (
@@ -97,7 +103,11 @@ export default function NotificationPanel({ role: _role }: Props) {
             )}
           </div>
 
-          <ul className="max-h-80 overflow-y-auto divide-y divide-stone-50">
+          <ul
+            className={`overflow-y-auto divide-y divide-stone-50 transition-[max-height] duration-200 ${
+              expanded ? "max-h-[60vh]" : "max-h-80"
+            }`}
+          >
             {items.length === 0 ? (
               <li className="px-4 py-8 text-center text-stone-400 text-sm">No notifications</li>
             ) : (
@@ -127,11 +137,16 @@ export default function NotificationPanel({ role: _role }: Props) {
             )}
           </ul>
 
-          <div className="border-t border-stone-100 px-4 py-2.5 text-center">
-            <button className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-              View all notifications
-            </button>
-          </div>
+          {items.length > 4 && (
+            <div className="border-t border-stone-100 px-4 py-2.5 text-center">
+              <button
+                onClick={() => setExpanded((v) => !v)}
+                className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+              >
+                {expanded ? "Show less" : "View all notifications"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
