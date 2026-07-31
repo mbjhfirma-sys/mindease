@@ -7,6 +7,7 @@ declare module "next-auth" {
       role: "CLIENT" | "THERAPIST" | "ADMIN";
       therapistStatus?: "pending" | "approved" | "rejected" | null;
       hasOnboarded?: boolean;
+      hasIntake?: boolean;
       profileCompleted?: boolean;
     } & DefaultSession["user"];
   }
@@ -23,8 +24,9 @@ declare module "next-auth/jwt" {
     role: "CLIENT" | "THERAPIST" | "ADMIN";
     therapistStatus?: "pending" | "approved" | "rejected" | null;
     hasOnboarded?: boolean;
+    hasIntake?: boolean;
     profileCompleted?: boolean;
-    /** Epoch ms of the last therapistStatus/hasOnboarded DB refresh — see auth.ts's jwt callback. */
+    /** Epoch ms of the last therapistStatus/hasOnboarded/hasIntake DB refresh — see auth.ts's jwt callback. */
     statusCheckedAt?: number;
     /** Epoch ms of the last login-streak sync — see auth.ts's jwt callback and lib/loginStreak.ts. */
     streakSyncedAt?: number;

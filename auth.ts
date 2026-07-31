@@ -106,9 +106,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (statusIsStale && token.role === "CLIENT" && token.id) {
         const client = await db.user.findUnique({
           where: { id: token.id as string },
-          select: { hasOnboarded: true },
+          select: { hasOnboarded: true, clientIntake: { select: { id: true } } },
         });
         token.hasOnboarded = client?.hasOnboarded ?? true;
+        token.hasIntake = client ? !!client.clientIntake : true;
         token.statusCheckedAt = Date.now();
       }
       return token;
@@ -120,6 +121,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.therapistStatus =
           (token.therapistStatus as "pending" | "approved" | "rejected" | null) ?? null;
         session.user.hasOnboarded = token.hasOnboarded as boolean | undefined;
+        session.user.hasIntake = token.hasIntake as boolean | undefined;
         session.user.profileCompleted = token.profileCompleted as boolean | undefined;
       }
       return session;

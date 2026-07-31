@@ -96,6 +96,7 @@ export async function GET() {
           include: { user: { select: { name: true, avatar: true } } },
         },
         therapistProfile: { select: { id: true, title: true, specializations: true, rating: true } },
+        clientIntake: { select: { id: true } },
         couponRedemption: {
           select: {
             discountValueSnapshot: true,
@@ -106,6 +107,9 @@ export async function GET() {
     });
 
     if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const { clientIntake, ...userWithoutIntake } = user;
+    const hasIntake = !!clientIntake;
 
     let premiumCreditAvailable = false;
     if (user.plan === "premium") {
@@ -137,23 +141,25 @@ export async function GET() {
       }
       return NextResponse.json({
         user: {
-          ...user,
+          ...userWithoutIntake,
           clientCode: code,
           notificationPrefs: user.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS,
           privacyPrefs: user.privacyPrefs ?? DEFAULT_PRIVACY_PREFS,
           dataDirective: user.dataDirective ?? DEFAULT_DATA_DIRECTIVE,
           premiumCreditAvailable,
+          hasIntake,
         },
       });
     }
 
     return NextResponse.json({
       user: {
-        ...user,
+        ...userWithoutIntake,
         notificationPrefs: user.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS,
         privacyPrefs: user.privacyPrefs ?? DEFAULT_PRIVACY_PREFS,
         dataDirective: user.dataDirective ?? DEFAULT_DATA_DIRECTIVE,
         premiumCreditAvailable,
+        hasIntake,
       },
     });
   } catch (err) {

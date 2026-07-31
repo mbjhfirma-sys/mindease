@@ -37,7 +37,10 @@ export default auth((req) => {
     if (user.role !== "CLIENT") {
       return NextResponse.redirect(new URL(homeFor(user.role), req.url));
     }
-    if (user.hasOnboarded) {
+    // Users who hit "Skip for now" have hasOnboarded=true but never actually
+    // filled out ClientIntake — let them back in so they can still add concerns
+    // later (unlocks Mindo course recommendations, therapist matching, etc.).
+    if (user.hasOnboarded && user.hasIntake) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
     return NextResponse.next();

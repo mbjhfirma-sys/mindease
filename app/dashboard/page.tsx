@@ -145,6 +145,7 @@ export default function DashboardPage() {
   const [mindoFacts, setMindoFacts] = useState<DailyFacts | null>(null);
   const [showMindoFacts, setShowMindoFacts] = useState(false);
   const [mindoIntroSeen, setMindoIntroSeen] = useState(true);
+  const [hasIntake, setHasIntake] = useState(true);
 
   const [activeTask,  setActiveTask]  = useState<Mission | null>(null);
   const [moodScore,   setMoodScore]   = useState<number | null>(null);
@@ -199,6 +200,7 @@ export default function DashboardPage() {
         setUserName(first);
       }
       setMindoIntroSeen(uData.user?.privacyPrefs?.mindoIntroSeen ?? false);
+      setHasIntake(uData.user?.hasIntake ?? true);
       if (briefingData.enabled && briefingData.briefingText) {
         setMindoBriefing(briefingData.briefingText);
         setMindoFacts(briefingData.facts ?? null);
@@ -335,6 +337,23 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Complete-profile nudge — shown to clients who skipped the intake quiz */}
+      {!loading && !hasIntake && (
+        <Link
+          href="/onboarding"
+          className="flex items-center gap-4 bg-sage-50 border border-sage-100 rounded-xl px-4 py-3.5 hover:bg-sage-100/60 transition-colors group"
+        >
+          <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
+            <ClipboardList size={16} className="text-sage-700" strokeWidth={1.5} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-sage-800">Finish setting up your profile</p>
+            <p className="text-xs text-sage-600 mt-0.5">Tell us what brings you here to unlock personalized course picks from Mindo and get matched with a therapist.</p>
+          </div>
+          <ArrowRight size={16} className="text-sage-500 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
+        </Link>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
