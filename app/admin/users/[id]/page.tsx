@@ -154,7 +154,6 @@ function AdminUserDetailInner({ id }: { id: string }) {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg font-semibold text-stone-900">{user.name}</h1>
-                <span className="text-[10px] border border-stone-200 text-stone-400 px-1.5 py-0.5 rounded font-medium">Level {user.level}</span>
               </div>
               <div className="text-xs text-stone-500 mt-0.5">{user.plan} · {user.email}</div>
               <div className="text-xs text-stone-400 mt-0.5">
@@ -167,7 +166,6 @@ function AdminUserDetailInner({ id }: { id: string }) {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 pt-4 border-t border-stone-100">
           {[
             { label: "Avg mood", value: moodAvg > 0 ? moodAvg.toFixed(1) : "—" },
-            { label: "XP earned", value: `${user.xp} xp` },
             { label: "2FA", value: user.twoFactorEnabled ? "On" : "Off" },
             { label: "Onboarded", value: user.hasOnboarded ? "Yes" : "No" },
           ].map((s) => (
@@ -518,7 +516,6 @@ function AdminUserDetailInner({ id }: { id: string }) {
                             <div className="text-sm font-medium text-stone-800">{m.mission.title}</div>
                             <div className="flex gap-3 mt-1 text-xs text-stone-400">
                               <span className="capitalize">{m.mission.category}</span>
-                              <span>+{m.mission.xp} xp</span>
                               <span>{new Date(m.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                             </div>
                           </div>

@@ -20,8 +20,6 @@ model User {
   dob                          DateTime?
   timezone                     String                        @default("UTC")
   language                     String                        @default("en")
-  xp                           Int                           @default(0)
-  level                        Int                           @default(1)
   createdAt                    DateTime                      @default(now())
   updatedAt                    DateTime                      @updatedAt
   therapistId                  String?
@@ -714,7 +712,6 @@ model Mission {
   description  String
   category     String
   duration     Int
-  xp           Int                 @default(10)
   recurring    Boolean             @default(true)
   activityType String              @default("generic")
   therapistId  String?
@@ -1402,7 +1399,6 @@ model Challenge {
   category     String
   difficulty   String                 @default("Beginner")
   totalDays    Int
-  xpReward     Int                    @default(50)
   activityType String                 @default("generic")
   createdAt    DateTime               @default(now())
   participants ChallengeParticipant[]

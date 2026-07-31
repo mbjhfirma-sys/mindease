@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       missionCompletions: {
         orderBy: { completedAt: "desc" },
         take: 50,
-        select: { id: true, completedAt: true, responseData: true, mission: { select: { id: true, title: true, category: true, xp: true, activityType: true } } },
+        select: { id: true, completedAt: true, responseData: true, mission: { select: { id: true, title: true, category: true, activityType: true } } },
       },
       achievements: { orderBy: { earnedAt: "desc" } },
       courseEnrollments: { orderBy: { assignedAt: "desc" } },
@@ -84,8 +84,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       dob: user.dob,
       timezone: user.timezone,
       language: user.language,
-      xp: user.xp,
-      level: user.level,
       createdAt: user.createdAt,
       twoFactorEnabled: user.twoFactorEnabled,
       hasOnboarded: user.hasOnboarded,

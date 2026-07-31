@@ -7,7 +7,7 @@ import type { MatchReasonFactor } from "@/lib/matching";
 
 type Client = {
   id: string; name: string; email: string; avatar: string | null;
-  plan: string; xp: number; level: number; joinedAt: string;
+  plan: string; joinedAt: string;
   recentMoods: { score: number; date: string }[];
   lastActivity: string;
   riskLevel: "low" | "medium" | "high";

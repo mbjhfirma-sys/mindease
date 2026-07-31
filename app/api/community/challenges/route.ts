@@ -17,7 +17,6 @@ async function ensureDefaultChallengesExist() {
         category: c.category,
         difficulty: c.difficulty,
         totalDays: c.totalDays,
-        xpReward: c.xpReward,
         activityType: c.activityType,
       };
       return db.challenge.upsert({ where: { id: c.id }, update: data, create: { id: c.id, ...data } });
@@ -55,7 +54,6 @@ export async function GET() {
       category: c.category,
       difficulty: c.difficulty,
       totalDays: c.totalDays,
-      xpReward: c.xpReward,
       activityType: c.activityType,
       participantCount: c._count.participants,
       joined: !!me,

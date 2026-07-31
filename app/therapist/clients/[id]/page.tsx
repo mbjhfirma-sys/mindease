@@ -22,7 +22,7 @@ type DigestData = { enabled: boolean; digestText?: string; facts?: WeeklyFacts; 
 type ApiJournalEntry = { id: string; title: string; content: string; mood: number; emotions: string[]; createdAt: string };
 type ApiMission = {
   id: string; completedAt: string; responseData: Record<string, unknown> | null;
-  mission: { id: string; title: string; category: string; xp: number; activityType: string };
+  mission: { id: string; title: string; category: string; activityType: string };
 };
 type ApiAppt = { id: string; date: string; duration: number; type: string; status: string };
 type ApiAssessmentResult = { id: string; assessmentId: string; score: number; label: string; createdAt: string };
@@ -36,7 +36,7 @@ type ApiIntake = {
 type OpenRiskFlag = { id: string; source: string; severity: "high" | "moderate"; detail: string; createdAt: string };
 
 type ClientData = {
-  id: string; name: string; email: string; plan: string; level: number; xp: number;
+  id: string; name: string; email: string; plan: string;
   memberSince: string; moodHistory: { score: number; date: string }[]; moodAvg: number;
   streak: number; riskLevel: RiskLevel; riskFlags: OpenRiskFlag[]; activeStepUpWindow: ActiveStepUpWindow | null;
   matchReasoning: { method: string; totalScore: number; factors: MatchReasonFactor[]; createdAt: string } | null;
@@ -581,9 +581,6 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   <span className={`w-1.5 h-1.5 rounded-full ${RISK_DOT_CLASS[client.riskLevel]}`} />
                   {client.riskLevel} risk
                 </span>
-                <span className="text-[10px] border border-stone-200 text-stone-400 px-1.5 py-0.5 rounded font-medium">
-                  Level {client.level}
-                </span>
               </div>
               <div className="text-xs text-stone-500 mt-0.5">{client.plan} · {client.email}</div>
               <div className="text-xs text-stone-400 mt-0.5">
@@ -610,7 +607,6 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             { label: "Avg mood", value: moodAvg > 0 ? moodAvg.toFixed(1) : "—" },
             { label: "Streak", value: `${client.streak}d` },
             { label: "Completed tasks", value: String(completedCount) },
-            { label: "XP earned", value: `${client.xp} xp` },
             { label: "Last session", value: lastSession ? fmtApptDate(lastSession.date) : "—" },
             { label: "Next session", value: nextSession ? fmtApptDate(nextSession.date) : "—" },
           ].map((s) => (
@@ -1162,7 +1158,6 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                           <div className="text-sm font-medium text-stone-800 line-through text-stone-400">{m.mission.title}</div>
                           <div className="flex gap-3 mt-1 text-xs text-stone-400">
                             <span className="capitalize">{m.mission.category}</span>
-                            <span>+{m.mission.xp} xp</span>
                             <span>{new Date(m.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                             {hasResponse && <span className="text-stone-500 font-medium">Response recorded</span>}
                           </div>

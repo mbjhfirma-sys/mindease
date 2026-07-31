@@ -16,13 +16,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const client = await db.user.findFirst({
     where: { id: clientId, therapistId: therapist.id },
     select: {
-      id: true, name: true, email: true, avatar: true, plan: true, level: true, xp: true, createdAt: true,
+      id: true, name: true, email: true, avatar: true, plan: true, createdAt: true,
       timezone: true,
       privacyPrefs: true,
       moodEntries: { select: { score: true, note: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 14 },
       journalEntries: { select: { id: true, title: true, content: true, mood: true, emotions: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 20 },
       missionCompletions: {
-        select: { id: true, completedAt: true, responseData: true, mission: { select: { id: true, title: true, category: true, xp: true, activityType: true } } },
+        select: { id: true, completedAt: true, responseData: true, mission: { select: { id: true, title: true, category: true, activityType: true } } },
         orderBy: { completedAt: "desc" },
         take: 30,
       },
@@ -104,8 +104,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       email: client.email,
       avatar: client.avatar,
       plan: client.plan,
-      level: client.level,
-      xp: client.xp,
       memberSince: client.createdAt,
       moodHistory: client.moodEntries.map((m) => ({ score: m.score, note: m.note, date: m.createdAt })),
       moodAvg,

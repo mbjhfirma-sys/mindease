@@ -17,7 +17,7 @@ const steps = [
   {
     num: "3",
     title: "Build momentum",
-    desc: "Complete missions to earn XP, build streaks, and unlock achievements as you go.",
+    desc: "Complete missions to build streaks and unlock achievements as you go.",
   },
   {
     num: "4",

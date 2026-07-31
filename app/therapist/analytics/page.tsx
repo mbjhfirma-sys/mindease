@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 type ApiClient = {
-  id: string; name: string; email: string; plan: string; level: number; xp: number;
+  id: string; name: string; email: string; plan: string;
   recentMoods: { score: number; date: string }[];
   missionCompletion: number; riskLevel: "low" | "medium" | "high";
 };

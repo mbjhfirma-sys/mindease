@@ -18,8 +18,6 @@ export async function GET() {
           email: true,
           avatar: true,
           plan: true,
-          xp: true,
-          level: true,
           createdAt: true,
           timezone: true,
           missionCompletions: {
@@ -114,8 +112,6 @@ export async function GET() {
       email: c.email,
       avatar: c.avatar,
       plan: c.plan,
-      xp: c.xp,
-      level: c.level,
       joinedAt: c.createdAt,
       recentMoods: c.moodEntries.map((m) => ({ score: m.score, date: m.createdAt })),
       lastActivity: c.missionCompletions[0]?.id ? "recent" : "inactive",

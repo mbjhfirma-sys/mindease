@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       user: { select: { name: true, email: true, avatar: true } },
       clients: {
         select: {
-          id: true, name: true, email: true, avatar: true, plan: true, xp: true, level: true, createdAt: true,
+          id: true, name: true, email: true, avatar: true, plan: true, createdAt: true,
           missionCompletions: { select: { id: true }, take: 1 },
         },
       },
@@ -71,7 +71,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       verifiedAt: therapist.verifiedAt,
       createdAt: therapist.createdAt,
       clients: therapist.clients.map((c) => ({
-        id: c.id, name: c.name, email: c.email, avatar: c.avatar, plan: c.plan, xp: c.xp, level: c.level, createdAt: c.createdAt,
+        id: c.id, name: c.name, email: c.email, avatar: c.avatar, plan: c.plan, createdAt: c.createdAt,
         therapistId: therapist.id, therapistName: therapist.user.name,
         lastActivity: c.missionCompletions.length > 0 ? "recent" : "inactive",
       })),

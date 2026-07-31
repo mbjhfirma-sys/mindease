@@ -98,39 +98,13 @@ function MoodQuickCheckin() {
   );
 }
 
-function ProgressPreview() {
-  const [stats, setStats] = useState<{ xp: number; level: number } | null>(null);
-
-  useEffect(() => {
-    fetch("/api/user")
-      .then((r) => r.json())
-      .then((d) => { if (d.user) setStats({ xp: d.user.xp ?? 0, level: d.user.level ?? 1 }); })
-      .catch(() => {});
-  }, []);
-
-  if (!stats) return null;
-  return (
-    <div className="bg-stone-50 border border-stone-100 rounded-xl p-3 flex items-center justify-around text-center">
-      <div>
-        <p className="text-lg font-bold text-stone-900">{stats.level}</p>
-        <p className="text-[10px] text-stone-400 uppercase tracking-wide">Level</p>
-      </div>
-      <div className="w-px h-8 bg-stone-200" />
-      <div>
-        <p className="text-lg font-bold text-stone-900">{stats.xp}</p>
-        <p className="text-[10px] text-stone-400 uppercase tracking-wide">XP earned</p>
-      </div>
-    </div>
-  );
-}
-
 // ── The tour itself ──────────────────────────────────────────────────────────
 
 export const CLIENT_TOUR: TourStep[] = [
   {
     Icon: LayoutDashboard,
     title: "Today's Tasks",
-    body: "You'll always have exactly 5 tasks here, every day — a mix picked for you, or set by your therapist once they've built out your plan. Complete them for XP.",
+    body: "You'll always have exactly 5 tasks here, every day — a mix picked for you, or set by your therapist once they've built out your plan.",
     accent: "bg-sage-50 text-sage-700",
     route: "/dashboard",
     targetTour: "/dashboard",
@@ -212,10 +186,9 @@ export const CLIENT_TOUR: TourStep[] = [
   {
     Icon: BarChart2,
     title: "Progress",
-    body: "Every task you complete earns XP and builds your streak. This is where it all adds up — levels, streaks, and badges for real consistency.",
+    body: "Every task you complete builds your streak. This is where it all adds up — streaks and badges for real consistency.",
     accent: "bg-emerald-50 text-emerald-700",
     route: "/dashboard/achievements",
     targetTour: "/dashboard/achievements",
-    Extra: ProgressPreview,
   },
 ];

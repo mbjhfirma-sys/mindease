@@ -70,7 +70,6 @@ async function ensureDefaultMissionsExist() {
         description: m.description,
         category: m.category,
         duration: m.duration,
-        xp: m.xp,
         recurring: m.recurring,
         activityType: m.activityType,
         therapistId: null,
@@ -161,7 +160,6 @@ export async function GET() {
         description: src.description,
         category: src.category,
         duration: src.duration,
-        xp: src.xp,
         recurring: src.recurring,
         activityType: src.activityType ?? "generic",
         completed: completedIds.has(m.id),
@@ -213,10 +211,7 @@ export async function POST(req: NextRequest) {
   const existing = await db.missionCompletion.findFirst({ where: existingWhere });
   if (existing) return NextResponse.json({ ok: true, alreadyCompleted: true });
 
-  await Promise.all([
-    db.missionCompletion.create({ data: { userId: session.user.id, missionId, responseData } }),
-    db.user.update({ where: { id: session.user.id }, data: { xp: { increment: mission.xp } } }),
-  ]);
+  await db.missionCompletion.create({ data: { userId: session.user.id, missionId, responseData } });
 
-  return NextResponse.json({ ok: true, xpEarned: mission.xp });
+  return NextResponse.json({ ok: true });
 }

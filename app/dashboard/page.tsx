@@ -19,7 +19,7 @@ import {
 type Category = "mindfulness" | "movement" | "journaling" | "breathing" | "social" | "habit";
 type Mission = {
   id: string; title: string; description: string; category: Category;
-  duration: number; xp: number; completed: boolean; dueTime?: string | null; activityType?: string;
+  duration: number; completed: boolean; dueTime?: string | null; activityType?: string;
 };
 type Course = {
   id: string; title: string; instructor: string; progress: number;
@@ -32,11 +32,11 @@ type Appt = {
 };
 
 const FALLBACK_MISSIONS: Mission[] = [
-  { id: "default_breathing",  title: "4-7-8 Breathing",        description: "Two rounds of 4-7-8 breathing to reduce stress.",   category: "breathing",   duration: 5,  xp: 10, completed: false, activityType: "breathing" },
-  { id: "default_journal",    title: "Daily Gratitude Entry",   description: "Write three things you're grateful for today.",      category: "journaling",  duration: 5,  xp: 15, completed: false, activityType: "gratitude" },
-  { id: "default_meditation", title: "Morning Mindfulness",     description: "10 minutes of breath-awareness meditation.",         category: "mindfulness", duration: 10, xp: 25, completed: false, activityType: "timer" },
-  { id: "default_walk",       title: "Mindful Walk",            description: "15-minute walk outside with grounding awareness.",   category: "movement",    duration: 15, xp: 20, completed: false, activityType: "walk" },
-  { id: "default_checkin",    title: "Evening Check-in",        description: "Reflect on one challenge from today for 5 minutes.", category: "journaling",  duration: 5,  xp: 15, completed: false, activityType: "reflection" },
+  { id: "default_breathing",  title: "4-7-8 Breathing",        description: "Two rounds of 4-7-8 breathing to reduce stress.",   category: "breathing",   duration: 5,  completed: false, activityType: "breathing" },
+  { id: "default_journal",    title: "Daily Gratitude Entry",   description: "Write three things you're grateful for today.",      category: "journaling",  duration: 5,  completed: false, activityType: "gratitude" },
+  { id: "default_meditation", title: "Morning Mindfulness",     description: "10 minutes of breath-awareness meditation.",         category: "mindfulness", duration: 10, completed: false, activityType: "timer" },
+  { id: "default_walk",       title: "Mindful Walk",            description: "15-minute walk outside with grounding awareness.",   category: "movement",    duration: 15, completed: false, activityType: "walk" },
+  { id: "default_checkin",    title: "Evening Check-in",        description: "Reflect on one challenge from today for 5 minutes.", category: "journaling",  duration: 5,  completed: false, activityType: "reflection" },
 ];
 
 const MOOD_OPTIONS = [

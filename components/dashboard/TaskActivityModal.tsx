@@ -5,7 +5,7 @@ import { X, Check, ChevronLeft, RefreshCw } from "lucide-react";
 
 type Mission = {
   id: string; title: string; description: string;
-  category: string; duration: number | string; xp: number;
+  category: string; duration: number | string;
   completed?: boolean; dueTime?: string | null; assignedBy?: string; activityType?: string;
 };
 

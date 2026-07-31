@@ -31,8 +31,6 @@ export interface UserProfile {
   dob: string | null;
   timezone: string;
   language: string;
-  xp: number;
-  level: number;
   createdAt: string;
   assignedTherapist?: {
     id: string;
@@ -99,7 +97,6 @@ export interface MissionItem {
   description: string;
   category: string;
   duration: number;
-  xp: number;
   recurring: boolean;
   completed: boolean;
   therapistId: string | null;
@@ -243,8 +240,6 @@ export interface TherapistClient {
   email: string;
   avatar: string | null;
   plan: string;
-  xp: number;
-  level: number;
   joinedAt: string;
 }
 
@@ -294,8 +289,6 @@ export interface AdminUserItem {
   email: string;
   avatar: string | null;
   plan: string;
-  xp: number;
-  level: number;
   createdAt: string;
   therapistId: string | null;
   therapistName: string | null;
@@ -317,7 +310,7 @@ export interface AdminMissionCompletionItem {
   id: string;
   completedAt: string;
   responseData: Record<string, unknown> | null;
-  mission: { id: string; title: string; category: string; xp: number; activityType: string };
+  mission: { id: string; title: string; category: string; activityType: string };
 }
 
 export interface AdminCourseProgressSummary {
@@ -393,8 +386,6 @@ export interface AdminUserDetail {
   dob: string | null;
   timezone: string;
   language: string;
-  xp: number;
-  level: number;
   createdAt: string;
   twoFactorEnabled: boolean;
   hasOnboarded: boolean;

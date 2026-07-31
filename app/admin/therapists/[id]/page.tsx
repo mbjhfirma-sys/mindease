@@ -257,7 +257,7 @@ function AdminTherapistDetailInner({ id }: { id: string }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-medium text-stone-800 group-hover:text-stone-900">{c.name}</span>
-                    <div className="text-xs text-stone-400 mt-0.5 truncate">{c.email} · {c.plan} · Level {c.level}</div>
+                    <div className="text-xs text-stone-400 mt-0.5 truncate">{c.email} · {c.plan}</div>
                   </div>
                   <div className="text-right flex-shrink-0 hidden sm:block">
                     <div className="text-xs text-stone-500">Joined</div>

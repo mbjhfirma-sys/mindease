@@ -6,7 +6,7 @@ import { Plus, Pencil, Trash2, Eye, X, Check, ChevronRight, Clock, Repeat2, Pape
 type AttachedFile = { id: string; name: string; size: number; mimeType: string; url: string };
 type Mission = {
   id: string; title: string; description: string; category: string;
-  duration: number; xp: number; recurring: boolean; completionCount: number; createdAt: string;
+  duration: number; recurring: boolean; completionCount: number; createdAt: string;
   attachments: AttachedFile[]; activityType: string;
 };
 type Mode = "list" | "create" | "edit" | "view" | "templates";
@@ -111,7 +111,6 @@ function AssignModal({ mission, onClose }: { mission: Mission; onClose: () => vo
 
 const CATEGORIES = ["mindfulness", "journaling", "breathing", "movement", "exposure", "social", "habit", "safety"];
 const DURATION_OPTS = [5, 10, 15, 20, 30, 45, 60, 90, 120];
-const XP_OPTS = [5, 10, 15, 20, 25, 30, 50];
 
 function fileIcon(mimeType: string) {
   if (mimeType.startsWith("image/")) return <ImageIcon size={14} strokeWidth={1.5} className="text-stone-500" />;
@@ -148,7 +147,7 @@ const ACTIVITY_TYPES: { value: string; label: string; hint: string }[] = [
   { value: "generic",         label: "Simple checklist",     hint: "Description + mark-as-done (for real-world tasks)" },
 ];
 
-const BLANK_FORM = { title: "", description: "", category: "mindfulness", duration: 15, xp: 10, recurring: false, activityType: "generic" };
+const BLANK_FORM = { title: "", description: "", category: "mindfulness", duration: 15, recurring: false, activityType: "generic" };
 type Form = typeof BLANK_FORM;
 
 const CATEGORY_BADGE: Record<string, { bg: string; text: string }> = {
@@ -162,127 +161,127 @@ const CATEGORY_BADGE: Record<string, { bg: string; text: string }> = {
   safety:      { bg: "bg-red-50",     text: "text-red-700" },
 };
 
-type Template = { title: string; description: string; category: string; duration: number; xp: number; recurring: boolean; approach: string; activityType: string };
+type Template = { title: string; description: string; category: string; duration: number; recurring: boolean; approach: string; activityType: string };
 
 const PREMADE_TASKS: Template[] = [
   {
     title: "Thought Record (CBT)",
     description: "Identify a distressing thought, rate your belief (0–100%), challenge it with evidence for and against, then write a balanced alternative thought.",
-    category: "journaling", duration: 15, xp: 20, recurring: true,
+    category: "journaling", duration: 15, recurring: true,
     approach: "CBT", activityType: "thought_record",
   },
   {
     title: "Behavioral Activation Schedule",
     description: "Plan three enjoyable or meaningful activities for the coming week. Rate predicted vs actual pleasure after each to rebuild motivation.",
-    category: "habit", duration: 15, xp: 20, recurring: false,
+    category: "habit", duration: 15, recurring: false,
     approach: "CBT", activityType: "behavioral_activation",
   },
   {
     title: "Exposure Ladder Step",
     description: "Complete the next agreed step on your personal exposure hierarchy. Rate anxiety before, peak, and after using the SUDS scale (0–100).",
-    category: "exposure", duration: 20, xp: 30, recurring: false,
+    category: "exposure", duration: 20, recurring: false,
     approach: "Exposure", activityType: "generic",
   },
   {
     title: "SUDS Anxiety Rating Log",
     description: "Three times today, pause and rate your anxiety on the SUDS scale (0 = calm, 100 = worst ever). Note the situation and any physical sensations.",
-    category: "mindfulness", duration: 5, xp: 10, recurring: true,
+    category: "mindfulness", duration: 5, recurring: true,
     approach: "CBT", activityType: "checkin",
   },
   {
     title: "Safety Plan Review",
     description: "Read through your personal safety plan. Verify that all contact numbers are still correct and that coping strategies still feel accessible.",
-    category: "safety", duration: 5, xp: 15, recurring: true,
+    category: "safety", duration: 5, recurring: true,
     approach: "Crisis", activityType: "generic",
   },
   {
     title: "Opposite Action Practice",
     description: "Notice an emotion urging you toward an unhelpful behavior, then deliberately do the opposite. Log the emotion, the urge, and what you did instead.",
-    category: "habit", duration: 15, xp: 20, recurring: true,
+    category: "habit", duration: 15, recurring: true,
     approach: "DBT", activityType: "reflection",
   },
   {
     title: "Emotion Surfing",
     description: "When a difficult emotion arises, observe it like a wave: notice where you feel it in your body, watch it peak, and stay with it until it subsides without acting on it.",
-    category: "mindfulness", duration: 10, xp: 20, recurring: true,
+    category: "mindfulness", duration: 10, recurring: true,
     approach: "DBT", activityType: "bodyscan",
   },
   {
     title: "TIPP Skill",
     description: "Use all four TIPP steps: Temperature (cold water on face), Intense exercise (60 sec jumping jacks), Paced breathing (4 in / 6 out), Paired muscle relaxation.",
-    category: "breathing", duration: 15, xp: 25, recurring: true,
+    category: "breathing", duration: 15, recurring: true,
     approach: "DBT", activityType: "breathing",
   },
   {
     title: "Check the Facts",
     description: "Write down an upsetting interpretation of an event, then list only the objective facts. Ask: does my emotion fit the actual facts, or an assumed story?",
-    category: "journaling", duration: 10, xp: 15, recurring: true,
+    category: "journaling", duration: 10, recurring: true,
     approach: "DBT", activityType: "worry",
   },
   {
     title: "Wise Mind Meditation",
     description: "Sit quietly and breathe. On each inhale think 'wise', on each exhale think 'mind'. Let thoughts settle until you sense a balanced, centred awareness.",
-    category: "mindfulness", duration: 10, xp: 20, recurring: true,
+    category: "mindfulness", duration: 10, recurring: true,
     approach: "DBT", activityType: "breathing",
   },
   {
     title: "Cognitive Defusion",
     description: "Write a recurring unhelpful thought, then prefix it with 'I notice I am having the thought that…'. Repeat three times. Notice how this creates distance.",
-    category: "mindfulness", duration: 10, xp: 15, recurring: true,
+    category: "mindfulness", duration: 10, recurring: true,
     approach: "ACT", activityType: "reflection",
   },
   {
     title: "Values Card Sort",
     description: "Review a list of 30 life values and sort them into 'very important', 'somewhat important', and 'not important'. Identify your top five and write why each matters.",
-    category: "journaling", duration: 20, xp: 25, recurring: false,
+    category: "journaling", duration: 20, recurring: false,
     approach: "ACT", activityType: "values",
   },
   {
     title: "Committed Action Step",
     description: "Choose one small action that moves you toward a core value today — no matter how tiny. Do it, then write one sentence about how it connected to what matters to you.",
-    category: "habit", duration: 10, xp: 15, recurring: true,
+    category: "habit", duration: 10, recurring: true,
     approach: "ACT", activityType: "generic",
   },
   {
     title: "Activity Monitoring Log",
     description: "Log each activity you do today (in 30-min blocks), rating mood (1–10) and mastery/pleasure. This data helps identify patterns linking behavior to mood.",
-    category: "journaling", duration: 10, xp: 15, recurring: true,
+    category: "journaling", duration: 10, recurring: true,
     approach: "CBT", activityType: "generic",
   },
   {
     title: "Pleasant Events List",
     description: "List 10 activities — large or small — that you used to enjoy or have been curious about. Circle any you could realistically do this week.",
-    category: "journaling", duration: 10, xp: 15, recurring: false,
+    category: "journaling", duration: 10, recurring: false,
     approach: "Behavioral", activityType: "generic",
   },
   {
     title: "Coping Card Creation",
     description: "On an index card or notes app, write one helpful coping statement for your hardest trigger. Keep it with you and read it when you notice the trigger.",
-    category: "habit", duration: 10, xp: 15, recurring: false,
+    category: "habit", duration: 10, recurring: false,
     approach: "CBT", activityType: "self_compassion",
   },
   {
     title: "Interpersonal Effectiveness Script",
     description: "Use the DEAR MAN framework to script a difficult conversation: Describe, Express, Assert, Reinforce, stay Mindful, Appear confident, Negotiate.",
-    category: "social", duration: 15, xp: 20, recurring: false,
+    category: "social", duration: 15, recurring: false,
     approach: "DBT", activityType: "social",
   },
   {
     title: "Sleep Diary Entry",
     description: "Record last night's sleep: bedtime, wake time, number of awakenings, sleep quality (1–5), and morning mood. Helps identify patterns over time.",
-    category: "journaling", duration: 5, xp: 10, recurring: true,
+    category: "journaling", duration: 5, recurring: true,
     approach: "Sleep", activityType: "checkin",
   },
   {
     title: "Distress Tolerance Box",
     description: "Gather 5 items that engage your senses and bring comfort (scented lotion, a photo, a smooth stone, gum, a playlist). Assemble your personal soothe kit.",
-    category: "habit", duration: 20, xp: 15, recurring: false,
+    category: "habit", duration: 20, recurring: false,
     approach: "DBT", activityType: "walk",
   },
   {
     title: "Strengths Inventory",
     description: "List 5 personal character strengths you demonstrated this week — even in small ways. For each, write one sentence about how you showed it.",
-    category: "journaling", duration: 15, xp: 20, recurring: false,
+    category: "journaling", duration: 15, recurring: false,
     approach: "Positive", activityType: "strength",
   },
 
@@ -291,7 +290,6 @@ const PREMADE_TASKS: Template[] = [
     description: "List three good things from today, no matter how small, and note briefly why each one mattered to you.",
     category: "journaling",
     duration: 5,
-    xp: 8,
     recurring: true,
     approach: "Positive",
     activityType: "gratitude",
@@ -301,7 +299,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Choose the mood that best captures your day, then freely write about what shaped that emotional weather and what you noticed in yourself.",
     category: "journaling",
     duration: 12,
-    xp: 15,
     recurring: true,
     approach: "Mindfulness",
     activityType: "reflection",
@@ -311,7 +308,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Reflect on where you are right now and write an open letter to yourself one year from now, describing what you hope will be different and what you want to remember.",
     category: "journaling",
     duration: 18,
-    xp: 20,
     recurring: false,
     approach: "ACT",
     activityType: "reflection",
@@ -321,7 +317,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Pick your mood, then write freely about a recent interaction that stayed with you - what happened, what you felt, and what you'd want the other person to understand.",
     category: "journaling",
     duration: 15,
-    xp: 18,
     recurring: false,
     approach: "Interpersonal",
     activityType: "reflection",
@@ -331,7 +326,6 @@ const PREMADE_TASKS: Template[] = [
     description: "After your session, note your mood and free-write about what came up, what felt important, and what you want to carry forward before next time.",
     category: "journaling",
     duration: 15,
-    xp: 18,
     recurring: true,
     approach: "Psychoeducation",
     activityType: "reflection",
@@ -341,7 +335,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Reflect on the past week as a whole - what drained you, what energized you, and what you'd like to do differently next week - and write it out in your own words.",
     category: "journaling",
     duration: 18,
-    xp: 20,
     recurring: true,
     approach: "Behavioral",
     activityType: "reflection",
@@ -351,7 +344,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Pick your mood, then write about a decision you're facing, exploring what your emotions want, what logic says, and where your 'wise mind' lands.",
     category: "journaling",
     duration: 15,
-    xp: 18,
     recurring: false,
     approach: "DBT",
     activityType: "reflection",
@@ -361,7 +353,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Write down a worry that's been circling in your mind, decide whether it's something in your control, partially in your control, or not in your control, then note one concrete next step.",
     category: "journaling",
     duration: 12,
-    xp: 15,
     recurring: true,
     approach: "CBT",
     activityType: "worry",
@@ -371,7 +362,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Capture a worst-case thought you've been dwelling on, assess how much of it you can actually influence, and write one grounded action or release plan.",
     category: "journaling",
     duration: 12,
-    xp: 15,
     recurring: true,
     approach: "CBT",
     activityType: "worry",
@@ -381,7 +371,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Name what's hurting right now, acknowledge that struggling is part of being human, then write yourself a few kind, supportive words as you would to a close friend.",
     category: "journaling",
     duration: 10,
-    xp: 15,
     recurring: true,
     approach: "Mindfulness",
     activityType: "self_compassion",
@@ -391,7 +380,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Describe the harsh self-talk you've noticed lately, recognize that self-criticism is a common human struggle, and write a kinder, more supportive response to yourself.",
     category: "journaling",
     duration: 10,
-    xp: 15,
     recurring: true,
     approach: "Trauma-informed",
     activityType: "self_compassion",
@@ -401,7 +389,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Look back on today and select every character strength you drew on, from courage to kindness to perseverance, to get through the moments that mattered.",
     category: "journaling",
     duration: 8,
-    xp: 12,
     recurring: true,
     approach: "Positive",
     activityType: "strength",
@@ -411,7 +398,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Choose the three values that feel most important to you at this point in your life, then reflect briefly on why they rose to the top.",
     category: "journaling",
     duration: 12,
-    xp: 15,
     recurring: false,
     approach: "ACT",
     activityType: "values",
@@ -421,7 +407,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Follow the guided body scan from head to feet, pausing at each region to notice tension or ease without trying to change anything.",
     category: "mindfulness",
     duration: 5,
-    xp: 10,
     recurring: true,
     approach: "Mindfulness",
     activityType: "bodyscan",
@@ -431,7 +416,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Lie down and follow the guided scan from head to feet to release physical tension and settle your body before sleep.",
     category: "mindfulness",
     duration: 5,
-    xp: 10,
     recurring: true,
     approach: "Sleep",
     activityType: "bodyscan",
@@ -441,7 +425,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Take a slow, deliberate walk while using the timer to pace yourself, then check off what you notice with each sense as you move.",
     category: "mindfulness",
     duration: 15,
-    xp: 18,
     recurring: true,
     approach: "ACT",
     activityType: "walk",
@@ -451,7 +434,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Use the timer to slow down, then work through the checklist of five things you see, four you hear, three you can touch, two you smell, and one you taste.",
     category: "mindfulness",
     duration: 10,
-    xp: 15,
     recurring: true,
     approach: "Trauma-informed",
     activityType: "walk",
@@ -461,7 +443,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Spend time outdoors during the countdown, deliberately noticing sights, sounds, textures, smells, and tastes around you and checking them off as you go.",
     category: "mindfulness",
     duration: 20,
-    xp: 22,
     recurring: false,
     approach: "Behavioral",
     activityType: "walk",
@@ -471,7 +452,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Sit quietly for the full timer and follow the on-screen prompts to silently offer goodwill first to yourself, then to others, without needing to write anything.",
     category: "mindfulness",
     duration: 10,
-    xp: 15,
     recurring: true,
     approach: "Positive",
     activityType: "timer",
@@ -481,7 +461,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Sit comfortably for the length of the timer, returning your attention to the sensation of breathing each time your mind wanders.",
     category: "mindfulness",
     duration: 10,
-    xp: 15,
     recurring: true,
     approach: "DBT",
     activityType: "timer",
@@ -491,7 +470,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Eat a small snack slowly for the duration of the timer, paying full attention to its taste, texture, and smell with each bite.",
     category: "mindfulness",
     duration: 12,
-    xp: 15,
     recurring: true,
     approach: "Psychoeducation",
     activityType: "timer",
@@ -501,7 +479,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Sit or lie down for the timer and picture a place where you feel completely safe and calm, using as much sensory detail as you can.",
     category: "mindfulness",
     duration: 10,
-    xp: 15,
     recurring: false,
     approach: "Trauma-informed",
     activityType: "timer",
@@ -511,7 +488,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the length of the timer, sit tall and imagine yourself as a mountain - steady and unmoved while thoughts and feelings pass through like weather.",
     category: "mindfulness",
     duration: 10,
-    xp: 15,
     recurring: true,
     approach: "Mindfulness",
     activityType: "timer",
@@ -521,7 +497,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Pause to note your mood and energy, check in with any tension you're holding in your body, and add an optional note about what's present for you right now.",
     category: "mindfulness",
     duration: 5,
-    xp: 8,
     recurring: true,
     approach: "Mindfulness",
     activityType: "checkin",
@@ -531,7 +506,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Follow the guided 4-7-8 breathing animation - inhale for 4 seconds, hold for 7, exhale for 8 - for two full rounds to calm your nervous system.",
     category: "breathing",
     duration: 3,
-    xp: 8,
     recurring: true,
     approach: "Mindfulness",
     activityType: "breathing",
@@ -541,7 +515,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Follow the guided 4-7-8 breathing pattern in bed for two rounds to slow your heart rate and ease into sleep.",
     category: "breathing",
     duration: 3,
-    xp: 8,
     recurring: true,
     approach: "Sleep",
     activityType: "breathing",
@@ -551,7 +524,6 @@ const PREMADE_TASKS: Template[] = [
     description: "When anxiety starts to build, follow the guided 4-7-8 breathing animation for two rounds to bring your body's arousal back down.",
     category: "breathing",
     duration: 3,
-    xp: 8,
     recurring: true,
     approach: "DBT",
     activityType: "breathing",
@@ -561,7 +533,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the length of the timer, breathe in a steady square pattern - inhale 4 counts, hold 4, exhale 4, hold 4 - to settle your nervous system.",
     category: "breathing",
     duration: 5,
-    xp: 10,
     recurring: true,
     approach: "DBT",
     activityType: "timer",
@@ -571,7 +542,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the length of the timer, place a hand on your belly and breathe slowly so your belly rises more than your chest, building a habit of deeper, calmer breaths.",
     category: "breathing",
     duration: 8,
-    xp: 12,
     recurring: true,
     approach: "Psychoeducation",
     activityType: "timer",
@@ -581,7 +551,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the duration of the timer, inhale slowly through your nose and exhale twice as long through pursed lips to slow your breathing rate during panic symptoms.",
     category: "breathing",
     duration: 5,
-    xp: 10,
     recurring: true,
     approach: "CBT",
     activityType: "timer",
@@ -591,7 +560,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the length of the timer, gently alternate breathing through one nostril at a time to slow down and create a sense of balance.",
     category: "breathing",
     duration: 6,
-    xp: 10,
     recurring: true,
     approach: "Mindfulness",
     activityType: "timer",
@@ -601,7 +569,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the duration of the timer, breathe in for about 5 seconds and out for about 5 seconds, aiming for a steady rhythm of roughly six breaths a minute.",
     category: "breathing",
     duration: 10,
-    xp: 15,
     recurring: true,
     approach: "Psychoeducation",
     activityType: "timer",
@@ -611,7 +578,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the length of the timer, breathe in for a count of four and out for a count of six, making each exhale longer than the inhale to trigger your body's relaxation response.",
     category: "breathing",
     duration: 5,
-    xp: 10,
     recurring: true,
     approach: "DBT",
     activityType: "timer",
@@ -621,7 +587,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Follow the guided stretch sequence - neck rolls, shoulder shrugs, and a forward fold - to release physical tension held in your body.",
     category: "movement",
     duration: 5,
-    xp: 10,
     recurring: true,
     approach: "Mindfulness",
     activityType: "stretch",
@@ -631,7 +596,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Start your day with the guided stretch sequence to wake up your body and loosen stiffness from sleep.",
     category: "movement",
     duration: 5,
-    xp: 10,
     recurring: true,
     approach: "Behavioral",
     activityType: "stretch",
@@ -641,7 +605,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Step away from your desk and follow the guided stretch sequence to release tension that's built up from sitting.",
     category: "movement",
     duration: 5,
-    xp: 8,
     recurring: true,
     approach: "Positive",
     activityType: "stretch",
@@ -651,7 +614,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Get outside and walk for the length of the timer, using it as one concrete step toward re-engaging with activity when motivation is low.",
     category: "movement",
     duration: 15,
-    xp: 18,
     recurring: true,
     approach: "Behavioral",
     activityType: "walk",
@@ -661,7 +623,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Take a walk outdoors for the countdown and work through the sensory checklist, noticing what you see, hear, touch, smell, and taste along the way.",
     category: "movement",
     duration: 15,
-    xp: 18,
     recurring: true,
     approach: "Mindfulness",
     activityType: "walk",
@@ -671,7 +632,6 @@ const PREMADE_TASKS: Template[] = [
     description: "When you notice yourself stuck in repetitive thinking, go for a walk for the length of the countdown and use the sensory checklist to shift attention outward.",
     category: "movement",
     duration: 15,
-    xp: 18,
     recurring: false,
     approach: "CBT",
     activityType: "walk",
@@ -681,7 +641,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the length of the timer, do jumping jacks, run in place, or another vigorous exercise to rapidly discharge intense emotion and reset your body's arousal.",
     category: "movement",
     duration: 10,
-    xp: 20,
     recurring: false,
     approach: "DBT",
     activityType: "timer",
@@ -691,7 +650,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Put on a song you like and move freely for the length of the timer, using dance as a quick way to lift mood and energy.",
     category: "movement",
     duration: 10,
-    xp: 15,
     recurring: true,
     approach: "Positive",
     activityType: "timer",
@@ -701,7 +659,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the length of the timer, move through a slow sun salutation sequence, syncing movement with breath as an act of caring for your body.",
     category: "movement",
     duration: 12,
-    xp: 15,
     recurring: true,
     approach: "ACT",
     activityType: "timer",
@@ -711,7 +668,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the length of the timer, walk in place or march while alternately tapping opposite knees, using rhythmic bilateral movement to help your body feel more settled.",
     category: "movement",
     duration: 8,
-    xp: 15,
     recurring: false,
     approach: "Trauma-informed",
     activityType: "timer",
@@ -721,7 +677,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Commit to one scheduled block of physical activity - a jog, a workout video, a bike ride - and use the timer to track the full session.",
     category: "movement",
     duration: 20,
-    xp: 22,
     recurring: true,
     approach: "Behavioral",
     activityType: "timer",
@@ -731,7 +686,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Go to a fitness, yoga, or sports class you've signed up for and mark the task complete once you've attended.",
     category: "movement",
     duration: 45,
-    xp: 30,
     recurring: true,
     approach: "Behavioral",
     activityType: "generic",
@@ -741,7 +695,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Call a restaurant and place an order out loud instead of using an app, then mark the task complete once you've done it.",
     category: "exposure",
     duration: 10,
-    xp: 20,
     recurring: false,
     approach: "Exposure",
     activityType: "generic",
@@ -751,7 +704,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Sit and eat a meal by yourself in a public café or restaurant for at least the planned time, then mark the task complete.",
     category: "exposure",
     duration: 30,
-    xp: 30,
     recurring: false,
     approach: "Exposure",
     activityType: "generic",
@@ -761,7 +713,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Touch a public doorknob or surface and delay washing your hands for the agreed-upon time as a step on your exposure hierarchy, then mark it complete.",
     category: "exposure",
     duration: 15,
-    xp: 25,
     recurring: false,
     approach: "CBT",
     activityType: "generic",
@@ -771,7 +722,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Start the timer and ride an elevator to the top floor and back, staying with the anxiety for the full duration instead of leaving early.",
     category: "exposure",
     duration: 10,
-    xp: 25,
     recurring: false,
     approach: "Exposure",
     activityType: "timer",
@@ -781,7 +731,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Start the timer and drive onto a highway on-ramp for at least one exit, staying present with the anxiety instead of turning back.",
     category: "exposure",
     duration: 20,
-    xp: 30,
     recurring: false,
     approach: "Exposure",
     activityType: "timer",
@@ -791,7 +740,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Start the timer and hold your breath for short repeated intervals to bring on physical sensations like breathlessness on purpose, then let them pass without escaping the exercise.",
     category: "exposure",
     duration: 5,
-    xp: 15,
     recurring: false,
     approach: "Exposure",
     activityType: "timer",
@@ -801,7 +749,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Start the timer and vividly imagine your feared scenario playing out in detail, staying with the anxiety it brings up for the full duration.",
     category: "exposure",
     duration: 15,
-    xp: 25,
     recurring: false,
     approach: "Trauma-informed",
     activityType: "timer",
@@ -811,7 +758,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Start the timer and breathe only through a narrow straw to bring on the sensation of breathlessness on purpose, staying with it until the timer ends.",
     category: "exposure",
     duration: 5,
-    xp: 15,
     recurring: false,
     approach: "Exposure",
     activityType: "timer",
@@ -821,7 +767,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Right after completing an exposure exercise, note your mood, energy, and body tension to track how your distress shifted, with an optional note on what you noticed.",
     category: "exposure",
     duration: 5,
-    xp: 10,
     recurring: false,
     approach: "CBT",
     activityType: "checkin",
@@ -831,7 +776,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Choose a friend, family member, partner, colleague, or therapist, pick or write a short thank-you message, and confirm once you've sent it.",
     category: "social",
     duration: 5,
-    xp: 10,
     recurring: true,
     approach: "Positive",
     activityType: "social",
@@ -841,7 +785,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Using the DEAR MAN structure in mind, choose who you need to set a boundary with, write a clear and respectful message stating what you need, and confirm once you've sent it.",
     category: "social",
     duration: 10,
-    xp: 18,
     recurring: false,
     approach: "DBT",
     activityType: "social",
@@ -851,7 +794,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Pick a friend you've been meaning to contact, write a short message to reconnect, and confirm once you've sent it.",
     category: "social",
     duration: 10,
-    xp: 15,
     recurring: false,
     approach: "Behavioral",
     activityType: "social",
@@ -861,7 +803,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Identify someone who could help with something you're struggling with, write a clear and direct request for support, and confirm once you've sent it.",
     category: "social",
     duration: 8,
-    xp: 15,
     recurring: false,
     approach: "Interpersonal",
     activityType: "social",
@@ -871,7 +812,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Choose the person you had a conflict with, write a short message acknowledging what happened and opening the door to repair, and confirm once you've sent it.",
     category: "social",
     duration: 10,
-    xp: 18,
     recurring: false,
     approach: "Interpersonal",
     activityType: "social",
@@ -881,7 +821,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Go to a scheduled support group meeting, in person or online, and mark the task complete once you've attended.",
     category: "social",
     duration: 45,
-    xp: 30,
     recurring: true,
     approach: "Behavioral",
     activityType: "generic",
@@ -891,7 +830,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Meet a friend or family member in person for coffee or a meal, and mark the task complete once you've done it.",
     category: "social",
     duration: 45,
-    xp: 25,
     recurring: false,
     approach: "Behavioral",
     activityType: "generic",
@@ -901,7 +839,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Note your mood, rate your energy level, check in with any body tension, and add an optional note about your day.",
     category: "habit",
     duration: 3,
-    xp: 6,
     recurring: true,
     approach: "Psychoeducation",
     activityType: "checkin",
@@ -911,7 +848,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Write down three things you're grateful for today, however small, to build a steady daily gratitude habit.",
     category: "habit",
     duration: 5,
-    xp: 8,
     recurring: true,
     approach: "Positive",
     activityType: "gratitude",
@@ -921,7 +857,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Follow the guided 4-7-8 breathing animation for two rounds every day to build a steady calming habit.",
     category: "habit",
     duration: 3,
-    xp: 8,
     recurring: true,
     approach: "Mindfulness",
     activityType: "breathing",
@@ -931,7 +866,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Sit for the length of the timer each day and rest your attention on your breath, building a consistent meditation habit over time.",
     category: "habit",
     duration: 10,
-    xp: 12,
     recurring: true,
     approach: "Mindfulness",
     activityType: "timer",
@@ -941,7 +875,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Each night, use the timer to slowly tense and release each major muscle group, building a consistent relaxation habit before sleep.",
     category: "habit",
     duration: 12,
-    xp: 15,
     recurring: true,
     approach: "Sleep",
     activityType: "timer",
@@ -951,7 +884,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Follow the guided stretch sequence each day to build a consistent habit of releasing physical tension.",
     category: "habit",
     duration: 5,
-    xp: 8,
     recurring: true,
     approach: "Behavioral",
     activityType: "stretch",
@@ -961,7 +893,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Take your prescribed medication at the scheduled time and mark the task complete once you've done it.",
     category: "habit",
     duration: 3,
-    xp: 5,
     recurring: true,
     approach: "Psychoeducation",
     activityType: "generic",
@@ -971,7 +902,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Commit to avoiding alcohol for the evening and mark the task complete at the end of the day.",
     category: "habit",
     duration: 3,
-    xp: 8,
     recurring: true,
     approach: "Behavioral",
     activityType: "generic",
@@ -981,7 +911,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Avoid caffeinated drinks after 2 PM today to protect your sleep, and mark the task complete at the end of the day.",
     category: "habit",
     duration: 3,
-    xp: 5,
     recurring: true,
     approach: "Sleep",
     activityType: "generic",
@@ -991,7 +920,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Choose a support person, send a message to schedule or start a check-in call, and confirm once you've reached out.",
     category: "habit",
     duration: 10,
-    xp: 15,
     recurring: true,
     approach: "Interpersonal",
     activityType: "social",
@@ -1001,7 +929,6 @@ const PREMADE_TASKS: Template[] = [
     description: "If your distress feels unmanageable, call your local crisis line and mark the task complete once you've made the call or decided it wasn't needed.",
     category: "safety",
     duration: 10,
-    xp: 20,
     recurring: false,
     approach: "Crisis",
     activityType: "generic",
@@ -1011,7 +938,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Work with your safety plan to remove or secure any items you've identified as a risk, and mark the task complete once it's done.",
     category: "safety",
     duration: 15,
-    xp: 30,
     recurring: false,
     approach: "Crisis",
     activityType: "generic",
@@ -1021,7 +947,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Reach out to the emergency contact named in your safety plan and mark the task complete once you've made contact.",
     category: "safety",
     duration: 5,
-    xp: 15,
     recurring: false,
     approach: "Crisis",
     activityType: "generic",
@@ -1031,7 +956,6 @@ const PREMADE_TASKS: Template[] = [
     description: "When panic spikes, start the timer and work through the checklist of five things you see, four you hear, three you touch, two you smell, and one you taste.",
     category: "safety",
     duration: 10,
-    xp: 15,
     recurring: false,
     approach: "Trauma-informed",
     activityType: "walk",
@@ -1041,7 +965,6 @@ const PREMADE_TASKS: Template[] = [
     description: "When an urge feels overwhelming, go for a walk for the length of the timer and work through the sensory checklist to help the intensity pass.",
     category: "safety",
     duration: 15,
-    xp: 18,
     recurring: false,
     approach: "DBT",
     activityType: "walk",
@@ -1051,7 +974,6 @@ const PREMADE_TASKS: Template[] = [
     description: "For the length of the timer, hold an ice cube or splash cold water on your face to rapidly bring down overwhelming emotional intensity.",
     category: "safety",
     duration: 5,
-    xp: 12,
     recurring: false,
     approach: "DBT",
     activityType: "timer",
@@ -1061,7 +983,6 @@ const PREMADE_TASKS: Template[] = [
     description: "After a difficult moment has passed, note your mood, energy, and body tension, with an optional note on what helped or what you need next.",
     category: "safety",
     duration: 5,
-    xp: 10,
     recurring: false,
     approach: "Crisis",
     activityType: "checkin",
@@ -1071,7 +992,6 @@ const PREMADE_TASKS: Template[] = [
     description: "Each day, note your mood and energy and rate your body tension as a quick check on how confident you feel in your safety plan.",
     category: "safety",
     duration: 3,
-    xp: 6,
     recurring: true,
     approach: "Crisis",
     activityType: "checkin",
@@ -1081,7 +1001,6 @@ const PREMADE_TASKS: Template[] = [
     description: "When panic hits, follow the guided 4-7-8 breathing animation for two rounds to help bring your body's alarm response back down.",
     category: "safety",
     duration: 3,
-    xp: 8,
     recurring: false,
     approach: "CBT",
     activityType: "breathing",
@@ -1210,16 +1129,6 @@ function MissionForm({
             className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
           >
             {DURATION_OPTS.map((d) => <option key={d} value={d}>{fmtDur(d)}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-medium text-stone-400 uppercase tracking-widest block mb-1.5">XP reward</label>
-          <select
-            value={form.xp}
-            onChange={(e) => setForm({ ...form, xp: Number(e.target.value) })}
-            className="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-400 transition-colors"
-          >
-            {XP_OPTS.map((x) => <option key={x} value={x}>+{x} XP</option>)}
           </select>
         </div>
         <div>
@@ -1398,14 +1307,14 @@ export default function MissionBuilderPage() {
   function openCreate() { setForm(BLANK_FORM); setPendingFiles([]); setSaved(false); setPendingClientIds(new Set()); setMode("create"); }
   function openEdit(m: Mission) {
     setEditingId(m.id);
-    setForm({ title: m.title, description: m.description, category: m.category, duration: m.duration, xp: m.xp, recurring: m.recurring, activityType: m.activityType });
+    setForm({ title: m.title, description: m.description, category: m.category, duration: m.duration, recurring: m.recurring, activityType: m.activityType });
     setPendingFiles([]);
     setSaved(false);
     setMode("edit");
   }
   function openView(m: Mission) { setViewingId(m.id); setMode("view"); }
   function openTemplate(t: Template) {
-    setForm({ title: t.title, description: t.description, category: t.category, duration: t.duration, xp: t.xp, recurring: t.recurring, activityType: t.activityType });
+    setForm({ title: t.title, description: t.description, category: t.category, duration: t.duration, recurring: t.recurring, activityType: t.activityType });
     setPendingFiles([]);
     setSaved(false);
     setMode("create");
@@ -1598,7 +1507,6 @@ export default function MissionBuilderPage() {
             {[
               { Icon: Clock,   label: "Duration",    value: fmtDur(viewingMission.duration) },
               { Icon: Repeat2, label: "Recurrence",  value: viewingMission.recurring ? "Daily" : "One-time" },
-              { Icon: Clock,   label: "XP reward",   value: `+${viewingMission.xp} XP` },
               { Icon: Clock,   label: "Completions", value: String(viewingMission.completionCount) },
             ].map(({ Icon, label, value }) => (
               <div key={label}>
@@ -1693,7 +1601,6 @@ export default function MissionBuilderPage() {
                     <div className="flex items-center justify-between mt-auto pt-1">
                       <div className="flex items-center gap-3 text-xs text-stone-400">
                         <span className="flex items-center gap-1"><Clock size={11} strokeWidth={1.5} />{fmtDur(t.duration)}</span>
-                        <span className="text-amber-500 font-medium">+{t.xp} XP</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <button
@@ -1769,7 +1676,6 @@ export default function MissionBuilderPage() {
                       <div className="flex flex-wrap items-center gap-3 mt-2.5 text-xs text-stone-400">
                         <span className="flex items-center gap-1"><Clock size={11} strokeWidth={1.5} />{fmtDur(mission.duration)}</span>
                         <span className="flex items-center gap-1"><Repeat2 size={11} strokeWidth={1.5} />{mission.recurring ? "Daily" : "One-time"}</span>
-                        <span className="text-amber-500 font-medium">+{mission.xp} XP</span>
                         <span className="capitalize">{mission.category}</span>
                         <span>{mission.completionCount} completion{mission.completionCount !== 1 ? "s" : ""}</span>
                         {mission.attachments.length > 0 && (
@@ -1833,7 +1739,6 @@ export default function MissionBuilderPage() {
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { label: "Duration",   value: fmtDur(t.duration) },
-                    { label: "XP Reward",  value: `+${t.xp} XP` },
                     { label: "Recurrence", value: t.recurring ? "Daily" : "One-time" },
                   ].map(({ label, value }) => (
                     <div key={label} className="bg-stone-50 rounded-xl px-4 py-3">
@@ -1869,7 +1774,7 @@ export default function MissionBuilderPage() {
                         const r = await fetch("/api/therapist/missions", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ title: t.title, description: t.description, category: t.category, duration: t.duration, xp: t.xp, recurring: t.recurring, activityType: t.activityType }),
+                          body: JSON.stringify({ title: t.title, description: t.description, category: t.category, duration: t.duration, recurring: t.recurring, activityType: t.activityType }),
                         });
                         const d = await r.json();
                         if (d.ok && d.mission) {
@@ -1900,7 +1805,7 @@ export default function MissionBuilderPage() {
                     Close
                   </button>
                   <button
-                    onClick={() => { setForm({ title: t.title, description: t.description, category: t.category, duration: t.duration, xp: t.xp, recurring: t.recurring, activityType: t.activityType }); setPendingFiles([]); setSaved(false); setMode("create"); setViewingTemplate(null); }}
+                    onClick={() => { setForm({ title: t.title, description: t.description, category: t.category, duration: t.duration, recurring: t.recurring, activityType: t.activityType }); setPendingFiles([]); setSaved(false); setMode("create"); setViewingTemplate(null); }}
                     className="flex-1 border border-stone-200 text-stone-700 text-sm font-medium py-2.5 rounded-lg hover:bg-stone-50 transition-colors"
                   >
                     Customize first

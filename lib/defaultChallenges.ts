@@ -6,7 +6,6 @@ export const BUILTIN_CHALLENGES = [
     category: "Mindfulness",
     difficulty: "Beginner",
     totalDays: 30,
-    xpReward: 150,
     activityType: "timer",
   },
   {
@@ -16,7 +15,6 @@ export const BUILTIN_CHALLENGES = [
     category: "Journaling",
     difficulty: "Beginner",
     totalDays: 7,
-    xpReward: 60,
     activityType: "gratitude",
   },
   {
@@ -26,7 +24,6 @@ export const BUILTIN_CHALLENGES = [
     category: "Sleep",
     difficulty: "Moderate",
     totalDays: 14,
-    xpReward: 90,
     activityType: "checkin",
   },
   {
@@ -36,7 +33,6 @@ export const BUILTIN_CHALLENGES = [
     category: "Community",
     difficulty: "Beginner",
     totalDays: 3,
-    xpReward: 40,
     activityType: "generic",
   },
 ];

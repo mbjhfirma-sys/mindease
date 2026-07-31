@@ -14,7 +14,6 @@ const createSchema = z.object({
   description: z.string().min(5).max(500),
   category: z.string().min(1),
   duration: z.number().int().min(1).max(180),
-  xp: z.number().int().min(5).max(100).default(10),
   recurring: z.boolean().default(true),
   activityType: activityTypeEnum.default("generic"),
 });
@@ -29,7 +28,6 @@ const updateSchema = z.object({
   description: z.string().min(5).max(500),
   category: z.string().min(1),
   duration: z.number().int().min(1).max(180),
-  xp: z.number().int().min(5).max(100),
   recurring: z.boolean(),
   activityType: activityTypeEnum.default("generic"),
 });
@@ -60,7 +58,6 @@ export async function GET() {
     description: m.description,
     category: m.category,
     duration: m.duration,
-    xp: m.xp,
     recurring: m.recurring,
     activityType: m.activityType,
     completionCount: m._count.completions,
@@ -152,7 +149,6 @@ export async function PATCH(req: NextRequest) {
       description: mission.description,
       category: mission.category,
       duration: mission.duration,
-      xp: mission.xp,
       recurring: mission.recurring,
       activityType: mission.activityType,
       completionCount: mission._count.completions,

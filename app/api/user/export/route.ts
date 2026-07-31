@@ -49,7 +49,7 @@ export async function GET() {
     profile: {
       id: safeUser.id, name: safeUser.name, email: safeUser.email, role: safeUser.role,
       phone: safeUser.phone, dob: safeUser.dob, timezone: safeUser.timezone, language: safeUser.language,
-      createdAt: safeUser.createdAt, plan: safeUser.plan, xp: safeUser.xp, level: safeUser.level,
+      createdAt: safeUser.createdAt, plan: safeUser.plan,
       communityContentOnDeletion: safeUser.communityContentOnDeletion, dataDirective: safeUser.dataDirective,
     },
     moodEntries: safeUser.moodEntries,

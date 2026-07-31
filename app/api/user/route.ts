@@ -88,7 +88,7 @@ export async function GET() {
       where: { id: session.user.id },
       select: {
         id: true, name: true, email: true, role: true, avatar: true,
-        plan: true, phone: true, dob: true, timezone: true, language: true, xp: true, level: true,
+        plan: true, phone: true, dob: true, timezone: true, language: true,
         createdAt: true, clientCode: true, hasOnboarded: true, hasSeenClientTour: true,
         notificationPrefs: true, privacyPrefs: true, twoFactorEnabled: true, peerMatchingOptIn: true,
         communityContentOnDeletion: true, dataDirective: true,

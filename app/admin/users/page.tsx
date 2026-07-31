@@ -59,7 +59,7 @@ export default function AdminUsersPage() {
                         {isActive ? "active" : "inactive"}
                       </span>
                     </div>
-                    <div className="text-xs text-stone-400 truncate">{u.email} · {u.plan} · Level {u.level}</div>
+                    <div className="text-xs text-stone-400 truncate">{u.email} · {u.plan}</div>
                   </div>
 
                   <div className="text-right flex-shrink-0 hidden sm:block min-w-[120px]">

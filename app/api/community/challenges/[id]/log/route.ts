@@ -51,9 +51,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
 
-  if (justCompleted) {
-    await db.user.update({ where: { id: session.user.id }, data: { xp: { increment: challenge.xpReward } } });
-  }
-
-  return NextResponse.json({ ok: true, progress: nextProgress, completed: justCompleted, xpEarned: justCompleted ? challenge.xpReward : 0 });
+  return NextResponse.json({ ok: true, progress: nextProgress, completed: justCompleted });
 }

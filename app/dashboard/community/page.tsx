@@ -55,7 +55,7 @@ function getGroupMeta(id: string) { return GROUP_META[id] ?? DEFAULT_META; }
 
 type Challenge = {
   id: string; title: string; description: string; category: string; difficulty: string;
-  totalDays: number; xpReward: number; activityType: string;
+  totalDays: number; activityType: string;
   participantCount: number; joined: boolean; progress: number; completed: boolean; canLogToday: boolean;
 };
 
@@ -1357,7 +1357,6 @@ function CommunityPageInner() {
             description: openChallengeTask.description,
             category: openChallengeTask.category,
             duration: 10,
-            xp: openChallengeTask.xpReward,
             activityType: openChallengeTask.activityType,
           }}
           onComplete={(id, data) => { completeChallengeLog(id, data); setOpenChallengeTask(null); }}
