@@ -1053,14 +1053,14 @@ function MissionForm({
   form, setForm,
   attachments, onRemoveAttachment, removingId,
   pendingFiles, setPendingFiles,
-  onCancel, onSave, submitLabel, heading, saved,
+  onCancel, onSave, submitLabel, heading, saved, saving, error,
   clients, clientsLoading, selectedClientIds, onToggleClient,
 }: {
   form: Form; setForm: (f: Form) => void;
   attachments: AttachedFile[]; onRemoveAttachment?: (id: string) => void; removingId?: string | null;
   pendingFiles: PendingFile[]; setPendingFiles: (f: PendingFile[]) => void;
   onCancel: () => void; onSave: () => void;
-  submitLabel: string; heading: string; saved: boolean;
+  submitLabel: string; heading: string; saved: boolean; saving: boolean; error?: string | null;
   clients?: Client[]; clientsLoading?: boolean;
   selectedClientIds?: Set<string>; onToggleClient?: (id: string) => void;
 }) {
@@ -1245,12 +1245,18 @@ function MissionForm({
         </div>
       )}
 
+      {error && (
+        <div className="bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="flex gap-2 pt-3 border-t border-stone-100">
         <button type="button" onClick={onCancel} className="flex-1 border border-stone-200 text-sm py-2.5 rounded-lg hover:bg-stone-50 transition-colors text-stone-600">Cancel</button>
         <button
           type="button"
           onClick={onSave}
-          disabled={!form.title.trim()}
+          disabled={!form.title.trim() || saving}
           className="flex-1 bg-stone-900 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           {submitLabel}
@@ -1273,6 +1279,7 @@ export default function MissionBuilderPage() {
   const [removingAttachmentId, setRemovingAttachmentId] = useState<string | null>(null);
   const [saved,            setSaved]           = useState(false);
   const [saving,           setSaving]          = useState(false);
+  const [saveError,        setSaveError]       = useState<string | null>(null);
   const [viewingTemplate,  setViewingTemplate] = useState<Template | null>(null);
   const [templateSearch,   setTemplateSearch]   = useState("");
   const [templateCategory, setTemplateCategory] = useState("all");
@@ -1302,14 +1309,15 @@ export default function MissionBuilderPage() {
     });
   }
 
-  function goList() { setMode("list"); setEditingId(null); setViewingId(null); setPendingFiles([]); setSaved(false); setPendingClientIds(new Set()); }
+  function goList() { setMode("list"); setEditingId(null); setViewingId(null); setPendingFiles([]); setSaved(false); setSaveError(null); setPendingClientIds(new Set()); }
 
-  function openCreate() { setForm(BLANK_FORM); setPendingFiles([]); setSaved(false); setPendingClientIds(new Set()); setMode("create"); }
+  function openCreate() { setForm(BLANK_FORM); setPendingFiles([]); setSaved(false); setSaveError(null); setPendingClientIds(new Set()); setMode("create"); }
   function openEdit(m: Mission) {
     setEditingId(m.id);
     setForm({ title: m.title, description: m.description, category: m.category, duration: m.duration, recurring: m.recurring, activityType: m.activityType });
     setPendingFiles([]);
     setSaved(false);
+    setSaveError(null);
     setMode("edit");
   }
   function openView(m: Mission) { setViewingId(m.id); setMode("view"); }
@@ -1317,23 +1325,30 @@ export default function MissionBuilderPage() {
     setForm({ title: t.title, description: t.description, category: t.category, duration: t.duration, recurring: t.recurring, activityType: t.activityType });
     setPendingFiles([]);
     setSaved(false);
+    setSaveError(null);
     setMode("create");
   }
 
   const editingMission = missions.find((m) => m.id === editingId) ?? null;
   const viewingMission = missions.find((m) => m.id === viewingId) ?? null;
 
-  async function uploadPendingFiles(missionId: string): Promise<AttachedFile[]> {
+  async function uploadPendingFiles(missionId: string): Promise<{ uploaded: AttachedFile[]; failed: string[] }> {
     const uploaded: AttachedFile[] = [];
+    const failed: string[] = [];
     for (const pf of pendingFiles) {
-      const formData = new FormData();
-      formData.append("missionId", missionId);
-      formData.append("file", pf.file);
-      const r = await fetch("/api/therapist/missions/attachments", { method: "POST", body: formData });
-      const d = await r.json();
-      if (r.ok && d.attachment) uploaded.push(d.attachment);
+      try {
+        const formData = new FormData();
+        formData.append("missionId", missionId);
+        formData.append("file", pf.file);
+        const r = await fetch("/api/therapist/missions/attachments", { method: "POST", body: formData });
+        const d = await r.json();
+        if (r.ok && d.attachment) uploaded.push(d.attachment);
+        else failed.push(pf.file.name);
+      } catch {
+        failed.push(pf.file.name);
+      }
     }
-    return uploaded;
+    return { uploaded, failed };
   }
 
   async function removeAttachment(missionId: string, attachmentId: string) {
@@ -1353,6 +1368,7 @@ export default function MissionBuilderPage() {
   async function commitCreate() {
     if (!form.title.trim() || saving) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const r = await fetch("/api/therapist/missions", {
         method: "POST",
@@ -1360,20 +1376,42 @@ export default function MissionBuilderPage() {
         body: JSON.stringify({ ...form, description: form.description || "No description" }),
       });
       const d = await r.json();
-      if (d.ok && d.mission) {
-        const uploaded = pendingFiles.length > 0 ? await uploadPendingFiles(d.mission.id) : [];
-        const newM: Mission = { ...d.mission, completionCount: 0, createdAt: d.mission.createdAt ?? new Date().toISOString(), attachments: uploaded };
-        setMissions((p) => [newM, ...p]);
-        if (pendingClientIds.size > 0) {
-          await fetch("/api/therapist/missions/assign", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ missionId: d.mission.id, clientIds: [...pendingClientIds] }),
-          });
-        }
+      if (!r.ok || !d.ok || !d.mission) {
+        throw new Error(d.error || "Couldn't create this task — please try again.");
       }
+
+      const { uploaded, failed } = pendingFiles.length > 0
+        ? await uploadPendingFiles(d.mission.id)
+        : { uploaded: [] as AttachedFile[], failed: [] as string[] };
+      const newM: Mission = { ...d.mission, completionCount: 0, createdAt: d.mission.createdAt ?? new Date().toISOString(), attachments: uploaded };
+      setMissions((p) => [newM, ...p]);
+      if (pendingClientIds.size > 0) {
+        await fetch("/api/therapist/missions/assign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ missionId: d.mission.id, clientIds: [...pendingClientIds] }),
+        }).catch(() => {});
+      }
+
+      if (failed.length > 0) {
+        // The task itself was created successfully — only the attachment upload
+        // failed. Switch into editing the task we just made (instead of closing
+        // the panel) so retrying "Save" re-attaches rather than creating a
+        // duplicate task, and keep only the files that actually failed staged.
+        setEditingId(d.mission.id);
+        setMode("edit");
+        setPendingFiles(pendingFiles.filter((pf) => failed.includes(pf.file.name)));
+        setSaveError(
+          `Task created, but ${failed.length === 1 ? `"${failed[0]}" failed` : `${failed.length} files failed`} to upload. You can try attaching again below.`
+        );
+        return;
+      }
+
+      setPendingFiles([]);
       setSaved(true);
       setTimeout(goList, 1200);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Something went wrong — please try again.");
     } finally {
       setSaving(false);
     }
@@ -1382,6 +1420,7 @@ export default function MissionBuilderPage() {
   async function commitEdit() {
     if (!form.title.trim() || !editingId || saving) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const r = await fetch("/api/therapist/missions", {
         method: "PATCH",
@@ -1389,13 +1428,28 @@ export default function MissionBuilderPage() {
         body: JSON.stringify({ missionId: editingId, ...form }),
       });
       const d = await r.json();
-      const uploaded = pendingFiles.length > 0 ? await uploadPendingFiles(editingId) : [];
-      if (d.ok && d.mission) {
-        setMissions((p) => p.map((m) => m.id === editingId ? { ...d.mission, attachments: [...d.mission.attachments, ...uploaded] } : m));
+      if (!r.ok || !d.ok || !d.mission) {
+        throw new Error(d.error || "Couldn't save these changes — please try again.");
       }
+
+      const { uploaded, failed } = pendingFiles.length > 0
+        ? await uploadPendingFiles(editingId)
+        : { uploaded: [] as AttachedFile[], failed: [] as string[] };
+      setMissions((p) => p.map((m) => m.id === editingId ? { ...d.mission, attachments: [...d.mission.attachments, ...uploaded] } : m));
+
+      if (failed.length > 0) {
+        setPendingFiles(pendingFiles.filter((pf) => failed.includes(pf.file.name)));
+        setSaveError(
+          `Changes saved, but ${failed.length === 1 ? `"${failed[0]}" failed` : `${failed.length} files failed`} to upload. You can try attaching again below.`
+        );
+        return;
+      }
+
       setPendingFiles([]);
       setSaved(true);
       setTimeout(goList, 1200);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Something went wrong — please try again.");
     } finally {
       setSaving(false);
     }
@@ -1470,7 +1524,7 @@ export default function MissionBuilderPage() {
           <MissionForm
             form={form} setForm={setForm}
             attachments={[]} pendingFiles={pendingFiles} setPendingFiles={setPendingFiles}
-            heading="New Task" saved={saved}
+            heading="New Task" saved={saved} saving={saving} error={saveError}
             onCancel={goList} onSave={commitCreate}
             submitLabel={saving ? "Saving…" : pendingClientIds.size > 0 ? `Assign to ${pendingClientIds.size} client${pendingClientIds.size > 1 ? "s" : ""}` : "Save task"}
             clients={clients} clientsLoading={clientsLoading}
@@ -1488,7 +1542,7 @@ export default function MissionBuilderPage() {
             onRemoveAttachment={(id) => removeAttachment(editingMission.id, id)}
             removingId={removingAttachmentId}
             pendingFiles={pendingFiles} setPendingFiles={setPendingFiles}
-            heading="Edit Task" saved={saved} onCancel={goList} onSave={commitEdit} submitLabel={saving ? "Saving…" : "Save changes"}
+            heading="Edit Task" saved={saved} saving={saving} error={saveError} onCancel={goList} onSave={commitEdit} submitLabel={saving ? "Saving…" : "Save changes"}
           />
         </div>
       )}
