@@ -18,6 +18,13 @@ const createSchema = z.object({
   activityType: activityTypeEnum.default("generic"),
 });
 
+function zodMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return "Invalid input";
+  const field = issue.path.join(".");
+  return field ? `${field}: ${issue.message}` : issue.message;
+}
+
 const deleteSchema = z.object({
   missionId: z.string(),
 });
@@ -81,7 +88,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: zodMessage(parsed.error) }, { status: 400 });
 
   const mission = await db.mission.create({
     data: { ...parsed.data, therapistId: therapist.id },
@@ -103,7 +110,7 @@ export async function DELETE(req: NextRequest) {
 
   const body = await req.json();
   const parsed = deleteSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: zodMessage(parsed.error) }, { status: 400 });
 
   const mission = await db.mission.findUnique({ where: { id: parsed.data.missionId } });
   if (!mission || mission.therapistId !== therapist.id) {
@@ -127,7 +134,7 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: zodMessage(parsed.error) }, { status: 400 });
 
   const existing = await db.mission.findUnique({ where: { id: parsed.data.missionId } });
   if (!existing || existing.therapistId !== therapist.id) {

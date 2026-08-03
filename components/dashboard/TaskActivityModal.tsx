@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { X, Check, ChevronLeft, RefreshCw } from "lucide-react";
+import AttachmentGallery, { type Attachment } from "@/components/dashboard/AttachmentGallery";
 
 type Mission = {
   id: string; title: string; description: string;
   category: string; duration: number | string;
   completed?: boolean; dueTime?: string | null; assignedBy?: string; activityType?: string;
+  attachments?: Attachment[];
 };
 
 type OnDone = (data?: Record<string, unknown>) => void;
@@ -39,6 +41,11 @@ export default function TaskActivityModal({ mission, onComplete, onClose }: {
           </button>
         </div>
         <div className="px-6 pb-8 pt-5">
+          {mission.attachments && mission.attachments.length > 0 && (
+            <div className="mb-5">
+              <AttachmentGallery attachments={mission.attachments} label="From your therapist" />
+            </div>
+          )}
           <ActivityContent mission={mission} onDone={done} />
         </div>
       </div>

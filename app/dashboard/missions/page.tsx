@@ -3,14 +3,16 @@
 import { useState, useEffect } from "react";
 import TaskActivityModal from "@/components/dashboard/TaskActivityModal";
 import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
-import { Flame, Check, ArrowRight } from "lucide-react";
+import { Flame, Check, ArrowRight, Paperclip } from "lucide-react";
 import { notifyBadgesChanged } from "@/lib/badgeEvents";
 
 type Category = "mindfulness" | "movement" | "journaling" | "breathing" | "social" | "habit";
+type Attachment = { id: string; name: string; size: number; mimeType: string; url: string };
 
 type Mission = {
   id: string; title: string; description: string; category: Category;
   duration: number; completed: boolean; dueTime?: string | null; activityType?: string;
+  attachments?: Attachment[];
 };
 
 const CATEGORY_LABELS: Record<Category, string> = {
@@ -255,6 +257,15 @@ export default function MissionsPage() {
                     <span className="text-xs text-stone-400">{fmtDuration(mission.duration)}</span>
                     <span className="text-stone-200">·</span>
                     <span className="text-xs text-stone-400">{CATEGORY_LABELS[mission.category]}</span>
+                    {(mission.attachments?.length ?? 0) > 0 && (
+                      <>
+                        <span className="text-stone-200">·</span>
+                        <span className="flex items-center gap-1 text-xs text-stone-400">
+                          <Paperclip size={11} strokeWidth={1.5} />
+                          {mission.attachments!.length} file{mission.attachments!.length > 1 ? "s" : ""}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 

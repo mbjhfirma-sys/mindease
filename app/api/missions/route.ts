@@ -96,7 +96,7 @@ export async function GET() {
     // Priority 1: missions individually assigned to this client by their therapist
     const personalAssignments = await db.missionAssignment.findMany({
       where: { clientId: userId },
-      include: { mission: true },
+      include: { mission: { include: { attachments: { orderBy: { createdAt: "asc" } } } } },
       orderBy: { assignedAt: "asc" },
     });
 
@@ -118,6 +118,7 @@ export async function GET() {
         // Priority 2: all missions from their therapist's pool
         poolRaw = await db.mission.findMany({
           where: { therapistId: user!.therapistId! },
+          include: { attachments: { orderBy: { createdAt: "asc" } } },
           orderBy: { createdAt: "asc" },
         });
       } else {
@@ -125,6 +126,7 @@ export async function GET() {
         await ensureDefaultMissionsExist();
         poolRaw = await db.mission.findMany({
           where: { therapistId: null },
+          include: { attachments: { orderBy: { createdAt: "asc" } } },
           orderBy: { createdAt: "asc" },
         });
       }
@@ -163,6 +165,7 @@ export async function GET() {
         recurring: src.recurring,
         activityType: src.activityType ?? "generic",
         completed: completedIds.has(m.id),
+        attachments: "attachments" in src ? src.attachments : [],
       };
     });
 
