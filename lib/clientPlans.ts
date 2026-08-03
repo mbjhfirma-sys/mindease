@@ -5,9 +5,12 @@ export type ClientPlan = {
   name: string;
   tagline: string;
   priceCents: number;
+  /** Billed once a year in place of 12 monthly charges — 2 months free vs. paying monthly. */
+  annualPriceCents?: number;
   mostPopular?: boolean;
   highlights: string[];
   stripePriceId?: string;
+  stripePriceIdAnnual?: string;
   features: {
     mindo: boolean;
     fullCourseLibrary: boolean;
@@ -35,8 +38,10 @@ export const CLIENT_PLANS: ClientPlan[] = [
     name: "Growth",
     tagline: "Everything you need to build lasting mental health habits.",
     priceCents: 1900,
+    annualPriceCents: 19000,
     mostPopular: true,
     stripePriceId: process.env.STRIPE_PRICE_GROWTH,
+    stripePriceIdAnnual: process.env.STRIPE_PRICE_GROWTH_ANNUAL,
     highlights: [
       "Full course library",
       "Live weekly group sessions",
@@ -52,7 +57,9 @@ export const CLIENT_PLANS: ClientPlan[] = [
     name: "Premium",
     tagline: "Deep, personalized support from certified professionals.",
     priceCents: 4900,
+    annualPriceCents: 49000,
     stripePriceId: process.env.STRIPE_PRICE_PREMIUM,
+    stripePriceIdAnnual: process.env.STRIPE_PRICE_PREMIUM_ANNUAL,
     highlights: [
       "Everything in Growth",
       "1 free 15-minute session every month",

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { computeConsecutiveDayStreak, resolveTimeZone, STREAK_LOOKBACK } from "@/lib/dateKey";
+import { assignClientToTherapist } from "@/lib/therapistAssignment";
 
 export async function GET() {
   const session = await auth();
@@ -42,10 +43,14 @@ export async function GET() {
   const since30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
   const streakLookbackStart = new Date(now - STREAK_LOOKBACK * 24 * 60 * 60 * 1000);
 
-  const [openFlags, recentCompletions, streakMoods, appointments] = await Promise.all([
+  const [openFlags, treatmentPlans, recentCompletions, streakMoods, appointments] = await Promise.all([
     db.riskFlag.findMany({
       where: { userId: { in: clientIds }, status: "open" },
       select: { userId: true, severity: true },
+    }),
+    db.treatmentPlan.findMany({
+      where: { therapistId: therapist.id, clientId: { in: clientIds } },
+      select: { clientId: true, riskLevel: true },
     }),
     db.missionCompletion.findMany({
       where: { userId: { in: clientIds }, completedAt: { gte: since30 } },
@@ -68,6 +73,15 @@ export async function GET() {
       riskByUser.set(f.userId, "high");
     } else if (f.severity === "moderate" && riskByUser.get(f.userId) !== "high") {
       riskByUser.set(f.userId, "medium");
+    }
+  }
+  // A therapist's own clinical risk assessment (Treatment plan) must never be
+  // silently outranked by automated flag detection — take whichever is worse.
+  const RISK_RANK = { low: 0, medium: 1, high: 2 } as const;
+  for (const p of treatmentPlans) {
+    const flagLevel = riskByUser.get(p.clientId) ?? "low";
+    if (p.riskLevel !== "low" && RISK_RANK[p.riskLevel] > RISK_RANK[flagLevel]) {
+      riskByUser.set(p.clientId, p.riskLevel);
     }
   }
 
@@ -143,7 +157,13 @@ export async function POST(req: NextRequest) {
   if (client.therapistId === therapist.id) return NextResponse.json({ error: "This client is already linked to you" }, { status: 409 });
   if (client.therapistId) return NextResponse.json({ error: "This client is already linked to another therapist" }, { status: 409 });
 
-  await db.user.update({ where: { id: client.id }, data: { therapistId: therapist.id } });
+  const result = await assignClientToTherapist(client.id, client.name, therapist.id);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: "You've reached your Starter plan's client limit — upgrade to accept more clients" },
+      { status: 409 }
+    );
+  }
 
   return NextResponse.json({ ok: true, clientName: client.name });
 }

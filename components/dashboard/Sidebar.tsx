@@ -8,11 +8,12 @@ import {
   LayoutDashboard, BookOpen, CheckSquare, PenLine,
   MessageCircle, Calendar, Search, Bot,
   BarChart2, Users, ClipboardList, Settings, LogOut,
-  ChevronLeft, ChevronRight, Stethoscope, LifeBuoy, Newspaper,
+  ChevronLeft, ChevronRight, Stethoscope, LifeBuoy, Newspaper, Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { onBadgesChanged } from "@/lib/badgeEvents";
+import UpgradeModal from "@/components/dashboard/UpgradeModal";
 
 type NavItem = { href: string; Icon: LucideIcon; label: string; exact?: boolean; accent?: boolean };
 
@@ -54,7 +55,9 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [streak,   setStreak]     = useState(0);
   const [avatar,   setAvatar]     = useState<string | null>(null);
+  const [plan,     setPlan]       = useState<string>("free");
   const [badges,   setBadges]     = useState<Record<string, number>>({});
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const fullName = session?.user?.name ?? "";
   const userName = fullName ? fullName.split(" ")[0] : "";
@@ -87,7 +90,10 @@ export default function Sidebar() {
       .catch(() => {});
     fetch("/api/user")
       .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((d) => { if (d.user?.avatar) setAvatar(d.user.avatar); })
+      .then((d) => {
+        if (d.user?.avatar) setAvatar(d.user.avatar);
+        if (d.user?.plan) setPlan(d.user.plan);
+      })
       .catch(() => {});
     fetchMissionsRemaining();
     fetchUnread();
@@ -191,19 +197,37 @@ export default function Sidebar() {
 
       {/* Bottom */}
       <div className="px-2.5 py-3 border-t border-stone-100 flex-shrink-0 space-y-0.5">
-        <Link
-          href="/dashboard/settings"
-          title={collapsed ? "Settings" : undefined}
-          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-all ${collapsed ? "justify-center" : ""}`}
-        >
-          <div className="w-6 h-6 bg-stone-100 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-semibold text-stone-600 flex-shrink-0">
-            {avatar
-              ? <img src={avatar} alt="" className="w-full h-full object-cover" />
-              : userInit}
-          </div>
-          {!collapsed && <span className="flex-1 truncate">{userName || "Settings"}</span>}
-          {!collapsed && <Settings size={15} strokeWidth={1.5} className="text-stone-300 flex-shrink-0" />}
-        </Link>
+        {plan !== "premium" ? (
+          <button
+            onClick={() => setShowUpgradeModal(true)}
+            title={collapsed ? "Upgrade" : undefined}
+            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg bg-gradient-to-r from-sage-600 to-sage-800 hover:from-sage-700 hover:to-sage-900 shadow-sm hover:shadow-md transition-all animate-pulse-glow ${collapsed ? "justify-center" : ""}`}
+          >
+            <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <Sparkles size={13} className="text-white" strokeWidth={2} />
+            </div>
+            {!collapsed && (
+              <div className="min-w-0 flex-1 text-left">
+                <div className="text-xs font-semibold text-white truncate">Upgrade</div>
+                <div className="text-[10px] text-sage-100 truncate">Unlock Mindo, courses & more</div>
+              </div>
+            )}
+          </button>
+        ) : (
+          <Link
+            href="/dashboard/settings"
+            title={collapsed ? "Settings" : undefined}
+            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-all ${collapsed ? "justify-center" : ""}`}
+          >
+            <div className="w-6 h-6 bg-stone-100 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-semibold text-stone-600 flex-shrink-0">
+              {avatar
+                ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+                : userInit}
+            </div>
+            {!collapsed && <span className="flex-1 truncate">{userName || "Settings"}</span>}
+            {!collapsed && <Settings size={15} strokeWidth={1.5} className="text-stone-300 flex-shrink-0" />}
+          </Link>
+        )}
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
           title={collapsed ? "Sign out" : undefined}
@@ -213,6 +237,14 @@ export default function Sidebar() {
           {!collapsed && <span className="flex-1 text-left">Sign out</span>}
         </button>
       </div>
+
+      {showUpgradeModal && (
+        <UpgradeModal
+          onClose={() => setShowUpgradeModal(false)}
+          title="Upgrade your plan"
+          description="Unlock Mindo, the full course library, and live group sessions."
+        />
+      )}
     </aside>
   );
 }

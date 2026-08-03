@@ -38,10 +38,13 @@ export async function handleSubscriptionEvent(event: Stripe.Event): Promise<void
 
   const item = subscription.items.data[0];
   const priceId = item?.price.id;
-  const plan = CLIENT_PLANS.find((p) => p.stripePriceId === priceId);
+  // Matches either cycle's price ID — a plan's annual price is a real, separate Stripe Price
+  // (see lib/clientPlans.ts), not something inferred from interval/amount.
+  const plan = CLIENT_PLANS.find((p) => p.stripePriceId === priceId || p.stripePriceIdAnnual === priceId);
   if (!plan || !item) return; // A price this app doesn't recognize as a client plan — ignore.
 
   const status = mapStatus(subscription.status);
+  const priceCents = priceId === plan.stripePriceIdAnnual ? (plan.annualPriceCents ?? plan.priceCents) : plan.priceCents;
 
   await db.$transaction([
     db.clientSubscription.upsert({
@@ -49,7 +52,7 @@ export async function handleSubscriptionEvent(event: Stripe.Event): Promise<void
       create: {
         userId: user.id,
         planId: plan.id,
-        priceCents: plan.priceCents,
+        priceCents,
         status,
         stripeSubscriptionId: subscription.id,
         stripePriceId: priceId!,
@@ -60,7 +63,7 @@ export async function handleSubscriptionEvent(event: Stripe.Event): Promise<void
       },
       update: {
         planId: plan.id,
-        priceCents: plan.priceCents,
+        priceCents,
         status,
         stripePriceId: priceId!,
         currentPeriodStart: new Date(item.current_period_start * 1000),

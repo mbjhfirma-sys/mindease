@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { MatchFactorsList } from "@/components/MatchFactorsList";
+import UpgradeModal from "@/components/therapist/UpgradeModal";
 import type { MatchReasonFactor } from "@/lib/matching";
 
 type Client = {
@@ -32,6 +33,11 @@ const RISK_PILL: Record<Client["riskLevel"], string> = {
 const RISK_DOT: Record<Client["riskLevel"], string> = {
   high: "bg-chart-risk-high", medium: "bg-chart-risk-medium", low: "bg-chart-risk-low",
 };
+// 1/5 (worst) -> 5/5 (best), same validated ramp as the client detail page's
+// 7-Day Mood Trend chart — see MOOD_SCORE_COLOR there for the accessibility notes.
+const MOOD_SCORE_COLOR: Record<number, string> = {
+  1: "#b03b39", 2: "#e48233", 3: "#8d7616", 4: "#8bbe4c", 5: "#007a38",
+};
 
 function needsAttention(c: Client) {
   return c.riskLevel !== "low" || c.lastActivity === "inactive";
@@ -41,7 +47,7 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: (name: string) => void }) {
+function AddClientModal({ onClose, onAdded, onCapacityLimit }: { onClose: () => void; onAdded: (name: string) => void; onCapacityLimit: () => void }) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -58,7 +64,14 @@ function AddClientModal({ onClose, onAdded }: { onClose: () => void; onAdded: (n
         body: JSON.stringify({ clientCode: code }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Something went wrong"); return; }
+      if (!res.ok) {
+        if (res.status === 409 && typeof data.error === "string" && data.error.includes("upgrade")) {
+          onCapacityLimit();
+          return;
+        }
+        setError(data.error ?? "Something went wrong");
+        return;
+      }
       setAddedName(data.clientName);
       onAdded(data.clientName);
     } catch {
@@ -120,6 +133,7 @@ export default function ClientsPage() {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [riskFilter, setRiskFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   function loadClients() {
     fetch("/api/therapist/clients")
@@ -148,6 +162,9 @@ export default function ClientsPage() {
       if (res.ok) {
         setWaitlist((prev) => prev.filter((w) => w.id !== id));
         if (action === "accept") { setLoading(true); loadClients(); }
+      } else if (res.status === 409) {
+        const d = await res.json().catch(() => null);
+        if (typeof d?.error === "string" && d.error.includes("upgrade")) setShowUpgradeModal(true);
       }
     } finally {
       setResolvingId(null);
@@ -179,6 +196,15 @@ export default function ClientsPage() {
         <AddClientModal
           onClose={() => setShowModal(false)}
           onAdded={() => { setShowModal(false); setLoading(true); loadClients(); }}
+          onCapacityLimit={() => { setShowModal(false); setShowUpgradeModal(true); }}
+        />
+      )}
+
+      {showUpgradeModal && (
+        <UpgradeModal
+          onClose={() => setShowUpgradeModal(false)}
+          title="You've reached your Starter plan's client limit"
+          description="Upgrade to Professional or Practice to accept unlimited clients."
         />
       )}
 
@@ -337,7 +363,7 @@ export default function ClientsPage() {
                         {client.recentMoods.length > 0 ? (
                           <div className="flex items-end gap-0.5 h-6">
                             {client.recentMoods.slice(0, 7).map((m, j) => (
-                              <div key={j} className={`w-1.5 rounded-t-sm ${RISK_DOT[client.riskLevel]}`} style={{ height: `${Math.max(2, (m.score / 5) * 22)}px` }} />
+                              <div key={j} className="w-1.5 rounded-t-sm" style={{ height: `${Math.max(2, (m.score / 5) * 22)}px`, backgroundColor: MOOD_SCORE_COLOR[m.score] }} />
                             ))}
                           </div>
                         ) : (

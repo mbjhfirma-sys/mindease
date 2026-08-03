@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Sparkles, Lock } from "lucide-react";
+import UpgradeModal from "@/components/dashboard/UpgradeModal";
 const CATEGORIES = ["All", "Mindfulness", "Mental Health", "Wellness", "Personal Growth", "Stress Management", "Self-Care"];
 
 type Course = {
@@ -27,6 +28,7 @@ export default function CoursesPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [recommendation, setRecommendation] = useState<CourseRecommendation | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -164,7 +166,8 @@ export default function CoursesPage() {
             {courses.map((c) => (
               <Link
                 key={c.id}
-                href={c.locked ? "/dashboard/settings" : `/dashboard/courses/${c.id}`}
+                href={c.locked ? "#" : `/dashboard/courses/${c.id}`}
+                onClick={(e) => { if (c.locked) { e.preventDefault(); setShowUpgradeModal(true); } }}
                 className={`bg-white rounded-3xl overflow-hidden border border-stone-100 transition-all group ${c.locked ? "opacity-70 hover:opacity-100" : "hover:shadow-lg"}`}
               >
                 <div className={`${c.color} h-28 flex items-center justify-center text-5xl relative`}>
@@ -205,6 +208,13 @@ export default function CoursesPage() {
             ))}
           </div>
         </>
+      )}
+      {showUpgradeModal && (
+        <UpgradeModal
+          onClose={() => setShowUpgradeModal(false)}
+          title="Unlock the full course library"
+          description="Upgrade to Growth or Premium to access every course in the library, not just the free intro set."
+        />
       )}
     </div>
   );

@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { signOut } from "next-auth/react";
 import { User, Bell, Shield, Lock, CreditCard, Copy, Check, Eye, EyeOff, Camera, Loader2, FileText } from "lucide-react";
-import { formatCents } from "@/lib/money";
+import { formatCents, discountedPriceCents } from "@/lib/money";
+import type { CouponRedemption } from "@/lib/money";
 import { CLIENT_PLANS } from "@/lib/clientPlans";
 
 function resizeToJpeg(file: File, maxPx = 200, quality = 0.85): Promise<string> {
@@ -84,19 +85,6 @@ type SessionLogItem = {
   id: string; date: string; duration: number; type: string; status: string;
   therapist: { user: { name: string } };
 };
-
-type CouponRedemption = {
-  discountValueSnapshot: number;
-  coupon: { code: string; discountType: "percent" | "fixed"; owner: { user: { name: string } } };
-};
-
-function discountedPriceCents(priceCents: number, redemption: CouponRedemption): number {
-  if (priceCents === 0) return 0;
-  const discounted = redemption.coupon.discountType === "percent"
-    ? priceCents * (1 - redemption.discountValueSnapshot / 100)
-    : priceCents - redemption.discountValueSnapshot;
-  return Math.max(0, Math.round(discounted));
-}
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (

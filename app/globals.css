@@ -137,3 +137,13 @@ html {
 .animate-tour-fade-in {
   animation: tour-fade-in 0.3s ease-out;
 }
+
+/* ── Sidebar upgrade CTA ─────────────────────────────────────────────────── */
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82, 183, 136, 0.35); }
+  50%      { box-shadow: 0 0 12px 3px rgba(82, 183, 136, 0.35); }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}

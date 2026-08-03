@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import Link from "next/link";
 import { Send, Phone, Sparkles } from "lucide-react";
 import { planById } from "@/lib/clientPlans";
+import UpgradeModal from "@/components/dashboard/UpgradeModal";
 
 type Message = { id: string; from: "ai" | "user"; text: string; time: string };
 
@@ -33,6 +33,7 @@ export default function AiChatPage() {
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [hasMindoAccess, setHasMindoAccess] = useState(true);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -90,9 +91,19 @@ export default function AiChatPage() {
         <p className="text-sm text-stone-500 mb-5">
           Upgrade your plan to chat with Mindo, get daily briefings, and receive personalized course recommendations.
         </p>
-        <Link href="/dashboard/settings" className="inline-block bg-stone-900 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-stone-800 transition-colors">
+        <button
+          onClick={() => setShowUpgradeModal(true)}
+          className="inline-block bg-stone-900 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-stone-800 transition-colors"
+        >
           View plans
-        </Link>
+        </button>
+        {showUpgradeModal && (
+          <UpgradeModal
+            onClose={() => setShowUpgradeModal(false)}
+            title="Mindo is a Growth & Premium feature"
+            description="Upgrade your plan to chat with Mindo, get daily briefings, and receive personalized course recommendations."
+          />
+        )}
       </div>
     );
   }

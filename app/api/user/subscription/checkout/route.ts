@@ -6,7 +6,10 @@ import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { planById } from "@/lib/clientPlans";
 
-const postSchema = z.object({ planId: z.enum(["growth", "premium"]) });
+const postSchema = z.object({
+  planId: z.enum(["growth", "premium"]),
+  billingCycle: z.enum(["monthly", "annual"]).default("monthly"),
+});
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -18,7 +21,8 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const plan = planById(parsed.data.planId);
-  if (!plan.stripePriceId) return NextResponse.json({ error: "Plan not configured" }, { status: 500 });
+  const priceId = parsed.data.billingCycle === "annual" ? plan.stripePriceIdAnnual : plan.stripePriceId;
+  if (!priceId) return NextResponse.json({ error: "Plan not configured" }, { status: 500 });
 
   const user = await db.user.findUniqueOrThrow({
     where: { id: session.user.id },
@@ -49,7 +53,7 @@ export async function POST(req: NextRequest) {
   const checkoutSession = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
-    line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+    line_items: [{ price: priceId, quantity: 1 }],
     discounts,
     success_url: `${origin}/dashboard/settings?tab=subscription&checkout=success`,
     cancel_url: `${origin}/dashboard/settings?tab=subscription&checkout=canceled`,
