@@ -58,11 +58,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     : 0;
 
   const streakLookbackStart = new Date(Date.now() - STREAK_LOOKBACK * 24 * 60 * 60 * 1000);
-  const [openRiskFlags, streakMoods, activeStepUpWindow, matchReasoning, pendingFeedback] = await Promise.all([
+  const [openRiskFlags, treatmentPlan, streakMoods, activeStepUpWindow, matchReasoning, pendingFeedback] = await Promise.all([
     db.riskFlag.findMany({
       where: { userId: clientId, status: "open" },
       select: { id: true, source: true, severity: true, detail: true, createdAt: true },
       orderBy: { createdAt: "desc" },
+    }),
+    db.treatmentPlan.findUnique({
+      where: { therapistId_clientId: { therapistId: therapist.id, clientId } },
+      select: { riskLevel: true },
     }),
     db.moodEntry.findMany({
       where: { userId: clientId, createdAt: { gte: streakLookbackStart } },
@@ -82,11 +86,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }),
   ]);
 
-  const riskLevel = openRiskFlags.some((f) => f.severity === "high")
+  const flagRiskLevel = openRiskFlags.some((f) => f.severity === "high")
     ? "high"
     : openRiskFlags.some((f) => f.severity === "moderate")
     ? "medium"
     : "low";
+  // A therapist's own clinical risk assessment (Treatment plan) must never be
+  // silently outranked by automated flag detection — take whichever is worse.
+  const RISK_RANK = { low: 0, medium: 1, high: 2 } as const;
+  const riskLevel = treatmentPlan && RISK_RANK[treatmentPlan.riskLevel] > RISK_RANK[flagRiskLevel]
+    ? treatmentPlan.riskLevel
+    : flagRiskLevel;
   const timeZone = resolveTimeZone(client.timezone);
   const streak = computeConsecutiveDayStreak(streakMoods.map((m) => m.createdAt), timeZone);
 
