@@ -43,6 +43,7 @@ export async function GET(
       author: { select: { id: true, name: true, avatar: true } },
       likes: { select: { userId: true } },
       _count: { select: { replies: true } },
+      attachments: true,
     },
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
     take: parseInt(req.nextUrl.searchParams.get("limit") ?? "50"),
@@ -80,6 +81,7 @@ export async function GET(
       liked: p.likes.some((l) => l.userId === userId),
       replyCount: p._count.replies,
       createdAt: p.createdAt,
+      attachments: p.attachments.map((a) => ({ id: a.id, name: a.name, size: a.size, mimeType: a.mimeType, url: a.url })),
     };
   });
 

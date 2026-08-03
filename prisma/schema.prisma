@@ -859,21 +859,35 @@ model GroupMembership {
 }
 
 model CommunityPost {
-  id        String        @id @default(cuid())
-  userId    String
-  groupId   String?
-  content   String
-  anonymous Boolean       @default(false)
-  pinned    Boolean       @default(false)
-  flagged   Boolean       @default(false)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  group     SupportGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes     PostLike[]
-  replies   PostReply[]
+  id          String                  @id @default(cuid())
+  userId      String
+  groupId     String?
+  content     String
+  anonymous   Boolean                 @default(false)
+  pinned      Boolean                 @default(false)
+  flagged     Boolean                 @default(false)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  group       SupportGroup?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes       PostLike[]
+  replies     PostReply[]
+  attachments CommunityPostAttachment[]
 
   @@index([groupId, createdAt])
+}
+
+model CommunityPostAttachment {
+  id        String        @id @default(cuid())
+  postId    String
+  name      String
+  size      Int
+  mimeType  String
+  url       String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
 }
 
 model PostLike {
@@ -1008,20 +1022,34 @@ model TherapistGroupInvite {
 }
 
 model TherapistGroupPost {
-  id        String                    @id @default(cuid())
-  groupId   String
-  authorId  String
-  content   String
-  pinned    Boolean                   @default(false)
-  flagged   Boolean                   @default(false)
-  createdAt DateTime                  @default(now())
-  updatedAt DateTime                  @updatedAt
-  author    User                      @relation("TherapistGroupPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  group     TherapistGroup            @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  likes     TherapistGroupPostLike[]
-  replies   TherapistGroupPostReply[]
+  id          String                    @id @default(cuid())
+  groupId     String
+  authorId    String
+  content     String
+  pinned      Boolean                   @default(false)
+  flagged     Boolean                   @default(false)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  author      User                      @relation("TherapistGroupPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  group       TherapistGroup            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  likes       TherapistGroupPostLike[]
+  replies     TherapistGroupPostReply[]
+  attachments TherapistGroupPostAttachment[]
 
   @@index([groupId, pinned, createdAt])
+}
+
+model TherapistGroupPostAttachment {
+  id        String             @id @default(cuid())
+  postId    String
+  name      String
+  size      Int
+  mimeType  String
+  url       String
+  createdAt DateTime           @default(now())
+  post      TherapistGroupPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
 }
 
 model TherapistGroupPostLike {

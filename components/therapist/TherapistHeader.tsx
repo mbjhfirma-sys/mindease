@@ -17,6 +17,7 @@ export default function TherapistHeader() {
   const [name, setName] = useState("Therapist");
   const [pendingAppts, setPendingAppts] = useState(0);
   const [unreadMsgs, setUnreadMsgs] = useState(0);
+  const [unreadCommunity, setUnreadCommunity] = useState(0);
   const [clinic, setClinic] = useState<ClinicInfo | null>(null);
   const [prevPathname, setPrevPathname] = useState<string | null>(null);
   const pathname = usePathname();
@@ -33,6 +34,7 @@ export default function TherapistHeader() {
         if (sData.stats) {
           setPendingAppts(sData.stats.pendingAppointments);
           setUnreadMsgs(sData.stats.unreadMessages);
+          setUnreadCommunity(sData.stats.unreadCommunityNotifications);
         }
       });
   }, []);
@@ -126,7 +128,11 @@ export default function TherapistHeader() {
           <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-2 mb-2">Portal</p>
           <div className="space-y-0.5">
             {CLIENT_NAV.map(({ href, label, Icon, exact }) => {
-              const badge = href === "/therapist/appointments" ? pendingAppts : href === "/therapist/messages" ? unreadMsgs : undefined;
+              const badge =
+                href === "/therapist/appointments" ? pendingAppts
+                : href === "/therapist/messages" ? unreadMsgs
+                : href === "/therapist/community" ? unreadCommunity
+                : undefined;
               const active = isActive(href, exact);
               return (
                 <Link

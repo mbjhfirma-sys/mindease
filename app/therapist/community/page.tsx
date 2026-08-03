@@ -4,12 +4,22 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Plus, X, Check, Users, Globe, Lock, Pencil, Trash2,
   MessageCircle, Pin, ChevronRight, ChevronLeft, Heart, Send, ShieldCheck,
-  Sparkles, Flag, UserPlus,
+  Sparkles, Flag, UserPlus, Paperclip, Activity,
 } from "lucide-react";
 import { IDENTITY_TAGS } from "@/lib/identityTags";
 import { AGE_GROUPS } from "@/lib/ageGroups";
 import { getJoinWindow } from "@/lib/video";
 import GroupCallRoom from "@/components/video/GroupCallRoom";
+import AttachmentGallery, { type Attachment } from "@/components/dashboard/AttachmentGallery";
+
+const ATTACHMENT_ACCEPT = "image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/mp4,audio/wav,audio/ogg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx";
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 type GroupSessionItem = {
   id: string; scheduledStart: string; durationMin: number;
@@ -54,6 +64,7 @@ interface CommunityPost {
   escalated: boolean;
   escalationSeverity: Severity | null;
   escalationDetail: string | null;
+  attachments: Attachment[];
 }
 
 interface Reply {
@@ -78,6 +89,16 @@ interface FlaggedPost {
   severity: Severity;
   detail: string | null;
   otherOpenRiskFlagCount: number;
+}
+
+interface ActivityItem {
+  id: string;
+  type: "post" | "reply" | "join";
+  groupId: string;
+  groupName: string;
+  authorName: string;
+  content: string | null;
+  createdAt: string;
 }
 
 interface GroupMember {
@@ -106,6 +127,8 @@ interface EscalateTarget {
   replyId?: string;
   defaultNote: string;
 }
+
+const ACTIVITY_PREVIEW_COUNT = 3;
 
 const CATEGORIES = [
   "Anxiety", "Depression", "Grief", "Sleep", "Trauma",
@@ -221,6 +244,8 @@ export default function TherapistCommunityPage() {
 
   const [newPost, setNewPost] = useState("");
   const [posting, setPosting] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
+  const [attachmentError, setAttachmentError] = useState("");
 
   const [repliesByPost, setRepliesByPost] = useState<Record<string, Reply[]>>({});
   const [loadedReplyPosts, setLoadedReplyPosts] = useState<Set<string>>(new Set());
@@ -230,6 +255,9 @@ export default function TherapistCommunityPage() {
 
   const [flaggedPosts, setFlaggedPosts] = useState<FlaggedPost[]>([]);
   const [loadingFlagged, setLoadingFlagged] = useState(true);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
+  const [activityExpanded, setActivityExpanded] = useState(false);
   const [overviewInsight, setOverviewInsight] = useState<string | null>(null);
   const [groupInsight, setGroupInsight] = useState<string | null>(null);
 
@@ -298,7 +326,15 @@ export default function TherapistCommunityPage() {
       .finally(() => setLoadingFlagged(false));
   }, []);
 
-  useEffect(() => { loadCommunities(); loadFlagged(); }, [loadCommunities, loadFlagged]);
+  const loadActivity = useCallback(() => {
+    fetch("/api/therapist/community/activity", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => setActivity(d.activity ?? []))
+      .catch(() => setActivity([]))
+      .finally(() => setLoadingActivity(false));
+  }, []);
+
+  useEffect(() => { loadCommunities(); loadFlagged(); loadActivity(); }, [loadCommunities, loadFlagged, loadActivity]);
 
   useEffect(() => {
     if (mode !== "list") return;
@@ -316,7 +352,7 @@ export default function TherapistCommunityPage() {
         const formatted: CommunityPost[] = (d.posts ?? []).map((p: {
           id: string; groupId: string; author: string; authorId: string; authorRiskLevel: RiskLevel; content: string;
           pinned: boolean; flagged: boolean; escalated: boolean; escalationSeverity: Severity | null; escalationDetail: string | null;
-          likes: number; liked: boolean; replyCount: number; createdAt: string;
+          likes: number; liked: boolean; replyCount: number; createdAt: string; attachments?: Attachment[];
         }) => ({
           id: p.id,
           communityId: p.groupId,
@@ -333,6 +369,7 @@ export default function TherapistCommunityPage() {
           escalated: p.escalated,
           escalationSeverity: p.escalationSeverity,
           escalationDetail: p.escalationDetail,
+          attachments: p.attachments ?? [],
         }));
         setPosts(formatted);
       })
@@ -589,13 +626,44 @@ export default function TherapistCommunityPage() {
         body: JSON.stringify({ content: newPost.trim() }),
       });
       if (res.ok) {
+        const d = await res.json();
+        const postId: string | undefined = d.post?.id;
+        if (postId && pendingAttachments.length > 0) {
+          await Promise.all(
+            pendingAttachments.map((file) => {
+              const form = new FormData();
+              form.append("postId", postId);
+              form.append("postSource", "therapist");
+              form.append("file", file);
+              return fetch("/api/community/posts/attachments", { method: "POST", body: form }).catch(() => null);
+            })
+          );
+        }
         setNewPost("");
+        setPendingAttachments([]);
         loadPosts(activeCommunityId);
         setCommunities((prev) => prev.map((c) => c.id === activeCommunityId ? { ...c, postCount: c.postCount + 1 } : c));
       }
     } finally {
       setPosting(false);
     }
+  }
+
+  function handleAttachmentSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    const oversized = files.find((f) => f.size > MAX_ATTACHMENT_BYTES);
+    if (oversized) {
+      setAttachmentError(`${oversized.name} is too large (15MB max)`);
+      return;
+    }
+    setAttachmentError("");
+    setPendingAttachments((prev) => [...prev, ...files]);
+  }
+
+  function removePendingAttachment(index: number) {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function dismissFlagged(fp: FlaggedPost) {
@@ -900,8 +968,29 @@ export default function TherapistCommunityPage() {
                     placeholder="Write something for your community…" rows={3}
                     className="flex-1 text-sm text-console-ink placeholder-console-dim resize-none focus:outline-none leading-relaxed" />
                 </div>
+                {pendingAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {pendingAttachments.map((file, i) => (
+                      <span key={`${file.name}-${i}`} className="flex items-center gap-1.5 text-[11px] bg-console-bg border border-console-line text-console-muted rounded-full pl-2.5 pr-1.5 py-1">
+                        <span className="max-w-[140px] truncate">{file.name}</span>
+                        <span className="text-console-dim">{formatBytes(file.size)}</span>
+                        <button onClick={() => removePendingAttachment(i)} className="text-console-dim hover:text-console-risk-high transition-colors">
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {attachmentError && <p className="text-[11px] text-console-risk-high mb-3">{attachmentError}</p>}
                 <div className="flex items-center justify-between border-t border-console-line pt-3">
-                  <span className="text-[10px] text-console-dim">{newPost.length}/500</span>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 text-xs text-console-muted hover:text-console-ink cursor-pointer transition-colors">
+                      <Paperclip size={14} strokeWidth={1.5} />
+                      <span className="hidden sm:inline">Attach</span>
+                      <input type="file" multiple accept={ATTACHMENT_ACCEPT} onChange={handleAttachmentSelect} className="hidden" />
+                    </label>
+                    <span className="text-[10px] text-console-dim">{newPost.length}/500</span>
+                  </div>
                   <button onClick={submitPost} disabled={!newPost.trim() || posting}
                     className="bg-console-navy text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity flex items-center gap-1.5">
                     <Send size={11} strokeWidth={2} />
@@ -948,6 +1037,11 @@ export default function TherapistCommunityPage() {
                         {post.escalated && post.escalationSeverity && <SeverityChip severity={post.escalationSeverity} />}
                       </div>
                       <p className="text-sm text-console-muted leading-relaxed">{post.content}</p>
+                      {post.attachments.length > 0 && (
+                        <div className="mt-3">
+                          <AttachmentGallery attachments={post.attachments} />
+                        </div>
+                      )}
                       {post.escalated && post.escalationDetail && (
                         <div className="mt-2 flex items-start gap-1.5 text-[11px] text-console-risk-high bg-console-banner-high-bg border border-console-banner-high-border rounded-lg px-2.5 py-1.5">
                           <Flag size={11} strokeWidth={1.8} className="flex-shrink-0 mt-0.5" />
@@ -1213,6 +1307,57 @@ export default function TherapistCommunityPage() {
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+
+              <div className="bg-console-panel border border-console-line rounded-xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-console-line">
+                  <Activity size={14} strokeWidth={1.8} className="text-console-muted" />
+                  <span className="text-sm font-semibold text-console-ink">Recent activity</span>
+                  {activity.length > 0 && (
+                    <span className="text-[11px] font-bold text-white bg-console-navy px-2 py-0.5 rounded-full">{activity.length}</span>
+                  )}
+                </div>
+                {loadingActivity ? (
+                  <div className="py-8 text-center text-sm text-console-dim">Loading…</div>
+                ) : activity.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-console-dim">No new posts, replies, or members yet.</div>
+                ) : (
+                  <>
+                    <div className="divide-y divide-console-line">
+                      {(activityExpanded ? activity : activity.slice(0, ACTIVITY_PREVIEW_COUNT)).map((a) => (
+                        <button
+                          key={a.id}
+                          onClick={() => openView(a.groupId)}
+                          className="w-full text-left p-4 flex gap-3 hover:bg-console-bg/60 transition-colors"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-console-bg flex items-center justify-center flex-shrink-0 text-sm">
+                            {a.type === "post" ? "📝" : a.type === "reply" ? "💬" : "🤝"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-console-ink mb-1">
+                              {a.authorName}
+                              <span className="text-console-dim font-normal">
+                                {" "}
+                                {a.type === "join" ? "joined" : a.type === "reply" ? "replied in" : "posted in"} {a.groupName} · {timeAgo(new Date(a.createdAt))}
+                              </span>
+                            </div>
+                            {a.content && <p className="text-xs text-console-muted leading-relaxed line-clamp-2">{a.content}</p>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    {activity.length > ACTIVITY_PREVIEW_COUNT && (
+                      <div className="border-t border-console-line px-4 py-2.5 text-center">
+                        <button
+                          onClick={() => setActivityExpanded((v) => !v)}
+                          className="text-xs font-medium text-console-muted hover:text-console-ink transition-colors"
+                        >
+                          {activityExpanded ? "Show less" : `Show all ${activity.length}`}
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

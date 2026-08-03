@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { createNotification } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export async function GET(req: NextRequest) {
       likes: { select: { userId: true } },
       replies: { orderBy: { createdAt: "asc" } },
       group: { select: { name: true } },
+      attachments: true,
     },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -89,6 +91,7 @@ export async function GET(req: NextRequest) {
             orderBy: { createdAt: "asc" },
           },
           group: { select: { name: true } },
+          attachments: true,
         },
         orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
         take: limit,
@@ -110,6 +113,7 @@ export async function GET(req: NextRequest) {
       liked: p.likes.some((l) => l.userId === userId),
       pinned: false,
       createdAt: p.createdAt,
+      attachments: p.attachments.map((a) => ({ id: a.id, name: a.name, size: a.size, mimeType: a.mimeType, url: a.url })),
     })),
     ...therapistPosts.map((p) => ({
       id: p.id,
@@ -125,6 +129,7 @@ export async function GET(req: NextRequest) {
       liked: p.likes.some((l) => l.userId === userId),
       pinned: p.pinned,
       createdAt: p.createdAt,
+      attachments: p.attachments.map((a) => ({ id: a.id, name: a.name, size: a.size, mimeType: a.mimeType, url: a.url })),
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
    .slice(0, limit);
@@ -144,7 +149,7 @@ export async function POST(req: NextRequest) {
   if (replyParsed.success && body.type === "reply") {
     const { postId, content, postSource } = replyParsed.data;
     if (postSource === "therapist") {
-      const targetPost = await db.therapistGroupPost.findUnique({ where: { id: postId }, select: { groupId: true } });
+      const targetPost = await db.therapistGroupPost.findUnique({ where: { id: postId }, select: { groupId: true, authorId: true } });
       if (!targetPost) return NextResponse.json({ error: "Post not found" }, { status: 404 });
       const tGroup = await db.therapistGroup.findUnique({ where: { id: targetPost.groupId }, include: { therapist: { select: { userId: true } } } });
       if (!tGroup) return NextResponse.json({ error: "Group not found" }, { status: 404 });
@@ -155,11 +160,34 @@ export async function POST(req: NextRequest) {
       const reply = await db.therapistGroupPostReply.create({
         data: { postId, authorId: userId, content },
       });
+      if (targetPost.authorId !== userId) {
+        const authorIsTherapist = targetPost.authorId === tGroup.therapist.userId;
+        const preview = content.length > 80 ? `${content.slice(0, 80)}…` : content;
+        await createNotification(targetPost.authorId, {
+          title: `New reply in "${tGroup.name}"`,
+          body: preview,
+          icon: "💬",
+          href: authorIsTherapist ? "/therapist/community" : "/dashboard/community",
+        });
+      }
       return NextResponse.json({ ok: true, reply }, { status: 201 });
     } else {
+      const targetPost = await db.communityPost.findUnique({
+        where: { id: postId },
+        select: { userId: true, group: { select: { name: true } } },
+      });
       const reply = await db.postReply.create({
         data: { postId, userId, content },
       });
+      if (targetPost && targetPost.userId !== userId) {
+        const preview = content.length > 80 ? `${content.slice(0, 80)}…` : content;
+        await createNotification(targetPost.userId, {
+          title: targetPost.group ? `New reply in "${targetPost.group.name}"` : "New reply on your post",
+          body: preview,
+          icon: "💬",
+          href: "/dashboard/community",
+        });
+      }
       return NextResponse.json({ ok: true, reply }, { status: 201 });
     }
   }
@@ -231,6 +259,15 @@ export async function POST(req: NextRequest) {
     const post = await db.therapistGroupPost.create({
       data: { groupId, authorId: userId, content },
     });
+    // Let the hosting therapist know a member posted — never for their own posts.
+    if (!isOwner) {
+      await createNotification(group.therapist.userId, {
+        title: `New post in "${group.name}"`,
+        body: content.length > 80 ? `${content.slice(0, 80)}…` : content,
+        icon: "📝",
+        href: "/therapist/community",
+      });
+    }
     return NextResponse.json({ ok: true, post }, { status: 201 });
   }
 

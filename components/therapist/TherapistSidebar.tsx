@@ -8,10 +8,10 @@ import { ChevronLeft, ChevronDown, ChevronRight, LogOut, Settings } from "lucide
 import { CLIENT_NAV, BUSINESS_GROUP, BUSINESS_SUBNAV } from "@/lib/therapistNav";
 import { onBadgesChanged } from "@/lib/badgeEvents";
 
-type Stats = { pendingAppointments: number; unreadMessages: number };
+type Stats = { pendingAppointments: number; unreadMessages: number; unreadCommunityNotifications: number };
 type ClinicSwitcher = { name: string; subtitle: string };
 
-const EMPTY_STATS: Stats = { pendingAppointments: 0, unreadMessages: 0 };
+const EMPTY_STATS: Stats = { pendingAppointments: 0, unreadMessages: 0, unreadCommunityNotifications: 0 };
 
 export default function TherapistSidebar() {
   const pathname = usePathname();
@@ -96,7 +96,11 @@ export default function TherapistSidebar() {
         {/* Nav — Client Panel items plus a collapsible Business Centre section */}
         <nav className="flex-1 px-2 py-2 flex flex-col gap-0.5 min-h-0 overflow-y-auto">
           {CLIENT_NAV.map(({ href, label, Icon, exact }) => {
-            const badge = href === "/therapist/appointments" ? stats.pendingAppointments : href === "/therapist/messages" ? stats.unreadMessages : undefined;
+            const badge =
+              href === "/therapist/appointments" ? stats.pendingAppointments
+              : href === "/therapist/messages" ? stats.unreadMessages
+              : href === "/therapist/community" ? stats.unreadCommunityNotifications
+              : undefined;
             const active = exact ? pathname === href : (pathname === href || pathname.startsWith(href + "/"));
             return (
               <Link

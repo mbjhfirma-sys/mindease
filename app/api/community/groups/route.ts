@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { createNotification } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function GET() {
 
   const userId = session.user.id;
 
-  const [supportGroups, therapistGroups, pendingInvites] = await Promise.all([
+  const [supportGroups, openTherapistGroups, pendingInvites, joinedPrivateGroups] = await Promise.all([
     db.supportGroup.findMany({
       include: {
         memberships: { select: { userId: true } },
@@ -46,7 +47,20 @@ export async function GET() {
         },
       },
     }),
+    // Invite-only groups the client has already joined — the open-groups query above
+    // excludes them by privacy, and once an invite is accepted it drops out of the
+    // pending-invites query too, so without this a joined private group would vanish
+    // from every list that feeds `formatted` the moment someone actually joins it.
+    db.therapistGroup.findMany({
+      where: { privacy: { not: "open" }, status: "active", memberships: { some: { clientId: userId } } },
+      include: {
+        memberships: { select: { clientId: true } },
+        _count: { select: { memberships: true } },
+        therapist: { include: { user: { select: { name: true } } } },
+      },
+    }),
   ]);
+  const therapistGroups = [...openTherapistGroups, ...joinedPrivateGroups];
 
   const invitedGroupIds = new Set(pendingInvites.map((i) => i.groupId));
   // Invite-only groups aren't in `therapistGroups` (that query is open-groups-only),
@@ -147,11 +161,30 @@ export async function POST(req: NextRequest) {
         }
         await db.therapistGroupInvite.update({ where: { id: invite.id }, data: { accepted: true } });
       }
+      // Only notify on a genuine new join — re-POSTing "join" on an already-joined group
+      // (the upsert below is a harmless no-op for that case) shouldn't re-notify.
+      const alreadyMember = await db.therapistGroupMembership.findUnique({
+        where: { groupId_clientId: { groupId, clientId: userId } },
+      });
       await db.therapistGroupMembership.upsert({
         where: { groupId_clientId: { groupId, clientId: userId } },
         update: {},
         create: { groupId, clientId: userId },
       });
+      if (!alreadyMember) {
+        const hostedGroup = await db.therapistGroup.findUnique({
+          where: { id: groupId },
+          select: { name: true, therapist: { select: { userId: true } } },
+        });
+        if (hostedGroup) {
+          await createNotification(hostedGroup.therapist.userId, {
+            title: "New member joined your group",
+            body: `${session.user.name ?? "A client"} joined "${hostedGroup.name}".`,
+            icon: "🤝",
+            href: "/therapist/community",
+          });
+        }
+      }
     } else {
       await db.therapistGroupMembership.deleteMany({
         where: { groupId, clientId: userId },

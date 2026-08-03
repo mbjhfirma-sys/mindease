@@ -113,7 +113,7 @@ export async function POST(
         title: "You've been invited to a community",
         body: `${inviterName} invited you to join "${group?.name ?? "a community"}".`,
         icon: "🤝",
-        href: "/dashboard/community?tab=groups",
+        href: "/dashboard/community?tab=discover",
       })
     )
   );

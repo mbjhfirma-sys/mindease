@@ -20,11 +20,12 @@ export async function GET() {
 
   if (!therapist) return NextResponse.json({ error: "Not a therapist" }, { status: 403 });
 
-  const [pendingAppointments, unreadMessages] = await Promise.all([
+  const [pendingAppointments, unreadMessages, unreadCommunityNotifications] = await Promise.all([
     db.appointment.count({ where: { therapistId: therapist.id, status: "pending" } }),
     db.message.count({
       where: { conversation: { therapistId: therapist.id }, read: false, fromUserId: { not: session.user.id } },
     }),
+    db.notification.count({ where: { userId: session.user.id, read: false, href: "/therapist/community" } }),
   ]);
 
   return NextResponse.json({
@@ -38,6 +39,7 @@ export async function GET() {
       totalSessions: therapist.totalSessions,
       pendingAppointments,
       unreadMessages,
+      unreadCommunityNotifications,
     },
   });
 }
