@@ -164,10 +164,17 @@ const RISK_PILL_CLASS: Record<RiskLevel, string> = {
 const RISK_DOT_CLASS: Record<RiskLevel, string> = {
   high: "bg-chart-risk-high", medium: "bg-chart-risk-medium", low: "bg-chart-risk-low",
 };
-const MOOD_BAR_COLOR: Record<RiskLevel, { base: string; hover: string }> = {
-  high: { base: "#D64545", hover: "#C23A3A" },
-  medium: { base: "#D98A2B", hover: "#C17A22" },
-  low: { base: "#2E9E6D", hover: "#268A5D" },
+// 1/5 (worst) -> 5/5 (best). Validated for lightness band, chroma floor, CVD
+// separation, and contrast against a white surface (dataviz skill's
+// validate_palette.js) — the one WARN-band contrast pair (2/5, 4/5) is
+// mitigated by the always-available hover tooltip and bar height, so mood is
+// never conveyed by color alone.
+const MOOD_SCORE_COLOR: Record<number, { base: string; hover: string }> = {
+  1: { base: "#b03b39", hover: "#9e3533" },
+  2: { base: "#e48233", hover: "#cd752e" },
+  3: { base: "#8d7616", hover: "#7f6a14" },
+  4: { base: "#8bbe4c", hover: "#7dab44" },
+  5: { base: "#007a38", hover: "#006e32" },
 };
 
 function todayIso() {
@@ -315,7 +322,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         }),
       });
       const d = await r.json();
-      if (r.ok && d.plan) setPlan(fromApiPlan(d.plan));
+      if (r.ok && d.plan) {
+        setPlan(fromApiPlan(d.plan));
+        // The client's overall risk level factors in the treatment plan's manual
+        // risk assessment (not just automated risk flags) — refetch so the header
+        // pill and risk banner pick up a changed risk level immediately.
+        fetch(`/api/therapist/clients/${id}`)
+          .then((res) => res.json())
+          .then((cd) => { if (cd.client) setClientData(cd.client); })
+          .catch(() => {});
+      }
       setPlanDraft(null);
       setPlanSaved(true);
       setTimeout(() => setPlanSaved(false), 2500);
@@ -801,7 +817,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                         className="w-full rounded-t-sm transition-colors"
                         style={{
                           height: `${(score / 5) * 60}px`,
-                          backgroundColor: hoveredMoodDay === i ? MOOD_BAR_COLOR[client.riskLevel].hover : MOOD_BAR_COLOR[client.riskLevel].base,
+                          backgroundColor: hoveredMoodDay === i ? MOOD_SCORE_COLOR[score].hover : MOOD_SCORE_COLOR[score].base,
                           minHeight: "4px",
                         }}
                         onMouseEnter={() => setHoveredMoodDay(i)}
@@ -1688,7 +1704,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           {/* Risk assessment card */}
-          <div className={`bg-white border rounded-xl overflow-hidden ${plan.riskLevel === "high" ? "border-red-200" : "border-chart-line"}`}>
+          {(() => {
+            const displayedRisk = editingPlan ? planDraft!.riskLevel : plan.riskLevel;
+            return (
+          <div className={`bg-white border rounded-xl overflow-hidden ${displayedRisk === "high" ? "border-red-200" : "border-chart-line"}`}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-chart-line">
               <h3 className="text-sm font-semibold text-stone-900">Risk assessment</h3>
               {editingPlan && (
@@ -1717,10 +1736,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             <div className="px-5 py-4 space-y-3">
               <div className="flex items-center gap-2">
                 <span className={`text-xs border px-2 py-0.5 rounded font-medium capitalize ${
-                  plan.riskLevel === "high" ? "border-red-200 text-red-600" :
-                  plan.riskLevel === "medium" ? "border-amber-200 text-amber-600" :
+                  displayedRisk === "high" ? "border-red-200 text-red-600" :
+                  displayedRisk === "medium" ? "border-amber-200 text-amber-600" :
                   "border-stone-200 text-stone-500"
-                }`}>{plan.riskLevel} risk</span>
+                }`}>{displayedRisk} risk</span>
                 <span className="text-xs text-stone-400">Last assessed {plan.lastAssessed}</span>
               </div>
 
@@ -1761,16 +1780,18 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
               {/* Crisis protocol — derived from risk level */}
               <div className="flex items-start gap-2 text-xs text-stone-600">
-                <span className={`mt-0.5 flex-shrink-0 ${plan.riskLevel !== "high" ? "text-stone-400" : "text-red-400"}`}>
-                  {plan.riskLevel !== "high" ? "✓" : "!"}
+                <span className={`mt-0.5 flex-shrink-0 ${displayedRisk !== "high" ? "text-stone-400" : "text-red-400"}`}>
+                  {displayedRisk !== "high" ? "✓" : "!"}
                 </span>
                 <span>
                   Crisis protocol{" "}
-                  {plan.riskLevel === "high" ? "activated — monitor closely" : "not required"}
+                  {displayedRisk === "high" ? "activated — monitor closely" : "not required"}
                 </span>
               </div>
             </div>
           </div>
+            );
+          })()}
 
           {editingPlan && (
             <div className="flex justify-end gap-2">
