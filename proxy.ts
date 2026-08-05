@@ -14,8 +14,26 @@ function homeFor(role?: string) {
   return "/dashboard";
 }
 
+// Pre-launch gate: every route not in this list needs a "site_access" cookie
+// matching SITE_ACCESS_CODE, or it's bounced to /coming-soon — checked first,
+// ahead of all the role-based logic below, since it applies regardless of
+// auth state. Unset SITE_ACCESS_CODE (e.g. a fresh local checkout) disables
+// the gate entirely rather than locking everyone out.
+const SITE_ACCESS_BYPASS = ["/coming-soon", "/api/site-access", "/api/webhooks", "/api/cron", "/api/auth"];
+
 export default auth((req) => {
   const { pathname } = req.nextUrl;
+
+  const accessCode = process.env.SITE_ACCESS_CODE;
+  if (accessCode && !SITE_ACCESS_BYPASS.some((p) => pathname.startsWith(p))) {
+    const hasAccess = req.cookies.get("site_access")?.value === accessCode;
+    if (!hasAccess) {
+      const url = new URL("/coming-soon", req.url);
+      if (pathname !== "/") url.searchParams.set("next", pathname + req.nextUrl.search);
+      return NextResponse.redirect(url);
+    }
+  }
+
   const user = req.auth?.user;
 
   // Holding pen for therapists who registered without an approval code.
