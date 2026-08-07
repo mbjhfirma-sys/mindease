@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { BookOpen, PenLine, TrendingUp, Lock, Trash2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Lock, Trash2, Plus, X } from "lucide-react";
 import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
 
 const emotionOptions = [
@@ -14,9 +14,10 @@ const TRIGGER_OPTIONS = [
   "Work stress", "Relationship", "Sleep", "Health", "Financial", "Family", "Social situation", "Other",
 ];
 
-const MOOD_EMOJIS  = ["", "😔", "😟", "😐", "🙂", "😊"];
-const MOOD_LABELS  = ["", "Low", "Low-ish", "Okay", "Good", "Great"];
-const MOOD_COLORS  = ["", "bg-red-300", "bg-orange-300", "bg-amber-300", "bg-lime-400", "bg-sage-400"];
+const MOOD_EMOJIS   = ["", "😔", "😟", "😐", "🙂", "😊"];
+const MOOD_LABELS   = ["", "Low", "Low-ish", "Okay", "Good", "Great"];
+const MOOD_COLORS   = ["", "bg-red-300", "bg-orange-300", "bg-amber-300", "bg-lime-400", "bg-sage-400"];
+const MOOD_BADGE_BG = ["", "bg-red-100", "bg-orange-100", "bg-amber-100", "bg-lime-100", "bg-sage-100"];
 
 const SLEEP_LABELS = ["", "Poor", "Rough", "Okay", "Good", "Great"];
 
@@ -42,8 +43,6 @@ function localId() {
   return `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-type Tab = "entries" | "new" | "trends";
-
 type Entry = {
   id: string; title: string; content: string; mood: number;
   emotions: string[]; type: string; wordCount: number; createdAt: string;
@@ -52,9 +51,91 @@ type Entry = {
 
 type MoodPoint = { date: string; score: number };
 
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function groupLabel(iso: string, now: Date): string {
+  const dayDiff = Math.round((startOfDay(now).getTime() - startOfDay(new Date(iso)).getTime()) / 86400000);
+  if (dayDiff <= 0) return "Today";
+  if (dayDiff === 1) return "Yesterday";
+  if (dayDiff <= 7) return "This week";
+  return "Earlier";
+}
+
+function sparklinePath(scores: number[]): string {
+  if (scores.length < 2) return "";
+  const w = 56, h = 20, pad = 2;
+  const min = Math.min(...scores), max = Math.max(...scores);
+  const range = max - min || 1;
+  return scores
+    .map((v, i) => {
+      const x = pad + (i * (w - pad * 2)) / (scores.length - 1);
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function EntrySheet({ entry, onClose, onDelete }: { entry: Entry; onClose: () => void; onDelete: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+      <div
+        className="relative w-full sm:max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-2xl shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-stone-100 sticky top-0 bg-white">
+          <span className="text-xs text-stone-400">{fmtDate(entry.createdAt)} · {fmtTime(entry.createdAt)}</span>
+          <div className="flex-1" />
+          <button onClick={onDelete} className="text-stone-300 hover:text-red-500 transition-colors p-1" title="Delete entry">
+            <Trash2 size={14} strokeWidth={1.5} />
+          </button>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 p-1">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-3xl">{MOOD_EMOJIS[entry.mood]}</span>
+            <div>
+              <h2 className="font-semibold text-stone-900">{entry.title}</h2>
+              <span className="text-xs text-stone-400">{MOOD_LABELS[entry.mood]}</span>
+            </div>
+          </div>
+          {entry.emotions?.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap mb-3">
+              {entry.emotions.map((e) => (
+                <span key={e} className="text-xs text-stone-600 bg-stone-100 px-2.5 py-1 rounded-md">{e}</span>
+              ))}
+            </div>
+          )}
+          {(entry.sleepQuality || (entry.triggers?.length ?? 0) > 0) && (
+            <div className="flex gap-1.5 flex-wrap mb-5">
+              {entry.sleepQuality ? (
+                <span className="text-xs text-stone-600 bg-stone-100 px-2.5 py-1 rounded-md">Sleep: {SLEEP_LABELS[entry.sleepQuality]}</span>
+              ) : null}
+              {entry.triggers?.map((t) => (
+                <span key={t} className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md">{t}</span>
+              ))}
+            </div>
+          )}
+          <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-line">{entry.content}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function JournalPage() {
   const checkAchievements = useAchievementCheck();
-  const [tab, setTab]             = useState<Tab>("entries");
   const [entries, setEntries]     = useState<Entry[]>([]);
   const [moodData, setMoodData]   = useState<MoodPoint[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -68,6 +149,9 @@ export default function JournalPage() {
   const [newTriggers, setNewTriggers] = useState<string[]>([]);
   const [saving,      setSaving]      = useState(false);
   const [saved,       setSaved]       = useState(false);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const detailsRef   = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
     // Fetch journal and mood independently so one failing doesn't block the other
@@ -103,6 +187,13 @@ export default function JournalPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [newContent]);
 
   function toggleEmotion(e: string) {
     setNewEmotions((p) => p.includes(e) ? p.filter((x) => x !== e) : [...p, e]);
@@ -159,7 +250,11 @@ export default function JournalPage() {
       setSaving(false);
     }
     setSaved(true);
-    setTimeout(() => { setSaved(false); setTab("entries"); resetForm(); }, 1400);
+    setTimeout(() => {
+      setSaved(false);
+      resetForm();
+      if (detailsRef.current) detailsRef.current.open = false;
+    }, 1400);
   }
 
   async function deleteEntry(id: string) {
@@ -173,325 +268,246 @@ export default function JournalPage() {
   const avgMood = moodData.length
     ? (moodData.reduce((s, d) => s + d.score, 0) / moodData.length).toFixed(1)
     : "—";
+  const goodDays = moodData.filter((d) => d.score >= 4).length;
+  const wordCount = newContent.trim() ? newContent.trim().split(/\s+/).filter(Boolean).length : 0;
 
-  function fmtDate(iso: string) {
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-  function fmtTime(iso: string) {
-    return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  }
+  const now = new Date();
+  const GROUP_ORDER = ["Today", "Yesterday", "This week", "Earlier"];
+  const grouped = GROUP_ORDER
+    .map((label) => ({ label, items: entries.filter((e) => groupLabel(e.createdAt, now) === label) }))
+    .filter((g) => g.items.length > 0);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-4 pb-12">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-stone-900">Journal</h1>
-          <p className="text-sm text-stone-500 mt-1 flex items-center gap-1.5">
-            {entries.length} entries
-            <span className="text-stone-300">·</span>
-            <Lock size={11} strokeWidth={1.5} className="text-stone-400" />
-            Private & encrypted
-          </p>
-        </div>
-        <button
-          onClick={() => { setTab("new"); setSelected(null); }}
-          className="bg-stone-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-stone-800 transition-colors"
-        >
-          New entry
-        </button>
+      <div>
+        <h1 className="text-2xl font-semibold text-stone-900">Journal</h1>
+        <p className="text-sm text-stone-500 mt-1 flex items-center gap-1.5">
+          {entries.length} entries
+          <span className="text-stone-300">·</span>
+          <Lock size={11} strokeWidth={1.5} className="text-stone-400" />
+          Private & encrypted
+        </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-stone-100">
-        {([
-          { id: "new",     label: "Write",        icon: <PenLine size={14} /> },
-          { id: "entries", label: "Entries",     icon: <BookOpen size={14} /> },
-          { id: "trends",  label: "Mood Trends",  icon: <TrendingUp size={14} /> },
-        ] as { id: Tab; label: string; icon: React.ReactNode }[]).map((t) => (
-          <button
-            key={t.id}
-            onClick={() => { setTab(t.id); setSelected(null); }}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              tab === t.id ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-700"
-            }`}
-          >
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Entries list ── */}
-      {tab === "entries" && !selected && (
-        <div className="space-y-2">
-          {loading && (
-            <div className="space-y-2 animate-pulse">
-              {[1, 2, 3].map((i) => <div key={i} className="h-20 bg-white border border-stone-100 rounded-xl" />)}
-            </div>
-          )}
-          {!loading && entries.length === 0 && (
-            <div className="text-center py-16">
-              <p className="text-stone-400 text-sm">No entries yet. Start writing!</p>
-            </div>
-          )}
-          {entries.map((entry) => (
-            <button
-              key={entry.id}
-              onClick={() => setSelected(entry)}
-              className="w-full text-left bg-white border border-stone-100 rounded-xl p-5 hover:border-stone-300 hover:shadow-sm transition-all group"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-base">{MOOD_EMOJIS[entry.mood]}</span>
-                    <span className="text-sm font-medium text-stone-800 group-hover:text-stone-900 truncate">{entry.title}</span>
-                    {entry.type !== "text" && (
-                      <span className="text-[10px] text-stone-400 border border-stone-200 px-1.5 py-0.5 rounded capitalize">{entry.type}</span>
-                    )}
-                  </div>
-                  {entry.content && (
-                    <p className="text-xs text-stone-400 leading-relaxed line-clamp-2">{entry.content}</p>
-                  )}
-                  {entry.emotions?.length > 0 && (
-                    <div className="flex gap-1.5 mt-2 flex-wrap">
-                      {entry.emotions.map((e) => (
-                        <span key={e} className="text-[10px] text-stone-500 bg-stone-50 border border-stone-100 px-2 py-0.5 rounded-md">{e}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="text-xs text-stone-500 font-medium">{fmtDate(entry.createdAt)}</div>
-                  <div className="text-[10px] text-stone-400 mt-0.5">{fmtTime(entry.createdAt)}</div>
-                  {entry.wordCount > 0 && <div className="text-[10px] text-stone-400 mt-0.5">{entry.wordCount}w</div>}
-                </div>
-              </div>
-            </button>
-          ))}
+      {/* ── Composer ── */}
+      <div className="bg-white border border-stone-100 rounded-2xl p-4">
+        <div className="flex gap-2 mb-3">
+          {MOOD_EMOJIS.slice(1).map((emoji, i) => {
+            const val = i + 1;
+            return (
+              <button
+                key={val}
+                onClick={() => setNewMood(val)}
+                className={`flex-1 flex items-center justify-center py-2.5 rounded-xl border text-lg transition-all ${
+                  newMood === val ? "border-sage-600 bg-sage-50" : "border-stone-100 hover:border-stone-300"
+                }`}
+              >
+                {emoji}
+              </button>
+            );
+          })}
         </div>
-      )}
 
-      {/* ── Entry detail ── */}
-      {tab === "entries" && selected && (
-        <div className="bg-white border border-stone-100 rounded-xl overflow-hidden">
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-stone-100">
-            <button onClick={() => setSelected(null)} className="text-sm text-stone-500 hover:text-stone-900 transition-colors">← Back</button>
-            <div className="flex-1" />
-            <div className="flex items-center gap-3 text-xs text-stone-400">
-              <span>{fmtDate(selected.createdAt)}</span>
-              <span>·</span>
-              <span>{fmtTime(selected.createdAt)}</span>
-            </div>
-            <button
-              onClick={() => deleteEntry(selected.id)}
-              className="text-stone-300 hover:text-red-500 transition-colors p-1"
-              title="Delete entry"
-            >
-              <Trash2 size={14} strokeWidth={1.5} />
-            </button>
-          </div>
-          <div className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-3xl">{MOOD_EMOJIS[selected.mood]}</span>
-              <div>
-                <h2 className="font-semibold text-stone-900">{selected.title}</h2>
-                <span className="text-xs text-stone-400">{MOOD_LABELS[selected.mood]}</span>
-              </div>
-            </div>
-            {selected.emotions?.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap mb-3">
-                {selected.emotions.map((e) => (
-                  <span key={e} className="text-xs text-stone-600 bg-stone-100 px-2.5 py-1 rounded-md">{e}</span>
+        <textarea
+          ref={textareaRef}
+          value={newContent}
+          onChange={(e) => setNewContent(e.target.value)}
+          placeholder="What's on your mind right now?"
+          rows={1}
+          className="w-full text-sm text-stone-800 placeholder-stone-300 focus:outline-none resize-none leading-relaxed"
+        />
+
+        <details ref={detailsRef} className="mt-1">
+          <summary className="cursor-pointer text-xs font-semibold text-sage-700 inline-flex items-center gap-1 list-none [&::-webkit-details-marker]:hidden mt-2">
+            <Plus size={12} strokeWidth={2.5} />
+            Add title, sleep, emotions or triggers
+          </summary>
+          <div className="mt-4 space-y-4">
+            <input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="Entry title (optional)"
+              className="w-full text-sm font-semibold text-stone-900 placeholder-stone-300 focus:outline-none border-b border-stone-100 pb-2"
+            />
+            <div>
+              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block mb-2">Emotions</label>
+              <div className="flex flex-wrap gap-1.5">
+                {emotionOptions.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => toggleEmotion(e)}
+                    className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                      newEmotions.includes(e) ? "bg-sage-700 text-white border-sage-700" : "border-stone-200 text-stone-600 hover:border-stone-400"
+                    }`}
+                  >
+                    {e}
+                  </button>
                 ))}
               </div>
-            )}
-            {(selected.sleepQuality || (selected.triggers?.length ?? 0) > 0) && (
-              <div className="flex gap-1.5 flex-wrap mb-5">
-                {selected.sleepQuality ? (
-                  <span className="text-xs text-stone-600 bg-stone-100 px-2.5 py-1 rounded-md">Sleep: {SLEEP_LABELS[selected.sleepQuality]}</span>
-                ) : null}
-                {selected.triggers?.map((t) => (
-                  <span key={t} className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md">{t}</span>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block mb-2">Sleep last night</label>
+              <div className="flex gap-1.5">
+                {SLEEP_LABELS.slice(1).map((label, i) => (
+                  <button
+                    key={label}
+                    onClick={() => setNewSleepQuality(newSleepQuality === i + 1 ? 0 : i + 1)}
+                    className={`flex-1 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${
+                      newSleepQuality === i + 1 ? "border-sage-600 bg-sage-50 text-sage-800" : "border-stone-100 text-stone-500 hover:border-stone-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
                 ))}
               </div>
-            )}
-            <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-line">{selected.content}</p>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block mb-2">Triggers today</label>
+              <div className="flex flex-wrap gap-1.5">
+                {TRIGGER_OPTIONS.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => toggleTrigger(t)}
+                    className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                      newTriggers.includes(t) ? "bg-amber-100 text-amber-800 border-amber-300" : "border-stone-200 text-stone-600 hover:border-stone-400"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        </details>
 
-      {/* ── Write ── */}
-      {tab === "new" && (
-        <div className="bg-white border border-stone-100 rounded-xl p-6 space-y-5">
+        <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-stone-100">
+          <span className="text-[10px] text-stone-300 mr-auto">{wordCount} words</span>
           {saved ? (
-            <div className="py-12 text-center">
-              <div className="text-3xl mb-3">✓</div>
-              <p className="text-sm font-medium text-stone-800">Entry saved</p>
-              <p className="text-xs text-stone-400 mt-1">Returning to your journal…</p>
-            </div>
+            <span className="text-xs font-medium text-sage-600">Saved ✓</span>
           ) : (
-            <>
-              <input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Entry title (optional)"
-                className="w-full text-lg font-semibold text-stone-900 placeholder-stone-300 focus:outline-none border-b border-stone-100 pb-3"
-              />
-
-              <div>
-                <label className="text-xs font-medium text-stone-400 uppercase tracking-wider block mb-2">How are you feeling?</label>
-                <div className="flex gap-2">
-                  {MOOD_EMOJIS.slice(1).map((emoji, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setNewMood(i + 1)}
-                      className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-lg border transition-all ${
-                        newMood === i + 1 ? "border-stone-900 bg-stone-50" : "border-stone-100 hover:border-stone-300"
-                      }`}
-                    >
-                      <span className="text-xl">{emoji}</span>
-                      <span className="text-[10px] text-stone-400">{MOOD_LABELS[i + 1]}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-stone-400 uppercase tracking-wider block mb-2">Emotions</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {emotionOptions.map((e) => (
-                    <button
-                      key={e}
-                      onClick={() => toggleEmotion(e)}
-                      className={`text-xs px-3 py-1.5 rounded-md border transition-all ${
-                        newEmotions.includes(e)
-                          ? "bg-stone-900 text-white border-stone-900"
-                          : "border-stone-200 text-stone-600 hover:border-stone-400"
-                      }`}
-                    >
-                      {e}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-stone-400 uppercase tracking-wider block mb-2">How did you sleep? (optional)</label>
-                <div className="flex gap-2">
-                  {SLEEP_LABELS.slice(1).map((label, i) => (
-                    <button
-                      key={label}
-                      onClick={() => setNewSleepQuality(newSleepQuality === i + 1 ? 0 : i + 1)}
-                      className={`flex-1 py-2 rounded-lg border text-[11px] font-medium transition-all ${
-                        newSleepQuality === i + 1 ? "border-stone-900 bg-stone-50 text-stone-900" : "border-stone-100 text-stone-500 hover:border-stone-300"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-stone-400 uppercase tracking-wider block mb-2">Any triggers today? (optional)</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {TRIGGER_OPTIONS.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => toggleTrigger(t)}
-                      className={`text-xs px-3 py-1.5 rounded-md border transition-all ${
-                        newTriggers.includes(t)
-                          ? "bg-amber-100 text-amber-800 border-amber-300"
-                          : "border-stone-200 text-stone-600 hover:border-stone-400"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-stone-400 uppercase tracking-wider block mb-2">Write freely</label>
-                <textarea
-                  value={newContent}
-                  onChange={(e) => setNewContent(e.target.value)}
-                  placeholder="This is your private space. Write without judgement…"
-                  rows={8}
-                  className="w-full text-sm text-stone-700 leading-relaxed placeholder-stone-300 focus:outline-none resize-none"
-                />
-                <div className="text-[10px] text-stone-300 text-right mt-1">
-                  {newContent.trim() ? newContent.trim().split(/\s+/).length : 0} words
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-3 border-t border-stone-100">
-                <button onClick={() => setTab("entries")} className="flex-1 py-2.5 text-sm text-stone-600 border border-stone-200 rounded-lg hover:bg-stone-50 transition-colors">
-                  Cancel
-                </button>
-                <button
-                  onClick={saveEntry}
-                  disabled={!newContent.trim() || saving}
-                  className="flex-1 py-2.5 text-sm font-medium bg-stone-900 text-white rounded-lg hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  {saving ? "Saving…" : "Save Entry"}
-                </button>
-              </div>
-            </>
+            <button
+              onClick={saveEntry}
+              disabled={!newContent.trim() || saving}
+              className="text-xs font-semibold bg-sage-700 hover:bg-sage-800 disabled:opacity-30 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl transition-colors"
+            >
+              {saving ? "Saving…" : "Save entry"}
+            </button>
           )}
         </div>
-      )}
+      </div>
 
-      {/* ── Trends ── */}
-      {tab === "trends" && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Avg Mood",   value: `${avgMood} / 5` },
-              { label: "Good days",  value: `${moodData.filter((d) => d.score >= 4).length}` },
-              { label: "Entries",    value: `${entries.length} total` },
-            ].map((s) => (
-              <div key={s.label} className="bg-white border border-stone-100 rounded-xl p-4 text-center">
-                <div className="text-lg font-semibold text-stone-900">{s.value}</div>
-                <div className="text-xs text-stone-400 mt-1">{s.label}</div>
-              </div>
-            ))}
+      {/* ── Mood trends ── */}
+      <div>
+        <div className="flex items-center justify-between py-1">
+          <span className="text-xs font-semibold text-stone-600">Mood trends</span>
+          <span className="flex items-center gap-2 text-[11px] font-medium text-stone-400">
+            avg {avgMood} this week
+            {moodData.length >= 2 && (
+              <svg viewBox="0 0 56 20" className="w-14 h-5 text-sage-500">
+                <path d={sparklinePath(moodData.map((d) => d.score))} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </span>
+        </div>
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-white border border-stone-100 rounded-xl p-3 text-center">
+              <div className="text-base font-bold text-stone-900">{avgMood} / 5</div>
+              <div className="text-[10px] text-stone-400 mt-0.5">Avg mood</div>
+            </div>
+            <div className="bg-white border border-stone-100 rounded-xl p-3 text-center">
+              <div className="text-base font-bold text-stone-900">{goodDays}</div>
+              <div className="text-[10px] text-stone-400 mt-0.5">Good days</div>
+            </div>
+            <div className="bg-white border border-stone-100 rounded-xl p-3 text-center">
+              <div className="text-base font-bold text-stone-900">{entries.length}</div>
+              <div className="text-[10px] text-stone-400 mt-0.5">Entries</div>
+            </div>
           </div>
-
-          {moodData.length > 0 ? (
-            <div className="bg-white border border-stone-100 rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-stone-900 mb-5">Recent Mood History</h3>
+          <div className="bg-white border border-stone-100 rounded-xl p-4">
+            {moodData.length > 0 ? (
               <div className="flex items-end gap-2 h-24">
                 {moodData.map((day, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                    <span className="text-sm">{MOOD_EMOJIS[day.score]}</span>
-                    <div className={`w-full rounded-t-sm ${MOOD_COLORS[day.score]}`} style={{ height: `${(day.score / 5) * 72}px` }} />
-                    <span className="text-[9px] text-stone-400 truncate w-full text-center">{day.date}</span>
+                  <div key={i} className="flex-1 flex flex-col items-center h-full group/bar">
+                    <div className="flex-1 w-full flex items-end">
+                      <div
+                        className={`w-full rounded-t-md rounded-b-sm relative ${MOOD_COLORS[day.score]}`}
+                        style={{ height: `${(day.score / 5) * 100}%` }}
+                      >
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-md bg-stone-900 text-white text-[10px] font-semibold whitespace-nowrap opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none">
+                          {MOOD_LABELS[day.score]} · {day.score}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[9px] text-stone-300 mt-1.5">{day.date}</span>
                   </div>
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="bg-white border border-stone-100 rounded-xl p-8 text-center">
-              <p className="text-sm text-stone-400">Log your mood on the dashboard to see trends here.</p>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-stone-400 text-center py-4">Log your mood on the dashboard to see trends here.</p>
+            )}
+          </div>
+        </div>
+      </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { title: "Voice Journal", desc: "Record audio reflections.", icon: "🎙️" },
-              { title: "Video Journal", desc: "Capture video reflections.",  icon: "🎥" },
-            ].map((item) => (
-              <div key={item.title} className="bg-white border border-stone-100 rounded-xl p-4">
-                <div className="text-xl mb-2">{item.icon}</div>
-                <h3 className="text-sm font-medium text-stone-800">{item.title}</h3>
-                <p className="text-xs text-stone-400 mt-1">{item.desc}</p>
-                <span className="inline-block mt-3 text-xs text-stone-400 border border-stone-200 px-2.5 py-1 rounded-md">Coming soon</span>
-              </div>
+      {/* ── Entries feed ── */}
+      {loading && (
+        <div className="space-y-2 animate-pulse">
+          {[1, 2, 3].map((i) => <div key={i} className="h-20 bg-white border border-stone-100 rounded-2xl" />)}
+        </div>
+      )}
+
+      {!loading && entries.length === 0 && (
+        <div className="text-center py-16">
+          <p className="text-stone-400 text-sm">No entries yet. Start writing above.</p>
+        </div>
+      )}
+
+      {!loading && grouped.map((g) => (
+        <div key={g.label}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-300 mt-5 mb-2.5 first:mt-0">{g.label}</p>
+          <div className="space-y-2.5">
+            {g.items.map((entry) => (
+              <button
+                key={entry.id}
+                onClick={() => setSelected(entry)}
+                className="w-full text-left bg-white border border-stone-100 rounded-2xl p-4 hover:border-sage-300 hover:shadow-sm transition-all"
+              >
+                <div className="flex gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${MOOD_BADGE_BG[entry.mood]}`}>
+                    {MOOD_EMOJIS[entry.mood]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-sm font-bold truncate ${entry.title === "Untitled" ? "text-stone-400" : "text-stone-900"}`}>
+                        {entry.title}
+                      </span>
+                      <span className="text-[11px] text-stone-400 flex-shrink-0">{fmtTime(entry.createdAt)}</span>
+                    </div>
+                    {entry.content && (
+                      <p className="text-xs text-stone-400 leading-relaxed line-clamp-2 mt-1">{entry.content}</p>
+                    )}
+                    {(entry.emotions?.length > 0 || (entry.triggers?.length ?? 0) > 0) && (
+                      <div className="flex gap-1.5 mt-2 flex-wrap">
+                        {entry.emotions?.map((e) => (
+                          <span key={e} className="text-[10px] text-stone-500 bg-stone-50 border border-stone-100 px-2 py-0.5 rounded-md">{e}</span>
+                        ))}
+                        {entry.triggers?.map((t) => (
+                          <span key={t} className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">{t}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
         </div>
+      ))}
+
+      {selected && (
+        <EntrySheet entry={selected} onClose={() => setSelected(null)} onDelete={() => deleteEntry(selected.id)} />
       )}
     </div>
   );

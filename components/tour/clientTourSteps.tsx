@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard, CheckSquare, PenLine, LifeBuoy, BookOpen,
-  ClipboardList, Users, MessageCircle, Calendar, Stethoscope, BarChart2,
+  ClipboardList, Users, MessageCircle, Calendar, BarChart2,
 } from "lucide-react";
 import type { TourStep } from "./types";
 
@@ -169,19 +169,11 @@ export const CLIENT_TOUR: TourStep[] = [
   },
   {
     Icon: Calendar,
-    title: "Schedule",
-    body: "Book, reschedule, or join your sessions from here — including video calls, right when it's time, no extra app needed.",
+    title: "Sessions",
+    body: "Book, reschedule, or join your sessions — including video calls, right when it's time, no extra app needed. It's also where you'll find the therapist you were matched with, and why.",
     accent: "bg-indigo-50 text-indigo-700",
     route: "/dashboard/schedule",
     targetTour: "/dashboard/schedule",
-  },
-  {
-    Icon: Stethoscope,
-    title: "My Therapist",
-    body: "The therapist you were matched with, and why — based on what you shared during sign-up. You can see their profile, or request a different match here any time.",
-    accent: "bg-cyan-50 text-cyan-700",
-    route: "/dashboard/my-therapist",
-    targetTour: "/dashboard/my-therapist",
   },
   {
     Icon: BarChart2,

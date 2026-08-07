@@ -8,7 +8,7 @@ import NotificationPanel from "@/components/NotificationPanel";
 import {
   LayoutDashboard, BookOpen, CheckSquare, PenLine,
   MessageCircle, Calendar, Search, Bot,
-  BarChart2, Users, ClipboardList, Settings, LogOut, Stethoscope, Newspaper,
+  BarChart2, Users, ClipboardList, Settings, LogOut, Newspaper,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { onBadgesChanged } from "@/lib/badgeEvents";
@@ -27,16 +27,15 @@ const navSections = [
   {
     label: "Care",
     items: [
+      { href: "/dashboard/ai-chat",      Icon: Bot,           label: "Ask Mindo" },
       { href: "/dashboard/messages",     Icon: MessageCircle, label: "Messages" },
-      { href: "/dashboard/schedule",     Icon: Calendar,      label: "Schedule" },
-      { href: "/dashboard/my-therapist", Icon: Stethoscope,   label: "My Therapist" },
-      { href: "/dashboard/find",         Icon: Search,        label: "Find a Therapist" },
+      { href: "/dashboard/schedule",     Icon: Calendar,      label: "Sessions" },
+      { href: "/dashboard/find",         Icon: Search,        label: "Find Professionals" },
     ],
   },
   {
     label: "Tools",
     items: [
-      { href: "/dashboard/ai-chat", Icon: Bot, label: "Ask Mindo" },
       { href: "/dashboard/achievements", Icon: BarChart2, label: "Progress" },
       { href: "/dashboard/community", Icon: Users, label: "Community" },
       { href: "/dashboard/assessment", Icon: ClipboardList, label: "Assessments" },

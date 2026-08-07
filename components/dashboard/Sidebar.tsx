@@ -8,7 +8,7 @@ import {
   LayoutDashboard, BookOpen, CheckSquare, PenLine,
   MessageCircle, Calendar, Search, Bot,
   BarChart2, Users, ClipboardList, Settings, LogOut,
-  ChevronLeft, ChevronRight, Stethoscope, LifeBuoy, Newspaper, Sparkles,
+  ChevronLeft, ChevronRight, LifeBuoy, Newspaper, Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import Logo from "@/components/Logo";
@@ -31,20 +31,19 @@ const navSections: { label: string; items: NavItem[] }[] = [
   {
     label: "Care",
     items: [
-      { href: "/dashboard/safety-plan",  Icon: LifeBuoy,      label: "Safety Plan", accent: true },
+      { href: "/dashboard/ai-chat",      Icon: Bot,           label: "Ask Mindo" },
       { href: "/dashboard/messages",     Icon: MessageCircle, label: "Messages" },
-      { href: "/dashboard/schedule",     Icon: Calendar,      label: "Schedule" },
-      { href: "/dashboard/my-therapist", Icon: Stethoscope,   label: "My Therapist" },
-      { href: "/dashboard/find",         Icon: Search,        label: "Find a Therapist" },
+      { href: "/dashboard/schedule",     Icon: Calendar,      label: "Sessions" },
+      { href: "/dashboard/find",         Icon: Search,        label: "Find Professionals" },
     ],
   },
   {
     label: "Tools",
     items: [
-      { href: "/dashboard/ai-chat", Icon: Bot, label: "Ask Mindo" },
       { href: "/dashboard/achievements", Icon: BarChart2, label: "Progress" },
       { href: "/dashboard/community", Icon: Users, label: "Community" },
       { href: "/dashboard/assessment", Icon: ClipboardList, label: "Assessments" },
+      { href: "/dashboard/safety-plan", Icon: LifeBuoy, label: "Safety Plan", accent: true },
     ],
   },
 ];

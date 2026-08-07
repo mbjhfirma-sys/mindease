@@ -44,7 +44,7 @@ export async function ensurePendingMatchFeedback(clientId: string) {
     title: "Quick check-in",
     body: `Has working with ${therapist.user.name} felt like a good fit? We'd love your feedback.`,
     icon: "💬",
-    href: "/dashboard/my-therapist",
+    href: "/dashboard/schedule",
   });
   await createNotification(therapist.userId, {
     title: "Quick check-in",

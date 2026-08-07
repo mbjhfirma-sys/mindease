@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       title: "You've been matched with a therapist",
       body: "Your waitlist request was accepted — you can now message and book sessions.",
       icon: "🤝",
-      href: "/dashboard/my-therapist",
+      href: "/dashboard/schedule",
     });
   } else {
     await db.waitlistEntry.update({ where: { id }, data: { status: "resolved" } });

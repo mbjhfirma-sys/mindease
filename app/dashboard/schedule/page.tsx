@@ -2,11 +2,16 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, CalendarDays, Clock, Video, Phone, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Clock, Video, Phone, MapPin, GraduationCap, Languages } from "lucide-react";
 import VideoCallRoom from "@/components/video/VideoCallRoom";
 import BookingModal from "@/components/dashboard/BookingModal";
+import { ProfileSection } from "@/components/dashboard/ProfileSection";
+import { MatchFactorsList } from "@/components/MatchFactorsList";
+import { MatchFeedbackPrompt } from "@/components/dashboard/MatchFeedbackPrompt";
 import { getJoinWindow } from "@/lib/video";
 import { getCancellationOutcome } from "@/lib/cancellationPolicy";
+import { specColor } from "@/lib/specializationColors";
+import type { MatchReasonFactor } from "@/lib/matching";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -17,6 +22,14 @@ type AssignedTherapist = {
   specializations: string[];
   rating: number;
   user: { name: string; avatar: string | null };
+};
+
+type TherapistProfile = {
+  bio: string | null;
+  approach: string | null;
+  specializations: string[];
+  education: string[];
+  languages: string[];
 };
 
 type Appt = {
@@ -116,6 +129,9 @@ export default function SchedulePage() {
   const router = useRouter();
   const [allAppts,        setAllAppts]        = useState<Appt[]>([]);
   const [therapist,       setTherapist]       = useState<AssignedTherapist | null>(null);
+  const [profile,         setProfile]         = useState<TherapistProfile | null>(null);
+  const [matchFactors,    setMatchFactors]    = useState<MatchReasonFactor[]>([]);
+  const [pendingFeedback, setPendingFeedback] = useState<{ id: string; counterpartName: string; counterpartRole: "CLIENT" | "THERAPIST" } | null>(null);
   const [loading,         setLoading]         = useState(true);
   const [weekOffset,      setWeekOffset]      = useState(0);
   const [selectedDate,    setSelectedDate]    = useState<Date>(new Date());
@@ -160,6 +176,34 @@ export default function SchedulePage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetch("/api/my-therapist")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        const t = d.therapist;
+        if (t) {
+          setProfile({
+            bio: t.bio ?? null,
+            approach: t.approach ?? null,
+            specializations: t.specializations ?? [],
+            education: t.education ?? [],
+            languages: t.languages ?? [],
+          });
+        }
+      })
+      .catch(() => {});
+
+    fetch("/api/match-reasoning/me")
+      .then((r) => r.ok ? r.json() : { reasoning: null })
+      .then((d) => setMatchFactors(d.reasoning?.factors ?? []))
+      .catch(() => setMatchFactors([]));
+
+    fetch("/api/match-feedback/pending")
+      .then((r) => r.ok ? r.json() : { pending: null })
+      .then((d) => setPendingFeedback(d.pending))
+      .catch(() => setPendingFeedback(null));
+  }, []);
 
   // Keeps "Available in Xm" join-window countdowns fresh without a network round trip.
   const [, tick] = useState(0);
@@ -232,7 +276,7 @@ export default function SchedulePage() {
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-stone-900">My Schedule</h1>
+            <h1 className="text-2xl font-bold text-stone-900">Sessions</h1>
             <p className="text-sm text-stone-500 mt-0.5">
               {today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </p>
@@ -244,6 +288,15 @@ export default function SchedulePage() {
             + Book Session
           </button>
         </div>
+
+        {pendingFeedback && (
+          <MatchFeedbackPrompt
+            feedbackId={pendingFeedback.id}
+            counterpartName={pendingFeedback.counterpartName}
+            counterpartRole={pendingFeedback.counterpartRole}
+            onDone={() => setPendingFeedback(null)}
+          />
+        )}
 
         {/* ── Therapist card ─────────────────────────────────────────────────── */}
         {loading ? (
@@ -508,6 +561,66 @@ export default function SchedulePage() {
               })}
             </div>
           </div>
+        )}
+
+        {/* ── Therapist profile ──────────────────────────────────────────────── */}
+        {!loading && therapist && profile && (
+          <>
+            {matchFactors.length > 0 && (
+              <ProfileSection title="Why you were matched">
+                <MatchFactorsList factors={matchFactors} />
+              </ProfileSection>
+            )}
+
+            {profile.bio && (
+              <ProfileSection title="About">
+                <p className="text-sm text-stone-600 leading-relaxed">{profile.bio}</p>
+              </ProfileSection>
+            )}
+
+            {profile.specializations.length > 0 && (
+              <ProfileSection title="Specialisations">
+                <div className="flex flex-wrap gap-2">
+                  {profile.specializations.map((s) => (
+                    <span key={s} className={`text-xs font-medium px-3 py-1.5 rounded-full border ${specColor(s)}`}>
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </ProfileSection>
+            )}
+
+            {profile.approach && (
+              <ProfileSection title="Therapeutic Approach">
+                <p className="text-sm text-stone-600 leading-relaxed">{profile.approach}</p>
+              </ProfileSection>
+            )}
+
+            {profile.education.length > 0 && (
+              <ProfileSection title="Education & Qualifications" Icon={GraduationCap}>
+                <ul className="space-y-2">
+                  {profile.education.map((e, i) => (
+                    <li key={i} className="flex items-start gap-2.5 text-sm text-stone-600">
+                      <span className="w-1.5 h-1.5 rounded-full bg-stone-400 mt-2 flex-shrink-0" />
+                      {e}
+                    </li>
+                  ))}
+                </ul>
+              </ProfileSection>
+            )}
+
+            {profile.languages.length > 0 && (
+              <ProfileSection title="Languages" Icon={Languages}>
+                <div className="flex flex-wrap gap-2">
+                  {profile.languages.map((l) => (
+                    <span key={l} className="text-xs font-medium px-3 py-1.5 rounded-full bg-stone-50 border border-stone-200 text-stone-700">
+                      {l}
+                    </span>
+                  ))}
+                </div>
+              </ProfileSection>
+            )}
+          </>
         )}
 
         {/* ── Empty state: has therapist but no sessions booked ─────────────── */}
