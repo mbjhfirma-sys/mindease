@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Sparkles, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { DailyFactsGrid } from "@/components/dashboard/DailyFactsGrid";
+import { MindoAvatar } from "@/components/dashboard/MindoAvatar";
 import type { DailyFacts } from "@/lib/mindo/factsTypes";
 
 type Briefing = { id: string; date: string; briefingText: string; softened: boolean; facts?: DailyFacts };
@@ -60,9 +61,7 @@ export default function MindoHistoryPage() {
         <div className="space-y-3">
           {briefings.map((b) => (
             <div key={b.id} className="bg-white border border-stone-100 rounded-xl p-4 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-sage-50 text-sage-600 flex items-center justify-center flex-shrink-0">
-                <Sparkles size={15} strokeWidth={1.5} />
-              </div>
+              <MindoAvatar size="xs" />
               <div className="min-w-0 flex-1">
                 <div className="text-xs font-medium text-stone-400 uppercase tracking-widest mb-1">
                   {formatDateKey(b.date)}

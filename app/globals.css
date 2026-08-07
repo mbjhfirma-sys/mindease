@@ -147,3 +147,196 @@ html {
 .animate-pulse-glow {
   animation: pulse-glow 2.5s ease-in-out infinite;
 }
+
+/* ── Mindo avatar — animation system ────────────────────────────────────── */
+/* See lib/mindo/animation.ts for the state machine that drives these classes
+   and components/dashboard/MindoAvatar.tsx for how they're composed with the
+   live, per-part transforms (brow lift, eye scale, gaze, mouth scale). */
+
+/* Ambient idle-body loop — a gentle, irregular float + breathe combined into
+   one long, asymmetric cycle so it doesn't read as an obvious repeating
+   loop. The real repetition-breaker is the randomized blink/gaze scheduler
+   in lib/mindo/useMindoLife.ts; this just has to not fight it. */
+@keyframes mindo-idle-body {
+  0%   { transform: translateY(0)      scale(1); }
+  22%  { transform: translateY(-1.4px) scale(1.012); }
+  48%  { transform: translateY(-2.2px) scale(1.021); }
+  64%  { transform: translateY(-1px)   scale(1.014); }
+  82%  { transform: translateY(0.5px)  scale(1.004); }
+  100% { transform: translateY(0)      scale(1); }
+}
+.animate-mindo-idle-body {
+  animation: mindo-idle-body 6200ms cubic-bezier(.45,.05,.55,.95) infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Slower variant — calm / gentle. */
+@keyframes mindo-idle-body-slow {
+  0%   { transform: translateY(0)      scale(1); }
+  30%  { transform: translateY(-1px)   scale(1.009); }
+  55%  { transform: translateY(-1.6px) scale(1.015); }
+  100% { transform: translateY(0)      scale(1); }
+}
+.animate-mindo-idle-body-slow {
+  animation: mindo-idle-body-slow 7400ms ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Deep variant — breathing state, synced to a slow inhale/exhale. */
+@keyframes mindo-idle-body-deep {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.045); }
+}
+.animate-mindo-idle-body-deep {
+  animation: mindo-idle-body-deep 5600ms ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* ── One-shot gestures ("verbs") — each plays once on entry, then hands
+   back to the ambient loop. Durations must match MINDO_STATES' motionMs. ── */
+
+/* Happy — a small settling bounce, not a full jump. */
+@keyframes mindo-motion-bounce {
+  0%   { transform: translateY(0) scale(1, 1); }
+  30%  { transform: translateY(1.5px) scale(1.05, 0.95); }
+  60%  { transform: translateY(-6px) scale(0.97, 1.04); }
+  82%  { transform: translateY(1px) scale(1.01, 0.99); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+.mindo-motion-bounce {
+  animation: mindo-motion-bounce 520ms cubic-bezier(.33,1,.68,1) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Excited — full squash-and-stretch jump: anticipation, rise, brief peak
+   hold, landing squash, small secondary bounce, settle. ~780ms. */
+@keyframes mindo-motion-jump {
+  0%   { transform: translateY(0) scale(1, 1); }
+  9%   { transform: translateY(4px) scale(1.09, 0.9); }
+  16%  { transform: translateY(2px) scale(1.05, 0.95); }
+  34%  { transform: translateY(-24%) scale(0.94, 1.1); }
+  48%  { transform: translateY(-28%) scale(0.97, 1.05); }
+  58%  { transform: translateY(-28%) scale(0.97, 1.05); }
+  76%  { transform: translateY(3px) scale(1.1, 0.88); }
+  87%  { transform: translateY(-5px) scale(0.97, 1.05); }
+  95%  { transform: translateY(1px) scale(1.02, 0.98); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+.mindo-motion-jump {
+  animation: mindo-motion-jump 780ms cubic-bezier(.33,1,.68,1) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Encouraging — warm, quiet nod. No sudden motion. */
+@keyframes mindo-motion-nod {
+  0%   { transform: translateY(0) rotate(0deg); }
+  30%  { transform: translateY(2px) rotate(-3deg); }
+  62%  { transform: translateY(0) rotate(2deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+.mindo-motion-nod {
+  animation: mindo-motion-nod 1500ms ease-in-out both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Curious — a brief attentive wobble on entry; the state then holds a
+   steady tilt via the live headTilt transform. */
+@keyframes mindo-motion-tilt {
+  0%   { transform: rotate(0deg) translateX(0); }
+  18%  { transform: rotate(-7deg) translateX(-1px); }
+  50%  { transform: rotate(6deg) translateX(1px); }
+  82%  { transform: rotate(-3deg) translateX(-1px); }
+  100% { transform: rotate(0deg) translateX(0); }
+}
+.mindo-motion-tilt {
+  animation: mindo-motion-tilt 1200ms ease-in-out both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Celebrating — hop + wink + sparkle burst. Milestones. */
+@keyframes mindo-motion-pop {
+  0%   { transform: translateY(0) rotate(0deg); }
+  22%  { transform: translateY(-16%) rotate(-4deg); }
+  42%  { transform: translateY(0) rotate(3deg); }
+  58%  { transform: translateY(-7%) rotate(-2deg); }
+  74%  { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+.mindo-motion-pop {
+  animation: mindo-motion-pop 850ms cubic-bezier(.32,.9,.36,1) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes mindo-wink {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(0.1); }
+}
+.mindo-eye-wink {
+  animation: mindo-wink 0.5s ease-in-out both;
+  animation-delay: 0.3s;
+}
+@keyframes mindo-spark {
+  0%   { transform: translate(0, 0) scale(0); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; }
+}
+.mindo-spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mindo-spark 0.8s cubic-bezier(.15,.75,.4,1) both;
+}
+
+/* Live-transform parts — brow / eye / mouth groups. The transform itself is
+   set inline per-frame from MINDO_STATES; this just owns the transition
+   timing (also overridden inline per state) and the fill-box origin so
+   scale/translate happen from each shape's own center, not the viewBox's. */
+.mindo-face-part {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 380ms cubic-bezier(.22,.61,.36,1);
+}
+.mindo-blink-part {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 100ms ease-in-out;
+}
+
+/* Word-by-word text reveal — warm, not a robotic character-by-character
+   typewriter. Used by MindoGreeting. */
+@keyframes mindo-word-reveal {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.mindo-word-reveal {
+  display: inline-block;
+  opacity: 0;
+  animation: mindo-word-reveal 420ms cubic-bezier(.22,.61,.36,1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-mindo-idle-body,
+  .animate-mindo-idle-body-slow,
+  .animate-mindo-idle-body-deep,
+  .mindo-motion-bounce,
+  .mindo-motion-jump,
+  .mindo-motion-nod,
+  .mindo-motion-tilt,
+  .mindo-motion-pop,
+  .mindo-eye-wink,
+  .mindo-spark,
+  .mindo-word-reveal {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .mindo-face-part,
+  .mindo-blink-part {
+    transition-duration: 0.001ms !important;
+  }
+}

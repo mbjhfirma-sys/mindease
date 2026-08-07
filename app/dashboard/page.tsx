@@ -8,12 +8,14 @@ import { useAchievementCheck } from "@/components/dashboard/AchievementToast";
 import { getJoinWindow } from "@/lib/video";
 import { notifyBadgesChanged } from "@/lib/badgeEvents";
 import { DailyFactsGrid } from "@/components/dashboard/DailyFactsGrid";
+import { MindoAvatar } from "@/components/dashboard/MindoAvatar";
+import { MindoGreeting } from "@/components/dashboard/MindoGreeting";
 import type { DailyFacts } from "@/lib/mindo/factsTypes";
 import {
   TrendingUp, BookOpen, Clock, Flame,
   PenLine, Bot, ClipboardList, Users,
   Video, CalendarDays, ArrowRight, CheckCircle2, Check, Lock,
-  Sparkles, X,
+  X,
 } from "lucide-react";
 
 type Category = "mindfulness" | "movement" | "journaling" | "breathing" | "social" | "habit";
@@ -329,13 +331,16 @@ export default function DashboardPage() {
             {loading ? "Loading…" : `${completedCount} of ${taskTotal} tasks done today`}
           </p>
         </div>
-        {streak > 0 && (
-          <div className="hidden sm:flex items-center gap-2 border border-amber-200 bg-amber-50 rounded-xl px-4 py-2.5 flex-shrink-0">
-            <Flame size={14} className="text-amber-500" />
-            <span className="text-sm font-semibold text-amber-700">{streak} days</span>
-            <span className="text-xs text-amber-500">streak</span>
-          </div>
-        )}
+        <Link
+          href="/dashboard/ai-chat"
+          className="hidden sm:flex items-center border border-sage-400 transition-colors rounded-xl px-4 py-2.5 flex-shrink-0"
+        >
+          <MindoGreeting
+            layout="inline"
+            size="sm"
+            textClassName="text-sm font-semibold text-amber-700 whitespace-nowrap"
+          />
+        </Link>
       </div>
 
       {/* Complete-profile nudge — shown to clients who skipped the intake quiz */}
@@ -384,9 +389,7 @@ export default function DashboardPage() {
       {/* Mindo daily briefing */}
       {!loading && mindoBriefing && (
         <div className="bg-gradient-to-br from-sage-800 to-sage-600 rounded-xl p-4 flex items-start gap-4 text-white shadow-sm">
-          <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-            <Sparkles size={18} className="text-white" strokeWidth={1.5} />
-          </div>
+          <MindoAvatar size="md" motion="jump" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-medium text-sage-100 uppercase tracking-widest mb-0.5">Mindo</p>

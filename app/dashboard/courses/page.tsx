@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Sparkles, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import UpgradeModal from "@/components/dashboard/UpgradeModal";
+import { MindoAvatar } from "@/components/dashboard/MindoAvatar";
 const CATEGORIES = ["All", "Mindfulness", "Mental Health", "Wellness", "Personal Growth", "Stress Management", "Self-Care"];
 
 type Course = {
@@ -71,9 +72,7 @@ export default function CoursesPage() {
             href={`/dashboard/courses/${recommendation.course.id}`}
             className="flex items-center gap-4 bg-gradient-to-br from-sage-800 to-sage-600 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all group"
           >
-            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-              <Sparkles size={18} className="text-white" strokeWidth={1.5} />
-            </div>
+            <MindoAvatar size="md" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-sage-100 uppercase tracking-widest mb-0.5">Mindo</p>
               <h3 className="font-bold text-white text-sm group-hover:underline">{recommendation.course.title}</h3>
